@@ -22,22 +22,18 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn is_orthogonal_to(&self, other: &Self) -> bool {
-        debug_assert!(self.n() == other.n());
-
-        let n = self.n();
-
-        for value in 0..n as Value {
+        for value in 0..N as Value {
             let mut other_values = BitSet::empty();
 
-            for i in 0..n {
-                for j in 0..n {
+            for i in 0..N {
+                for j in 0..N {
                     if self.get(i, j) == value {
                         other_values.insert(other.get(i, j).into());
                     }
                 }
             }
 
-            if other_values != BitSet::all_less_than(n) {
+            if other_values != BitSet::all_less_than(N) {
                 return false;
             }
         }

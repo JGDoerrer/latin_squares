@@ -73,66 +73,73 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn propagate_value(&mut self, i: usize, j: usize, value: Value) {
-        if Constraint::Value(value) == self.get(i, j) {
-            return;
-        }
+        let mut stack = Vec::with_capacity(N);
+        stack.push((i, j, value));
 
-        *self.get_mut(i, j) = Constraint::Value(value);
-
-        let mask = BitSet::single(value.into())
-            .complement()
-            .intersect(BitSet::all_less_than(N));
-
-        for k in 0..N {
-            if k == j {
-                continue;
-            }
-            let a = self.get_mut(i, k);
-
-            match a {
-                Constraint::Impossible => {
-                    return;
-                }
-                Constraint::Value(v) => {
-                    if !mask.contains(*v as usize) {
-                        *a = Constraint::Impossible;
-                    }
-                }
-                Constraint::PossibleValues(values) => {
-                    *values = values.intersect(mask);
-
-                    if values.is_single() {
-                        let value = values.into_iter().next().unwrap() as Value;
-
-                        self.propagate_value(i, k, value);
-                    }
-                }
-            }
-        }
-
-        for k in 0..N {
-            if k == i {
+        while let Some((i, j, value)) = stack.pop() {
+            if Constraint::Value(value) == self.get(i, j) {
                 continue;
             }
 
-            let a = self.get_mut(k, j);
+            *self.get_mut(i, j) = Constraint::Value(value);
 
-            match a {
-                Constraint::Impossible => {
-                    return;
+            let mask = BitSet::single(value.into())
+                .complement()
+                .intersect(BitSet::all_less_than(N));
+
+            for k in 0..N {
+                if k == j {
+                    continue;
                 }
-                Constraint::Value(v) => {
-                    if !mask.contains(*v as usize) {
-                        *a = Constraint::Impossible;
+                let a = self.get_mut(i, k);
+
+                match a {
+                    Constraint::Impossible => {
+                        return;
+                    }
+                    Constraint::Value(v) => {
+                        if !mask.contains(*v as usize) {
+                            *a = Constraint::Impossible;
+                            return;
+                        }
+                    }
+                    Constraint::PossibleValues(values) => {
+                        *values = values.intersect(mask);
+
+                        if values.is_single() {
+                            let value = values.into_iter().next().unwrap() as Value;
+
+                            stack.push((i, k, value));
+                        }
                     }
                 }
-                Constraint::PossibleValues(values) => {
-                    *values = values.intersect(mask);
+            }
 
-                    if values.is_single() {
-                        let value = values.into_iter().next().unwrap() as Value;
+            for k in 0..N {
+                if k == i {
+                    continue;
+                }
 
-                        self.propagate_value(k, j, value);
+                let a = self.get_mut(k, j);
+
+                match a {
+                    Constraint::Impossible => {
+                        return;
+                    }
+                    Constraint::Value(v) => {
+                        if !mask.contains(*v as usize) {
+                            *a = Constraint::Impossible;
+                            return;
+                        }
+                    }
+                    Constraint::PossibleValues(values) => {
+                        *values = values.intersect(mask);
+
+                        if values.is_single() {
+                            let value = values.into_iter().next().unwrap() as Value;
+
+                            stack.push((k, j, value));
+                        }
                     }
                 }
             }
@@ -331,12 +338,9 @@ impl<const N: usize> Constraints<N> {
     // }
 
     pub fn make_orthogonal_to_sq(&mut self, sq: &LatinSquare<N>) {
-        debug_assert!(sq.n() == self.n());
-        let n = self.n();
-
         let mut known_values = [BitSet::empty(); MAX_N];
-        for i in 0..n {
-            for j in 0..n {
+        for i in 0..N {
+            for j in 0..N {
                 if let Constraint::Value(v) = self.get(i, j) {
                     let value = sq.get(i, j) as usize;
                     known_values[value].insert(v as usize);
@@ -344,15 +348,17 @@ impl<const N: usize> Constraints<N> {
             }
         }
 
-        for i in 0..n {
-            for j in 0..n {
+        for i in 0..N {
+            for j in 0..N {
                 let value = sq.get(i, j) as usize;
                 match self.get_mut(i, j) {
                     Constraint::Impossible | Constraint::Value(_) => {}
                     Constraint::PossibleValues(bitset) => {
                         let new = bitset.intersect(known_values[value].complement());
                         *bitset = new;
-                        if new.is_single() {
+                        if new.is_empty() {
+                            *self.get_mut(i, j) = Constraint::Impossible;
+                        } else if new.is_single() {
                             let value = new.into_iter().next().unwrap() as Value;
                             self.propagate_value(i, j, value);
                         }
@@ -422,7 +428,11 @@ impl<const N: usize> Debug for Constraints<N> {
             }
             write!(f, "[")?;
             for j in 0..self.n() {
-                write!(f, "{:?}, ", self.get(i, j))?;
+                match self.get(i, j) {
+                    Constraint::Impossible => todo!(),
+                    Constraint::Value(v) => write!(f, "{:3?}, ", v)?,
+                    Constraint::PossibleValues(v) => write!(f, "{:03X}, ", v.bits())?,
+                }
             }
             write!(f, "]")?;
             if i != self.n() - 1 {

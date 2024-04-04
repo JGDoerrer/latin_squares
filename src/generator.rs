@@ -38,6 +38,7 @@ impl<const N: usize> Iterator for LatinSquareGenerator<N> {
 
                 let mut new = constraints.clone();
                 new.set(i, j, value as Value);
+                new.find_singles();
 
                 if let Some((i, j)) = new.first_unsolved() {
                     if new.is_solvable() {
@@ -84,13 +85,13 @@ enum State<const N: usize> {
         start_value: Value,
     },
 }
-pub struct OrthogonalGenerator<const N: usize> {
+pub struct OrthogonalGenerator3<const N: usize> {
     stack: Vec<State<N>>,
 }
 
-impl<const N: usize> OrthogonalGenerator<N> {
+impl<const N: usize> OrthogonalGenerator3<N> {
     pub fn new() -> Self {
-        OrthogonalGenerator {
+        OrthogonalGenerator3 {
             stack: vec![State::First {
                 constraints: Constraints::new_reduced(),
                 constraints2: Constraints::new_first_row(),
@@ -103,7 +104,7 @@ impl<const N: usize> OrthogonalGenerator<N> {
     }
 }
 
-impl<const N: usize> Iterator for OrthogonalGenerator<N> {
+impl<const N: usize> Iterator for OrthogonalGenerator3<N> {
     type Item = (LatinSquare<N>, LatinSquare<N>, LatinSquare<N>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -205,7 +206,7 @@ impl<const N: usize> Iterator for OrthogonalGenerator<N> {
                             let sq2 = new.into();
 
                             if !sq.is_orthogonal_to(&sq2) {
-                                continue;
+                                continue 'w;
                             }
 
                             dbg!((&sq, &sq2));
@@ -273,6 +274,72 @@ impl<const N: usize> Iterator for OrthogonalGenerator<N> {
                     self.stack.pop();
                 }
             }
+        }
+
+        None
+    }
+}
+
+pub struct OrthogonalGenerator<const N: usize> {
+    sqs: Vec<LatinSquare<N>>,
+    stack: Vec<(Constraints<N>, usize, usize, Value)>,
+}
+
+impl<const N: usize> OrthogonalGenerator<N> {
+    pub fn new(sqs: Vec<LatinSquare<N>>) -> Self {
+        let mut constraints = Constraints::new_first_row();
+
+        for sq in &sqs {
+            constraints.make_orthogonal_to_sq(sq);
+        }
+
+        OrthogonalGenerator {
+            sqs,
+            stack: vec![(constraints, 1, 0, 0)],
+        }
+    }
+}
+
+impl<const N: usize> Iterator for OrthogonalGenerator<N> {
+    type Item = LatinSquare<N>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.stack.is_empty() {
+            return None;
+        }
+
+        'w: while let Some((constraints, i, j, start_value)) = self.stack.last_mut() {
+            let values = constraints.get(*i, *j).bitset();
+
+            for value in values.intersect(BitSet::all_less_than(*start_value as usize).complement())
+            {
+                *start_value = value as Value + 1;
+
+                let mut constraints = (*constraints).clone();
+                constraints.set(*i, *j, value as Value);
+                constraints.find_singles();
+                for sq in &self.sqs {
+                    constraints.make_orthogonal_to_sq(sq);
+                }
+
+                if let Some((i, j)) = constraints.first_unsolved() {
+                    if constraints.is_solvable() {
+                        self.stack.push((constraints, i, j, 0));
+                    }
+                    continue 'w;
+                }
+                if constraints.is_solved() {
+                    let new_sq = constraints.into();
+
+                    if self.sqs.iter().any(|sq| !sq.is_orthogonal_to(&new_sq)) {
+                        continue 'w;
+                    }
+
+                    return Some(new_sq);
+                }
+            }
+
+            self.stack.pop();
         }
 
         None
