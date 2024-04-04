@@ -1,16 +1,20 @@
 use std::fmt::Debug;
 
-use crate::{bitset::BitSet, constants::MAX_N, constraints::Constraints, types::Value};
+use crate::{
+    bitset::BitSet,
+    constants::MAX_N,
+    constraints::{Constraint, Constraints},
+    types::Value,
+};
 
 #[derive(Clone)]
-pub struct LatinSquare {
-    n: usize,
-    values: [[Value; MAX_N]; MAX_N],
+pub struct LatinSquare<const N: usize> {
+    values: [[Value; N]; N],
 }
 
-impl LatinSquare {
+impl<const N: usize> LatinSquare<N> {
     pub fn n(&self) -> usize {
-        self.n
+        N
     }
 
     pub fn get(&self, i: usize, j: usize) -> Value {
@@ -42,32 +46,41 @@ impl LatinSquare {
     }
 }
 
-impl From<Constraints> for LatinSquare {
-    fn from(constraints: Constraints) -> Self {
+impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
+    fn from(constraints: Constraints<N>) -> Self {
         debug_assert!(constraints.is_solved());
-        let n = constraints.n();
+        let mut values = [[0; N]; N];
 
-        let mut values = [[0; MAX_N]; MAX_N];
-
-        for i in 0..n {
-            for j in 0..n {
-                values[i][j] = constraints.get(i, j).into_iter().next().unwrap() as Value;
+        for i in 0..N {
+            for j in 0..N {
+                match constraints.get(i, j) {
+                    Constraint::Value(value) => values[i][j] = value,
+                    Constraint::Impossible | Constraint::PossibleValues(_) => unreachable!(),
+                }
             }
         }
 
-        LatinSquare { n, values }
+        LatinSquare { values }
     }
 }
 
-impl Debug for LatinSquare {
+impl<const N: usize> Debug for LatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f)?;
+        write!(f, "\n[")?;
         for i in 0..self.n() {
-            for j in 0..self.n() {
-                write!(f, "{:2} ", self.get(i, j))?;
+            if i != 0 {
+                write!(f, " ")?;
             }
-            writeln!(f)?;
+            write!(f, "[")?;
+            for j in 0..self.n() {
+                write!(f, "{:2}, ", self.get(i, j))?;
+            }
+            write!(f, "]")?;
+            if i != self.n() - 1 {
+                writeln!(f, ",")?;
+            }
         }
+        write!(f, "]")?;
         Ok(())
     }
 }
