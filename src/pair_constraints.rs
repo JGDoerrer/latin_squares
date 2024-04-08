@@ -1,18 +1,14 @@
-use crate::{
-    bitset::BitSet,
-    latin_square::{LatinSquare, LatinSquarePair},
-    types::Value,
-};
+use crate::{bitset::BitSet, latin_square::LatinSquarePair, types::Value};
 
 #[derive(Debug, Clone)]
-pub struct Constraints<const N: usize> {
+pub struct PairConstraints<const N: usize> {
     constraints: [[BitSet; N]; N],
 }
 
-impl<const N: usize> Constraints<N> {
+impl<const N: usize> PairConstraints<N> {
     pub fn new() -> Self {
-        Constraints {
-            constraints: [[BitSet::all_less_than(N); N]; N],
+        PairConstraints {
+            constraints: [[BitSet::all_less_than(N * N); N]; N],
         }
     }
 
@@ -21,24 +17,14 @@ impl<const N: usize> Constraints<N> {
 
         for i in 0..N {
             let value = constraints.get(0, i).into_iter().next().unwrap();
-            constraints.set(0, i, value);
+            let value_pair = ((value % N) as Value, (value / N) as Value);
+            constraints.set(0, i, value_pair);
         }
 
         constraints
     }
 
-    pub fn new_reduced() -> Self {
-        let mut constraints = Self::new();
-
-        for i in 0..N {
-            constraints.set(0, i, i);
-            constraints.set(i, 0, i);
-        }
-
-        constraints
-    }
-
-    pub fn set(&mut self, i: usize, j: usize, value: usize) {
+    pub fn set(&mut self, i: usize, j: usize, value: (Value, Value)) {
         self.propagate_value(i, j, value);
     }
 
@@ -46,8 +32,8 @@ impl<const N: usize> Constraints<N> {
         self.constraints[i][j]
     }
 
-    fn propagate_value(&mut self, i: usize, j: usize, value: usize) {
-        let value_index = value;
+    fn propagate_value(&mut self, i: usize, j: usize, value: (Value, Value)) {
+        let value_index = value.0 as usize + value.1 as usize * N;
         assert!(self.constraints[i][j].contains(value_index));
         self.constraints[i][j] = BitSet::single(value_index);
 
@@ -59,9 +45,15 @@ impl<const N: usize> Constraints<N> {
             num
         };
 
-        let mask = BitSet::single(value)
+        let mask1 = BitSet::from_bits(BitSet::all_less_than(N).bits() << (value.1 as usize * N))
             .complement()
             .intersect(BitSet::all_less_than(N * N));
+
+        let mask2 = BitSet::from_bits(BitSet::single(value.0 as usize).bits() * every_nth)
+            .complement()
+            .intersect(BitSet::all_less_than(N * N));
+
+        let mask = mask1.intersect(mask2);
 
         for k in 0..N {
             if k != j {
@@ -69,7 +61,8 @@ impl<const N: usize> Constraints<N> {
                     self.constraints[i][k] = self.constraints[i][k].intersect(mask);
                     if self.constraints[i][k].is_single() {
                         let value = self.constraints[i][k].into_iter().next().unwrap();
-                        self.propagate_value(i, k, value);
+                        let value_pair = ((value % N) as Value, (value / N) as Value);
+                        self.propagate_value(i, k, value_pair);
                     }
                 }
             }
@@ -78,7 +71,26 @@ impl<const N: usize> Constraints<N> {
                     self.constraints[k][j] = self.constraints[k][j].intersect(mask);
                     if self.constraints[k][j].is_single() {
                         let value = self.constraints[k][j].into_iter().next().unwrap();
-                        self.propagate_value(k, j, value);
+                        let value_pair = ((value % N) as Value, (value / N) as Value);
+                        self.propagate_value(k, j, value_pair);
+                    }
+                }
+            }
+        }
+
+        // remove value pair from all cells
+        for k in 0..N {
+            for l in 0..N {
+                if k == i && l == j {
+                    continue;
+                }
+
+                if self.constraints[k][l].contains(value_index) {
+                    self.constraints[k][l].remove(value_index);
+                    if self.constraints[k][l].is_single() {
+                        let value = self.constraints[k][l].into_iter().next().unwrap();
+                        let value_pair = ((value % N) as Value, (value / N) as Value);
+                        self.propagate_value(k, l, value_pair);
                     }
                 }
             }
@@ -116,7 +128,7 @@ impl<const N: usize> Constraints<N> {
         (min_values < N * N + 1).then(|| index)
     }
 
-    pub fn to_latin_square(self) -> LatinSquare<N> {
+    pub fn to_latin_squares(self) -> LatinSquarePair<N> {
         self.into()
     }
 
@@ -143,8 +155,8 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn find_singles(&mut self) {
+        let mut counts = vec![0; N * N];
         for i in 0..N {
-            let mut counts = [0; N];
             for j in 0..N {
                 if !self.get(i, j).is_single() {
                     for value in self.get(i, j) {
@@ -152,42 +164,19 @@ impl<const N: usize> Constraints<N> {
                     }
                 }
             }
+        }
 
-            for value in counts
-                .into_iter()
-                .enumerate()
-                .filter(|(_, c)| *c == 1)
-                .map(|(i, _)| i)
-            {
+        for value in counts
+            .into_iter()
+            .enumerate()
+            .filter(|(_, c)| *c == 1)
+            .map(|(i, _)| i)
+        {
+            for i in 0..N {
                 for j in 0..N {
-                    if !self.get(i, j).is_single() {
-                        if self.get(i, j).contains(value) {
-                            self.propagate_value(i, j, value);
-                        }
-                    }
-                }
-            }
-
-            let mut counts = [0; N];
-            for j in 0..N {
-                if !self.get(j, i).is_single() {
-                    for value in self.get(j, i) {
-                        counts[value] += 1;
-                    }
-                }
-            }
-
-            for value in counts
-                .into_iter()
-                .enumerate()
-                .filter(|(_, c)| *c == 1)
-                .map(|(i, _)| i)
-            {
-                for j in 0..N {
-                    if !self.get(j, i).is_single() {
-                        if self.get(j, i).contains(value) {
-                            self.propagate_value(j, i, value);
-                        }
+                    if self.get(i, j).contains(value) {
+                        let value_pair = ((value % N) as Value, (value / N) as Value);
+                        self.propagate_value(i, j, value_pair);
                     }
                 }
             }

@@ -1,12 +1,11 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Range};
 
-use crate::constants::MAX_N;
-
-/// A bitset to store up to MAX_N bits
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BitSet {
-    bits: u16,
+    bits: BitType,
 }
+
+type BitType = u128;
 
 impl BitSet {
     #[inline]
@@ -16,23 +15,31 @@ impl BitSet {
 
     #[inline]
     pub const fn full() -> Self {
-        Self::all_less_than(MAX_N + 1)
+        Self::all_less_than(BitType::BITS as usize)
     }
 
     #[inline]
     pub const fn all_less_than(n: usize) -> Self {
         BitSet {
-            bits: ((1u32 << n) - 1) as u16,
+            bits: (((1 as BitType) << n) - 1) as BitType,
         }
     }
 
     #[inline]
-    pub const fn from_u16(bits: u16) -> Self {
+    pub const fn from_bits(bits: BitType) -> Self {
         BitSet { bits }
     }
 
     #[inline]
-    pub const fn bits(&self) -> u16 {
+    pub const fn from_range(range: Range<usize>) -> Self {
+        let start = range.start;
+        let end = range.end;
+
+        Self::all_less_than(end).intersect(Self::all_less_than(start).complement())
+    }
+
+    #[inline]
+    pub const fn bits(&self) -> BitType {
         self.bits
     }
 
@@ -48,7 +55,7 @@ impl BitSet {
 
     #[inline]
     pub fn insert(&mut self, index: usize) {
-        debug_assert!(index < MAX_N);
+        debug_assert!(index < BitType::BITS as usize);
         let bit_mask = 1 << index;
 
         self.bits |= bit_mask;
@@ -56,7 +63,7 @@ impl BitSet {
 
     #[inline]
     pub fn remove(&mut self, index: usize) {
-        debug_assert!(index < MAX_N);
+        debug_assert!(index < BitType::BITS as usize);
         let bit_mask = 1 << index;
 
         self.bits &= !bit_mask;
@@ -64,7 +71,7 @@ impl BitSet {
 
     #[inline]
     pub const fn contains(&self, index: usize) -> bool {
-        debug_assert!(index < MAX_N);
+        debug_assert!(index < BitType::BITS as usize);
         let bit_mask = 1 << index;
 
         (self.bits & bit_mask) != 0
@@ -86,10 +93,7 @@ impl BitSet {
 
     #[inline]
     pub const fn complement(&self) -> Self {
-        const MASK: u16 = ((1u32 << (MAX_N + 1)) - 1) as u16;
-        BitSet {
-            bits: !self.bits & MASK,
-        }
+        BitSet { bits: !self.bits }
     }
 
     #[inline]
@@ -104,7 +108,8 @@ impl BitSet {
 
     #[inline]
     pub const fn is_single(&self) -> bool {
-        self.len() == 1
+        self.bits != 0 && self.bits & (self.bits - 1) == 0
+        // self.bits.is_power_of_two()
     }
 }
 
@@ -118,10 +123,10 @@ impl IntoIterator for BitSet {
     }
 }
 
-impl From<u16> for BitSet {
+impl From<BitType> for BitSet {
     #[inline]
-    fn from(bits: u16) -> Self {
-        Self::from_u16(bits)
+    fn from(bits: BitType) -> Self {
+        Self::from_bits(bits)
     }
 }
 
@@ -136,7 +141,7 @@ impl Iterator for BitSetIter {
     fn next(&mut self) -> Option<Self::Item> {
         let next = self.bitset.bits.trailing_zeros() as usize;
 
-        if next < MAX_N {
+        if next < BitType::BITS as usize {
             // remove first set bit
             self.bitset.bits = (self.bitset.bits - 1) & self.bitset.bits;
             Some(next)
@@ -163,7 +168,7 @@ impl Debug for BitSet {
         f.debug_struct("BitSet")
             .field(
                 "bits",
-                &format!("{:016b}", self.bits).chars().collect::<String>(),
+                &format!("{:0128b}", self.bits).chars().collect::<String>(),
             )
             // .field(
             //     "set_bits",

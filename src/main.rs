@@ -1,31 +1,19 @@
-use crate::generator::{LatinSquareGenerator, OrthogonalGenerator, OrthogonalGenerator3};
+use latin_square_pair_generator::LatinSquarePairGenerator;
+
+use crate::latin_square_generator::LatinSquareGenerator;
 
 mod bitset;
-mod constants;
 mod constraints;
-mod generator;
 mod latin_square;
+mod latin_square_generator;
+mod latin_square_pair_generator;
+mod pair_constraints;
 mod types;
 
 fn main() {
-    let sqs = LatinSquareGenerator::<7>::new()
-        .map(|sq| {
-            OrthogonalGenerator::new(vec![sq.clone()])
-                .next()
-                .map(|sq2| vec![sq, sq2])
+    dbg!(LatinSquarePairGenerator::<10>::new()
+        .inspect(|sq| {
+            dbg!(sq);
         })
-        .flatten()
-        .inspect(|sqs| {
-            dbg!(sqs);
-        })
-        .map(|sqs| {
-            OrthogonalGenerator::new(sqs.clone()).next().map(|new_sq| {
-                let mut new_sqs = sqs;
-                new_sqs.push(new_sq);
-                new_sqs
-            })
-        })
-        .flatten()
-        .next();
-    dbg!(&sqs);
+        .count());
 }
