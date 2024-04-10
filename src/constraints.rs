@@ -1,7 +1,6 @@
 use crate::{
     bitset::BitSet,
     latin_square::{LatinSquare, LatinSquarePair},
-    types::Value,
 };
 
 #[derive(Debug, Clone)]
@@ -50,14 +49,6 @@ impl<const N: usize> Constraints<N> {
         let value_index = value;
         assert!(self.constraints[i][j].contains(value_index));
         self.constraints[i][j] = BitSet::single(value_index);
-
-        let every_nth = {
-            let mut num = 1u128;
-            for _ in 0..N {
-                num |= num << N;
-            }
-            num
-        };
 
         let mask = BitSet::single(value)
             .complement()

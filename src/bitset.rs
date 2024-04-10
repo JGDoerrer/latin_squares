@@ -39,6 +39,29 @@ impl BitSet {
     }
 
     #[inline]
+    pub fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = usize>,
+    {
+        let mut bitset = BitSet::empty();
+        for item in iter {
+            bitset.insert(item);
+        }
+        bitset
+    }
+
+    #[inline]
+    pub const fn from_slice(slice: &[usize]) -> Self {
+        let mut bits = 0 as BitType;
+        let mut i = 0;
+        while i < slice.len() {
+            bits |= (1 as BitType) << slice[i];
+            i += 1;
+        }
+        BitSet::from_bits(bits)
+    }
+
+    #[inline]
     pub const fn bits(&self) -> BitType {
         self.bits
     }
@@ -149,11 +172,6 @@ impl Iterator for BitSetIter {
             None
         }
     }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.bitset.len(), Some(self.bitset.len()))
-    }
 }
 
 impl ExactSizeIterator for BitSetIter {
@@ -170,10 +188,12 @@ impl Debug for BitSet {
                 "bits",
                 &format!("{:0128b}", self.bits).chars().collect::<String>(),
             )
-            // .field(
-            //     "set_bits",
-            //     &(0..MAX_N).filter(|i| self.contains(*i)).collect::<Vec<_>>(),
-            // )
+            .field(
+                "set_bits",
+                &(0..BitType::BITS as usize)
+                    .filter(|i| self.contains(*i))
+                    .collect::<Vec<_>>(),
+            )
             .finish()
     }
 }

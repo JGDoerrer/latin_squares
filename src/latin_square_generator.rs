@@ -1,9 +1,9 @@
 use std::time::Instant;
 
-use crate::{constraints::Constraints, latin_square::LatinSquare, types::Value};
+use crate::{constraints::Constraints, latin_square::LatinSquare};
 
 pub struct LatinSquareGenerator<const N: usize> {
-    stack: Vec<(Constraints<N>, usize, usize, Value)>,
+    stack: Vec<(Constraints<N>, usize, usize, usize)>,
 }
 
 impl<const N: usize> LatinSquareGenerator<N> {
@@ -31,7 +31,7 @@ impl<const N: usize> Iterator for LatinSquareGenerator<N> {
                 if value < (*start_value).into() {
                     continue;
                 }
-                *start_value = value as Value + 1;
+                *start_value = value as usize + 1;
 
                 let mut new = constraints.clone();
                 new.set(i, j, value);

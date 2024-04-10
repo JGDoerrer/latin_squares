@@ -1,14 +1,91 @@
-use crate::{bitset::BitSet, latin_square::LatinSquarePair, types::Value};
+use crate::{
+    bitset::BitSet,
+    latin_square::{Cell, CellOrValuePair, LatinSquarePair, ValuePair},
+};
+use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 pub struct PairConstraints<const N: usize> {
-    constraints: [[BitSet; N]; N],
+    values_left: BitSet,
+    empty_cells: BitSet,
+    cells: [[BitSet; N]; N],
+    rows: [BitSet; N],
+    cols: [BitSet; N],
+    first_values: [BitSet; N],
+    second_values: [BitSet; N],
 }
 
 impl<const N: usize> PairConstraints<N> {
+    const VALUE_PAIRS_WITHOUT_FIRST: [BitSet; N] = {
+        let mut table = [BitSet::empty(); N];
+
+        let every_nth = {
+            let mut num = 1u128;
+            let mut i = 0;
+            while i < N {
+                num |= num << N;
+                i += 1;
+            }
+            num
+        };
+
+        let mut i = 0;
+        while i < N {
+            table[i] = BitSet::from_bits(BitSet::single(i).bits() * every_nth).complement();
+            i += 1;
+        }
+
+        table
+    };
+    const VALUE_PAIRS_WITHOUT_SECOND: [BitSet; N] = {
+        let mut table = [BitSet::empty(); N];
+
+        let mut i = 0;
+        while i < N {
+            table[i] = BitSet::from_bits(BitSet::all_less_than(N).bits() << (i * N)).complement();
+            i += 1;
+        }
+
+        table
+    };
+    const CELLS_WITHOUT_ROW: [BitSet; N] = Self::VALUE_PAIRS_WITHOUT_SECOND;
+    const CELLS_WITHOUT_COLUMN: [BitSet; N] = Self::VALUE_PAIRS_WITHOUT_FIRST;
+
+    const RELATIONS: [[BitSet; 4]; 3] = [[
+        (BitSet::from_slice(&[
+            00, 11, 12, 13, 21, 22, 23, 31, 32, 33, 44, 45, 46, 54, 55, 56, 64, 65, 66, 77, 78, 79,
+            87, 88, 89, 97, 98, 99,
+        ])),
+        (BitSet::from_slice(&[
+            01, 02, 03, 10, 20, 30, 47, 48, 49, 57, 58, 59, 67, 68, 69, 74, 75, 76, 84, 85, 86, 94,
+            95, 96,
+        ])),
+        (BitSet::from_slice(&[
+            04, 05, 06, 17, 18, 19, 27, 28, 29, 37, 38, 39, 40, 50, 60, 71, 72, 73, 81, 82, 83, 91,
+            92, 93,
+        ])),
+        (BitSet::from_slice(&[
+            07, 08, 09, 14, 15, 16, 24, 25, 26, 34, 35, 36, 41, 42, 43, 51, 52, 53, 61, 62, 63, 70,
+            80, 90,
+        ])),
+    ]; 3];
+
+    fn get_class(i: usize) -> BitSet {
+        *Self::RELATIONS[0]
+            .iter()
+            .find(|bitset| bitset.contains(i))
+            .unwrap()
+    }
+
     pub fn new() -> Self {
         PairConstraints {
-            constraints: [[BitSet::all_less_than(N * N); N]; N],
+            values_left: BitSet::all_less_than(N * N),
+            empty_cells: BitSet::all_less_than(N * N),
+            cells: [[BitSet::all_less_than(N * N); N]; N],
+            rows: [(BitSet::all_less_than(N * N)); N],
+            cols: [(BitSet::all_less_than(N * N)); N],
+            first_values: [(BitSet::all_less_than(N * N)); N],
+            second_values: [(BitSet::all_less_than(N * N)); N],
         }
     }
 
@@ -16,116 +93,94 @@ impl<const N: usize> PairConstraints<N> {
         let mut constraints = Self::new();
 
         for i in 0..N {
-            let value = constraints.get(0, i).into_iter().next().unwrap();
-            let value_pair = ((value % N) as Value, (value / N) as Value);
+            let value = constraints
+                .values_for_cell(0, i)
+                .into_iter()
+                .next()
+                .unwrap();
+            let value_pair = ((value % N) as usize, (value / N) as usize);
             constraints.set(0, i, value_pair);
         }
 
         constraints
     }
 
-    pub fn set(&mut self, i: usize, j: usize, value: (Value, Value)) {
+    pub fn set(&mut self, i: usize, j: usize, value: (usize, usize)) {
         self.propagate_value(i, j, value);
     }
 
-    pub fn get(&self, i: usize, j: usize) -> BitSet {
-        self.constraints[i][j]
+    pub fn values_for_cell(&self, i: usize, j: usize) -> BitSet {
+        self.rows[i]
+            .intersect(self.cols[j])
+            .intersect(self.values_left)
+            .intersect(Self::get_class(i * N + j))
     }
 
-    fn propagate_value(&mut self, i: usize, j: usize, value: (Value, Value)) {
-        let value_index = value.0 as usize + value.1 as usize * N;
-        assert!(self.constraints[i][j].contains(value_index));
-        self.constraints[i][j] = BitSet::single(value_index);
-
-        let every_nth = {
-            let mut num = 1u128;
-            for _ in 0..N {
-                num |= num << N;
-            }
-            num
-        };
-
-        let mask1 = BitSet::from_bits(BitSet::all_less_than(N).bits() << (value.1 as usize * N))
-            .complement()
-            .intersect(BitSet::all_less_than(N * N));
-
-        let mask2 = BitSet::from_bits(BitSet::single(value.0 as usize).bits() * every_nth)
-            .complement()
-            .intersect(BitSet::all_less_than(N * N));
-
-        let mask = mask1.intersect(mask2);
-
-        for k in 0..N {
-            if k != j {
-                if self.constraints[i][k].intersect(mask) != self.constraints[i][k] {
-                    self.constraints[i][k] = self.constraints[i][k].intersect(mask);
-                    if self.constraints[i][k].is_single() {
-                        let value = self.constraints[i][k].into_iter().next().unwrap();
-                        let value_pair = ((value % N) as Value, (value / N) as Value);
-                        self.propagate_value(i, k, value_pair);
-                    }
-                }
-            }
-            if k != i {
-                if self.constraints[k][j].intersect(mask) != self.constraints[k][j] {
-                    self.constraints[k][j] = self.constraints[k][j].intersect(mask);
-                    if self.constraints[k][j].is_single() {
-                        let value = self.constraints[k][j].into_iter().next().unwrap();
-                        let value_pair = ((value % N) as Value, (value / N) as Value);
-                        self.propagate_value(k, j, value_pair);
-                    }
-                }
-            }
-        }
-
-        // remove value pair from all cells
-        for k in 0..N {
-            for l in 0..N {
-                if k == i && l == j {
-                    continue;
-                }
-
-                if self.constraints[k][l].contains(value_index) {
-                    self.constraints[k][l].remove(value_index);
-                    if self.constraints[k][l].is_single() {
-                        let value = self.constraints[k][l].into_iter().next().unwrap();
-                        let value_pair = ((value % N) as Value, (value / N) as Value);
-                        self.propagate_value(k, l, value_pair);
-                    }
-                }
-            }
-        }
+    pub fn cells_for_value(&self, value: (usize, usize)) -> BitSet {
+        self.first_values[value.0]
+            .intersect(self.second_values[value.1])
+            .intersect(self.empty_cells)
+            .intersect(Self::get_class(value.0 + value.1 * N))
     }
 
-    pub fn get_next(&self) -> Option<(usize, usize)> {
-        for i in 0..N {
-            if !self.get(0, i).is_single() {
-                return Some((0, i));
+    fn propagate_value(&mut self, i: usize, j: usize, value: (usize, usize)) {
+        let value_index = value.0 + value.1 * N;
+        assert!(self.cells[i][j].contains(value_index));
+        self.cells[i][j] = BitSet::single(value_index);
+
+        self.rows[i] = self.rows[i]
+            .intersect(Self::VALUE_PAIRS_WITHOUT_FIRST[value.0])
+            .intersect(Self::VALUE_PAIRS_WITHOUT_SECOND[value.1]);
+        self.cols[j] = self.cols[j]
+            .intersect(Self::VALUE_PAIRS_WITHOUT_FIRST[value.0])
+            .intersect(Self::VALUE_PAIRS_WITHOUT_SECOND[value.1]);
+
+        self.first_values[value.0] = self.first_values[value.0]
+            .intersect(Self::CELLS_WITHOUT_ROW[i])
+            .intersect(Self::CELLS_WITHOUT_COLUMN[j]);
+        self.second_values[value.1] = self.second_values[value.1]
+            .intersect(Self::CELLS_WITHOUT_ROW[i])
+            .intersect(Self::CELLS_WITHOUT_COLUMN[j]);
+
+        self.empty_cells.remove(i * N + j);
+        self.values_left.remove(value_index);
+    }
+
+    pub fn most_constrained_cell(&self) -> Option<(Cell, usize)> {
+        self.empty_cells
+            .into_iter()
+            .map(|index| {
+                let cell = Cell(index / N, index % N);
+                (cell, self.values_for_cell(cell.0, cell.1).len())
+            })
+            .min_by_key(|(_, len)| *len)
+    }
+
+    pub fn most_constrained_value(&self) -> Option<(ValuePair, usize)> {
+        self.values_left
+            .into_iter()
+            .map(|index| {
+                let value_pair = ValuePair(index % N, index / N);
+                (
+                    value_pair,
+                    self.cells_for_value((value_pair.0, value_pair.1)).len(),
+                )
+            })
+            .min_by_key(|(_, len)| *len)
+    }
+
+    pub fn most_constrained(&self) -> Option<CellOrValuePair> {
+        match (self.most_constrained_cell(), self.most_constrained_value()) {
+            (None, None) => None,
+            (Some((cell, cell_values)), Some((value, value_cells))) => {
+                Some(if cell_values < value_cells {
+                    CellOrValuePair::Cell(cell)
+                } else {
+                    CellOrValuePair::ValuePair(value)
+                })
             }
+            _ => unreachable!(),
         }
-        for i in 0..N {
-            if !self.get(i, 0).is_single() {
-                return Some((i, 0));
-            }
-        }
-
-        let mut min_values = N * N + 1;
-        let mut index = (0, 0);
-
-        for i in 0..N {
-            for j in 0..N {
-                if !self.get(i, j).is_single() {
-                    let len = self.get(i, j).len();
-
-                    if len < min_values {
-                        min_values = len;
-                        index = (i, j);
-                    }
-                }
-            }
-        }
-
-        (min_values < N * N + 1).then(|| index)
     }
 
     pub fn to_latin_squares(self) -> LatinSquarePair<N> {
@@ -133,24 +188,28 @@ impl<const N: usize> PairConstraints<N> {
     }
 
     pub fn is_solved(&self) -> bool {
-        for i in 0..N {
-            for j in 0..N {
-                if !self.get(i, j).is_single() {
-                    return false;
-                }
-            }
-        }
-        true
+        self.values_left.is_empty() && self.empty_cells.is_empty()
     }
 
     pub fn is_solvable(&self) -> bool {
-        for i in 0..N {
-            for j in 0..N {
-                if self.get(i, j).is_empty() {
-                    return false;
-                }
+        for cell_index in self.empty_cells {
+            if self
+                .values_for_cell(cell_index / N, cell_index % N)
+                .is_empty()
+            {
+                return false;
             }
         }
+
+        for value_index in self.values_left {
+            if self
+                .cells_for_value((value_index % N, value_index / N))
+                .is_empty()
+            {
+                return false;
+            }
+        }
+
         true
     }
 
@@ -158,8 +217,8 @@ impl<const N: usize> PairConstraints<N> {
         let mut counts = vec![0; N * N];
         for i in 0..N {
             for j in 0..N {
-                if !self.get(i, j).is_single() {
-                    for value in self.get(i, j) {
+                if !self.values_for_cell(i, j).is_single() {
+                    for value in self.values_for_cell(i, j) {
                         counts[value] += 1;
                     }
                 }
@@ -174,8 +233,8 @@ impl<const N: usize> PairConstraints<N> {
         {
             for i in 0..N {
                 for j in 0..N {
-                    if self.get(i, j).contains(value) {
-                        let value_pair = ((value % N) as Value, (value / N) as Value);
+                    if self.values_for_cell(i, j).contains(value) {
+                        let value_pair = ((value % N) as usize, (value / N) as usize);
                         self.propagate_value(i, j, value_pair);
                     }
                 }
@@ -183,3 +242,29 @@ impl<const N: usize> PairConstraints<N> {
         }
     }
 }
+
+// impl<const N: usize> Debug for PairConstraints<N> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "[\n")?;
+//         for i in 0..N {
+//             write!(f, "    [")?;
+//             for j in 0..N {
+//                 if self.values_for_cell(i, j).is_single() {
+//                     write!(
+//                         f,
+//                         "{:02}, ",
+//                         self.values_for_cell(i, j).into_iter().next().unwrap()
+//                     )?;
+//                 } else {
+//                     write!(f, "??, ")?;
+//                 }
+//             }
+//             write!(f, "]")?;
+//             if i != N - 1 {
+//                 writeln!(f, ",")?;
+//             }
+//         }
+//         write!(f, "\n]")?;
+//         Ok(())
+//     }
+// }

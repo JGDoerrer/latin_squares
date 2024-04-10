@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use latin_square_pair_generator::LatinSquarePairGenerator;
 
 use crate::latin_square_generator::LatinSquareGenerator;
@@ -8,12 +10,25 @@ mod latin_square;
 mod latin_square_generator;
 mod latin_square_pair_generator;
 mod pair_constraints;
-mod types;
 
 fn main() {
-    dbg!(LatinSquarePairGenerator::<10>::new()
-        .inspect(|sq| {
-            dbg!(sq);
-        })
-        .count());
+    // let mut all_pairs = vec![];
+    // let mut squares: HashMap<_, Vec<_>> = HashMap::new();
+    LatinSquarePairGenerator::<10>::new().for_each(|pair| {
+        println!("{pair:?}");
+
+        // all_pairs.push(pair);
+        // if let Some(sqs) = squares.get_mut(&pair.0) {
+        //     sqs.push(pair.1)
+        // } else {
+        //     squares.insert(pair.0, vec![pair.1]);
+        // }
+        // if let Some(sqs) = squares.get_mut(&pair.1) {
+        //     sqs.push(pair.0)
+        // } else {
+        //     squares.insert(pair.1, vec![pair.0]);
+        // }
+
+        // dbg!(&squares);
+    });
 }
