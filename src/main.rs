@@ -1,14 +1,18 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use latin_square_pair_generator::LatinSquarePairGenerator;
 
-use crate::latin_square_generator::LatinSquareGenerator;
+use crate::{
+    latin_square_generator::LatinSquareGenerator,
+    orthogonal_generator::OrthogonalLatinSquareGenerator,
+};
 
 mod bitset;
 mod constraints;
 mod latin_square;
 mod latin_square_generator;
 mod latin_square_pair_generator;
+mod orthogonal_generator;
 mod pair_constraints;
 
 fn main() {
@@ -30,5 +34,11 @@ fn main() {
         // }
 
         // dbg!(&squares);
+
+        if let Some(third) = OrthogonalLatinSquareGenerator::new(vec![pair.0, pair.1]).next() {
+            println!("{third:?}");
+        } else {
+            println!("nope");
+        }
     });
 }
