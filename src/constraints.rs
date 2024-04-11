@@ -1,9 +1,4 @@
-use std::ops::Not;
-
-use crate::{
-    bitset::BitSet,
-    latin_square::{LatinSquare, LatinSquarePair},
-};
+use crate::{bitset::BitSet, latin_square::LatinSquare};
 
 #[derive(Debug, Clone)]
 pub struct Constraints<const N: usize> {

@@ -1,11 +1,8 @@
-use std::{collections::HashMap, vec};
+use std::vec;
 
 use latin_square_pair_generator::LatinSquarePairGenerator;
 
-use crate::{
-    latin_square_generator::LatinSquareGenerator,
-    orthogonal_generator::OrthogonalLatinSquareGenerator,
-};
+use crate::orthogonal_generator::OrthogonalLatinSquareGenerator;
 
 mod bitset;
 mod constraints;

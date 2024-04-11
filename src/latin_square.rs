@@ -1,4 +1,4 @@
-use std::{collections::btree_map::VacantEntry, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::{bitset::BitSet, constraints::Constraints, pair_constraints::PairConstraints};
 

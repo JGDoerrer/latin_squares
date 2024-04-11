@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::{constraints::Constraints, latin_square::LatinSquare};
 
 pub struct OrthogonalLatinSquareGenerator<const N: usize> {
