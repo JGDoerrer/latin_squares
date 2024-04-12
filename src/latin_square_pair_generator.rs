@@ -1,8 +1,6 @@
 use crate::{
-    latin_square::{
-        Cell, CellOrValuePair, LatinSquarePair, PartialLatinSquare, PartialLatinSquarePair,
-    },
-    pair_constraints::PairConstraints,
+    latin_square::{Cell, LatinSquarePair, PartialLatinSquare},
+    pair_constraints::{CellOrValuePair, PairConstraints},
 };
 
 pub struct LatinSquarePairGenerator<const N: usize> {
@@ -13,6 +11,8 @@ pub struct LatinSquarePairGenerator<const N: usize> {
         usize,
     )>,
 }
+
+pub type PartialLatinSquarePair<const N: usize> = (PartialLatinSquare<N>, PartialLatinSquare<N>);
 
 impl<const N: usize> LatinSquarePairGenerator<N> {
     pub fn new() -> Self {

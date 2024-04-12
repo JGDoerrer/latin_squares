@@ -1,4 +1,7 @@
-use crate::{bitset::BitSet, latin_square::LatinSquare};
+use crate::{
+    bitset::BitSet,
+    latin_square::{Cell, LatinSquare},
+};
 
 #[derive(Debug, Clone)]
 pub struct Constraints<const N: usize> {
@@ -102,6 +105,13 @@ impl<const N: usize> Constraints<N> {
         }
 
         (min_values < N * N + 1).then(|| index)
+    }
+
+    pub fn most_constrained_cell(&self) -> Option<Cell> {
+        (0..N * N)
+            .map(|index| Cell(index / N, index % N))
+            .filter(|cell| self.get(cell.0, cell.1).len() >= 2)
+            .min_by_key(|cell| self.get(cell.0, cell.1).len() >= 2)
     }
 
     pub fn to_latin_square(self) -> LatinSquare<N> {

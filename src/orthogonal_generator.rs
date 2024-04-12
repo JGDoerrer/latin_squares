@@ -1,4 +1,7 @@
-use crate::{constraints::Constraints, latin_square::LatinSquare};
+use crate::{
+    constraints::Constraints,
+    latin_square::{Cell, LatinSquare},
+};
 
 pub struct OrthogonalLatinSquareGenerator<const N: usize> {
     stack: Vec<(Constraints<N>, usize, usize, usize)>,
@@ -45,10 +48,12 @@ impl<const N: usize> Iterator for OrthogonalLatinSquareGenerator<N> {
                 }
                 new.find_singles();
 
-                if let Some((i, j)) = new.get_next() {
-                    if new.is_solvable() {
-                        self.stack.push((new, i, j, 0));
-                    }
+                if !new.is_solvable() {
+                    continue;
+                }
+
+                if let Some(Cell(i, j)) = new.most_constrained_cell() {
+                    self.stack.push((new, i, j, 0));
                     continue 'w;
                 }
                 if new.is_solved() {
@@ -57,7 +62,7 @@ impl<const N: usize> Iterator for OrthogonalLatinSquareGenerator<N> {
                     if self.sqs.iter().all(|sq| sq.is_orthogonal_to(&new_sq)) {
                         return Some(new_sq);
                     }
-                    dbg!(new_sq);
+                    dbg!(new_sq, self.stack.len());
                     continue 'w;
                 }
             }

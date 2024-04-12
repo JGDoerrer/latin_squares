@@ -7,19 +7,12 @@ pub struct LatinSquare<const N: usize> {
     values: [[usize; N]; N],
 }
 
-pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
-
 #[derive(Debug, Clone, Copy)]
 pub struct Cell(pub usize, pub usize);
 
-#[derive(Debug, Clone, Copy)]
-pub struct ValuePair(pub usize, pub usize);
+pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
 
-#[derive(Debug, Clone, Copy)]
-pub enum CellOrValuePair {
-    Cell(Cell),
-    ValuePair(ValuePair),
-}
+pub type LatinSquareTriple<const N: usize> = (LatinSquare<N>, LatinSquare<N>, LatinSquare<N>);
 
 impl<const N: usize> LatinSquare<N> {
     pub fn get(&self, i: usize, j: usize) -> usize {
@@ -204,8 +197,6 @@ pub struct PartialLatinSquare<const N: usize> {
     values: [[Option<usize>; N]; N],
 }
 
-pub type PartialLatinSquarePair<const N: usize> = (PartialLatinSquare<N>, PartialLatinSquare<N>);
-
 impl<const N: usize> PartialLatinSquare<N> {
     pub fn new() -> Self {
         PartialLatinSquare {
@@ -275,5 +266,14 @@ impl<const N: usize> Debug for PartialLatinSquare<N> {
         }
         write!(f, "\n]")?;
         Ok(())
+    }
+}
+
+impl Cell {
+    pub fn to_index<const N: usize>(self) -> usize {
+        self.0 * N + self.1
+    }
+    pub fn from_index<const N: usize>(value: usize) -> Self {
+        Cell(value / N, value % N)
     }
 }

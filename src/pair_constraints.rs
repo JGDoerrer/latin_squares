@@ -1,6 +1,6 @@
 use crate::{
     bitset::BitSet,
-    latin_square::{Cell, CellOrValuePair, LatinSquarePair, ValuePair},
+    latin_square::{Cell, LatinSquare, LatinSquarePair, PartialLatinSquare},
 };
 use std::fmt::Debug;
 
@@ -8,11 +8,19 @@ use std::fmt::Debug;
 pub struct PairConstraints<const N: usize> {
     values_left: BitSet,
     empty_cells: BitSet,
-    cells: [[BitSet; N]; N],
     rows: [BitSet; N],
     cols: [BitSet; N],
     first_values: [BitSet; N],
     second_values: [BitSet; N],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ValuePair(pub usize, pub usize);
+
+#[derive(Debug, Clone, Copy)]
+pub enum CellOrValuePair {
+    Cell(Cell),
+    ValuePair(ValuePair),
 }
 
 impl<const N: usize> PairConstraints<N> {
@@ -51,27 +59,65 @@ impl<const N: usize> PairConstraints<N> {
     const CELLS_WITHOUT_ROW: [BitSet; N] = Self::VALUE_PAIRS_WITHOUT_SECOND;
     const CELLS_WITHOUT_COLUMN: [BitSet; N] = Self::VALUE_PAIRS_WITHOUT_FIRST;
 
-    const RELATIONS: [[BitSet; 4]; 3] = [[
-        (BitSet::from_slice(&[
-            00, 11, 12, 13, 21, 22, 23, 31, 32, 33, 44, 45, 46, 54, 55, 56, 64, 65, 66, 77, 78, 79,
-            87, 88, 89, 97, 98, 99,
-        ])),
-        (BitSet::from_slice(&[
-            01, 02, 03, 10, 20, 30, 47, 48, 49, 57, 58, 59, 67, 68, 69, 74, 75, 76, 84, 85, 86, 94,
-            95, 96,
-        ])),
-        (BitSet::from_slice(&[
-            04, 05, 06, 17, 18, 19, 27, 28, 29, 37, 38, 39, 40, 50, 60, 71, 72, 73, 81, 82, 83, 91,
-            92, 93,
-        ])),
-        (BitSet::from_slice(&[
-            07, 08, 09, 14, 15, 16, 24, 25, 26, 34, 35, 36, 41, 42, 43, 51, 52, 53, 61, 62, 63, 70,
-            80, 90,
-        ])),
-    ]; 3];
+    const RELATIONS: [[BitSet; 4]; 3] = [
+        [
+            BitSet::from_slice(&[
+                00, 11, 12, 13, 21, 22, 23, 31, 32, 33, 44, 45, 46, 54, 55, 56, 64, 65, 66, 77, 78,
+                79, 87, 88, 89, 97, 98, 99,
+            ]),
+            BitSet::from_slice(&[
+                01, 02, 03, 10, 20, 30, 47, 48, 49, 57, 58, 59, 67, 68, 69, 74, 75, 76, 84, 85, 86,
+                94, 95, 96,
+            ]),
+            BitSet::from_slice(&[
+                04, 05, 06, 17, 18, 19, 27, 28, 29, 37, 38, 39, 40, 50, 60, 71, 72, 73, 81, 82, 83,
+                91, 92, 93,
+            ]),
+            BitSet::from_slice(&[
+                07, 08, 09, 14, 15, 16, 24, 25, 26, 34, 35, 36, 41, 42, 43, 51, 52, 53, 61, 62, 63,
+                70, 80, 90,
+            ]),
+        ],
+        [
+            BitSet::from_slice(&[
+                00, 01, 10, 11, 22, 23, 32, 33, 44, 45, 54, 55, 66, 67, 68, 69, 76, 77, 78, 79, 86,
+                87, 88, 89, 96, 97, 98, 99,
+            ]),
+            BitSet::from_slice(&[
+                02, 03, 12, 13, 20, 21, 30, 31, 46, 47, 48, 49, 56, 57, 58, 59, 64, 65, 74, 75, 84,
+                85, 94, 95,
+            ]),
+            BitSet::from_slice(&[
+                04, 05, 14, 15, 26, 27, 28, 29, 36, 37, 38, 39, 40, 41, 50, 51, 62, 63, 72, 73, 82,
+                83, 92, 93,
+            ]),
+            BitSet::from_slice(&[
+                06, 07, 08, 09, 16, 17, 18, 19, 24, 25, 34, 35, 42, 43, 52, 53, 60, 61, 70, 71, 80,
+                81, 90, 91,
+            ]),
+        ],
+        [
+            BitSet::from_slice(&[
+                00, 01, 10, 11, 22, 23, 32, 33, 44, 45, 54, 55, 66, 67, 68, 69, 76, 77, 78, 79, 86,
+                87, 88, 89, 96, 97, 98, 99,
+            ]),
+            BitSet::from_slice(&[
+                02, 03, 12, 13, 20, 21, 30, 31, 46, 47, 48, 49, 56, 57, 58, 59, 64, 65, 74, 75, 84,
+                85, 94, 95,
+            ]),
+            BitSet::from_slice(&[
+                04, 05, 14, 15, 26, 27, 28, 29, 36, 37, 38, 39, 40, 41, 50, 51, 62, 63, 72, 73, 82,
+                83, 92, 93,
+            ]),
+            BitSet::from_slice(&[
+                06, 07, 08, 09, 16, 17, 18, 19, 24, 25, 34, 35, 42, 43, 52, 53, 60, 61, 70, 71, 80,
+                81, 90, 91,
+            ]),
+        ],
+    ];
 
     fn get_class(i: usize) -> BitSet {
-        *Self::RELATIONS[0]
+        *Self::RELATIONS[2]
             .iter()
             .find(|bitset| bitset.contains(i))
             .unwrap()
@@ -81,7 +127,6 @@ impl<const N: usize> PairConstraints<N> {
         PairConstraints {
             values_left: BitSet::all_less_than(N * N),
             empty_cells: BitSet::all_less_than(N * N),
-            cells: [[BitSet::all_less_than(N * N); N]; N],
             rows: [(BitSet::all_less_than(N * N)); N],
             cols: [(BitSet::all_less_than(N * N)); N],
             first_values: [(BitSet::all_less_than(N * N)); N],
@@ -106,27 +151,7 @@ impl<const N: usize> PairConstraints<N> {
     }
 
     pub fn set(&mut self, i: usize, j: usize, value: (usize, usize)) {
-        self.propagate_value(i, j, value);
-    }
-
-    pub fn values_for_cell(&self, i: usize, j: usize) -> BitSet {
-        self.rows[i]
-            .intersect(self.cols[j])
-            .intersect(self.values_left)
-            .intersect(Self::get_class(i * N + j))
-    }
-
-    pub fn cells_for_value(&self, value: (usize, usize)) -> BitSet {
-        self.first_values[value.0]
-            .intersect(self.second_values[value.1])
-            .intersect(self.empty_cells)
-            .intersect(Self::get_class(value.0 + value.1 * N))
-    }
-
-    fn propagate_value(&mut self, i: usize, j: usize, value: (usize, usize)) {
         let value_index = value.0 + value.1 * N;
-        assert!(self.cells[i][j].contains(value_index));
-        self.cells[i][j] = BitSet::single(value_index);
 
         self.rows[i] = self.rows[i]
             .intersect(Self::VALUE_PAIRS_WITHOUT_FIRST[value.0])
@@ -144,6 +169,20 @@ impl<const N: usize> PairConstraints<N> {
 
         self.empty_cells.remove(i * N + j);
         self.values_left.remove(value_index);
+    }
+
+    pub fn values_for_cell(&self, i: usize, j: usize) -> BitSet {
+        self.rows[i]
+            .intersect(self.cols[j])
+            .intersect(self.values_left)
+        // .intersect(Self::get_class(i * N + j))
+    }
+
+    pub fn cells_for_value(&self, value: (usize, usize)) -> BitSet {
+        self.first_values[value.0]
+            .intersect(self.second_values[value.1])
+            .intersect(self.empty_cells)
+        // .intersect(Self::get_class(value.0 + value.1 * N))
     }
 
     pub fn most_constrained_cell(&self) -> Option<(Cell, usize)> {
@@ -235,7 +274,7 @@ impl<const N: usize> PairConstraints<N> {
                 for j in 0..N {
                     if self.values_for_cell(i, j).contains(value) {
                         let value_pair = ((value % N) as usize, (value / N) as usize);
-                        self.propagate_value(i, j, value_pair);
+                        self.set(i, j, value_pair);
                     }
                 }
             }
@@ -268,3 +307,13 @@ impl<const N: usize> PairConstraints<N> {
 //         Ok(())
 //     }
 // }
+
+impl ValuePair {
+    pub fn from_index<const N: usize>(index: usize) -> Self {
+        ValuePair(index % N, index / N)
+    }
+
+    pub fn to_index<const N: usize>(self) -> usize {
+        self.0 + self.1 * N
+    }
+}
