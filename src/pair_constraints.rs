@@ -1,6 +1,6 @@
 use crate::{
     bitset::BitSet,
-    latin_square::{Cell, LatinSquare, LatinSquarePair, PartialLatinSquare},
+    latin_square::{Cell, LatinSquarePair},
 };
 use std::fmt::Debug;
 

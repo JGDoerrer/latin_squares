@@ -1,6 +1,5 @@
 use crate::{
-    latin_square::{Cell, LatinSquarePair, LatinSquareTriple, PartialLatinSquare},
-    pair_constraints::{CellOrValuePair, PairConstraints},
+    latin_square::{Cell, LatinSquareTriple, PartialLatinSquare},
     triple_constraints::{CellOrValueTriple, TripleConstraints},
 };
 

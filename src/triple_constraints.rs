@@ -1,8 +1,6 @@
-use std::collections::btree_map::Values;
-
 use crate::{
     bitset::BitSet,
-    latin_square::{Cell, LatinSquare},
+    latin_square::Cell,
     pair_constraints::{PairConstraints, ValuePair},
 };
 

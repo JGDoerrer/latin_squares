@@ -1,9 +1,4 @@
-use std::vec;
-
-use latin_square_pair_generator::LatinSquarePairGenerator;
 use latin_square_triple_generator::LatinSquareTripleGenerator;
-
-use crate::orthogonal_generator::OrthogonalLatinSquareGenerator;
 
 mod bitset;
 mod constraints;
