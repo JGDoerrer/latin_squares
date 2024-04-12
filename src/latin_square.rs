@@ -12,8 +12,6 @@ pub struct Cell(pub usize, pub usize);
 
 pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
 
-pub type LatinSquareTriple<const N: usize> = (LatinSquare<N>, LatinSquare<N>, LatinSquare<N>);
-
 impl<const N: usize> LatinSquare<N> {
     pub fn get(&self, i: usize, j: usize) -> usize {
         self.values[i][j]
@@ -192,9 +190,9 @@ impl<const N: usize> Debug for LatinSquare<N> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PartialLatinSquare<const N: usize> {
-    values: [[Option<usize>; N]; N],
+    values: [[Option<u8>; N]; N],
 }
 
 impl<const N: usize> PartialLatinSquare<N> {
@@ -205,11 +203,11 @@ impl<const N: usize> PartialLatinSquare<N> {
     }
 
     pub fn get(&self, i: usize, j: usize) -> Option<usize> {
-        self.values[i][j]
+        self.values[i][j].map(|val| val.into())
     }
 
     pub fn set(&mut self, i: usize, j: usize, value: usize) {
-        self.values[i][j] = Some(value);
+        self.values[i][j] = Some(value as u8);
     }
 
     pub fn next_unknown(&self) -> Option<(usize, usize)> {

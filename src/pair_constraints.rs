@@ -178,6 +178,22 @@ impl<const N: usize> PairConstraints<N> {
         // .intersect(Self::get_class(i * N + j))
     }
 
+    pub fn first_values_for_cell(&self, cell: Cell) -> BitSet {
+        BitSet::from_iter(
+            self.values_for_cell(cell.0, cell.1)
+                .into_iter()
+                .map(|index| index % N),
+        )
+    }
+
+    pub fn second_values_for_cell(&self, cell: Cell) -> BitSet {
+        BitSet::from_iter(
+            self.values_for_cell(cell.0, cell.1)
+                .into_iter()
+                .map(|index| index / N),
+        )
+    }
+
     pub fn cells_for_value(&self, value: (usize, usize)) -> BitSet {
         self.first_values[value.0]
             .intersect(self.second_values[value.1])

@@ -181,6 +181,12 @@ impl ExactSizeIterator for BitSetIter {
     }
 }
 
+impl FromIterator<usize> for BitSet {
+    fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+        BitSet::from_iter(iter)
+    }
+}
+
 impl Debug for BitSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BitSet")

@@ -1,29 +1,15 @@
+use std::time::Instant;
+
 use crate::{
-    latin_square::{Cell, LatinSquareTriple, PartialLatinSquare},
+    latin_square::{Cell, LatinSquare, PartialLatinSquare},
     triple_constraints::{CellOrValueTriple, TripleConstraints},
 };
 
 pub struct LatinSquareTripleGenerator<const N: usize> {
-    stack: Vec<(
-        PartialLatinSquareTriple<N>,
-        TripleConstraints<N>,
-        CellOrValueTriple,
-        usize,
-    )>,
+    stack: Vec<(TripleConstraints<N>, CellOrValueTriple, usize)>,
 }
-pub type PartialLatinSquareTriple<const N: usize> = (
-    PartialLatinSquare<N>,
-    PartialLatinSquare<N>,
-    PartialLatinSquare<N>,
-);
-
 impl<const N: usize> LatinSquareTripleGenerator<N> {
     pub fn new() -> Self {
-        let mut sq_triple = (
-            PartialLatinSquare::new(),
-            PartialLatinSquare::new(),
-            PartialLatinSquare::new(),
-        );
         let mut constraints = TripleConstraints::new();
 
         for i in 0..N {
@@ -33,108 +19,81 @@ impl<const N: usize> LatinSquareTripleGenerator<N> {
                 .next()
                 .unwrap();
             constraints.set(Cell(0, i), value);
-            sq_triple.0.set(0, i, value.0);
-            sq_triple.1.set(0, i, value.1);
-            sq_triple.2.set(0, i, value.2);
         }
 
         LatinSquareTripleGenerator {
-            stack: vec![(
-                sq_triple,
-                constraints.clone(),
-                constraints.most_constrained().unwrap(),
-                0,
-            )],
+            stack: vec![(constraints.clone(), CellOrValueTriple::Cell(Cell(1, 0)), 0)],
         }
     }
 }
 
 impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
-    type Item = LatinSquareTriple<N>;
+    type Item = [LatinSquare<N>; 3];
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.stack.is_empty() {
             return None;
         }
 
+        let start = Instant::now();
         let mut best = 0;
 
-        'w: while let Some((sq_triple, constraints, cell_or_value, start_value)) =
-            self.stack.last_mut()
-        {
-            match cell_or_value {
-                CellOrValueTriple::Cell(cell) => {
-                    let cell = *cell;
-                    let values = constraints.values_for_cell(cell);
+        'w: while let Some((constraints, cell_or_value, start_value)) = self.stack.last_mut() {
+            if let CellOrValueTriple::Cell(Cell(i, 0)) = *cell_or_value {
+                dbg!(constraints.squares());
 
-                    for value in values {
-                        if value.to_index::<N>() < (*start_value).into() {
-                            continue;
-                        }
-                        *start_value = value.to_index::<N>() + 1;
+                let cell = Cell(i, 0);
+                let values = constraints.values_for_cell(cell);
 
-                        let mut new = constraints.clone();
-                        let mut sq_triple = sq_triple.clone();
-                        new.set(cell, value);
-                        sq_triple.0.set(cell.0, cell.1, value.0);
-                        sq_triple.1.set(cell.0, cell.1, value.1);
-                        sq_triple.2.set(cell.0, cell.1, value.2);
+                for (j, value) in values.into_iter().enumerate().skip(*start_value) {
+                    *start_value = j + 1;
 
-                        if !new.is_solvable() {
-                            continue;
-                        }
+                    let mut new = constraints.clone();
+                    new.set(cell, value);
 
+                    if !new.is_solvable() {
+                        continue;
+                    }
+
+                    if i == N - 1 {
                         match new.most_constrained() {
                             Some(cell_or_values) => {
-                                self.stack.push((sq_triple.clone(), new, cell_or_values, 0));
+                                self.stack.push((new.clone(), cell_or_values, 0));
                                 if self.stack.len() > best {
                                     best = self.stack.len();
-                                    dbg!(&sq_triple, best);
+                                    dbg!(new.squares(), best, Instant::now() - start);
                                 }
-                                // dbg!(self.stack.len());
+
                                 continue 'w;
                             }
                             None => {
-                                if sq_triple.0.next_unknown().is_none() {
-                                    return Some((
-                                        sq_triple.0.into(),
-                                        sq_triple.1.into(),
-                                        sq_triple.2.into(),
-                                    ));
+                                if constraints.is_solved() {
+                                    return Some(constraints.squares().map(|sq| sq.into()));
                                 }
                             }
                         }
+                        continue 'w;
+                    } else {
+                        self.stack
+                            .push((new.clone(), CellOrValueTriple::Cell(Cell(i + 1, 0)), 0));
+                        if self.stack.len() > best {
+                            best = self.stack.len();
+                            dbg!(new.squares(), best, Instant::now() - start);
+                        }
+                        continue 'w;
                     }
                 }
-                CellOrValueTriple::ValueTriple(value) => {
-                    let start_i = *start_value % N;
+            } else {
+                match cell_or_value {
+                    CellOrValueTriple::Cell(cell) => {
+                        let cell = *cell;
+                        let values = constraints.values_for_cell(cell);
 
-                    for i in start_i..N {
-                        let mut value = *value;
-                        if value.0 == N {
-                            value.0 = i;
-                        } else if value.1 == N {
-                            value.1 = i;
-                        } else {
-                            value.2 = i;
-                        }
-
-                        let cells = constraints.cells_for_value(value);
-
-                        let start_cell = *start_value / N;
-
-                        for cell in cells {
-                            if cell.to_index::<N>() < start_cell {
-                                continue;
-                            }
-                            *start_value = i + (cell.to_index::<N>() + 1) * N;
+                        for (i, value) in values.into_iter().enumerate().skip(*start_value) {
+                            *start_value = i + 1;
 
                             let mut new = constraints.clone();
-                            let mut sq_triple = sq_triple.clone();
                             new.set(cell, value);
-                            sq_triple.0.set(cell.0, cell.1, value.0);
-                            sq_triple.1.set(cell.0, cell.1, value.1);
-                            sq_triple.2.set(cell.0, cell.1, value.2);
 
                             if !new.is_solvable() {
                                 continue;
@@ -142,21 +101,61 @@ impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
 
                             match new.most_constrained() {
                                 Some(cell_or_values) => {
-                                    self.stack.push((sq_triple.clone(), new, cell_or_values, 0));
-                                    if self.stack.len() >= best {
+                                    self.stack.push((new.clone(), cell_or_values, 0));
+                                    if self.stack.len() > best {
                                         best = self.stack.len();
-                                        dbg!(&sq_triple, best);
+                                        dbg!(new.squares(), best, Instant::now() - start);
                                     }
-                                    // dbg!(self.stack.len());
                                     continue 'w;
                                 }
                                 None => {
-                                    if sq_triple.0.next_unknown().is_none() {
-                                        return Some((
-                                            sq_triple.0.into(),
-                                            sq_triple.1.into(),
-                                            sq_triple.2.into(),
-                                        ));
+                                    if constraints.is_solved() {
+                                        return Some(constraints.squares().map(|sq| sq.into()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    CellOrValueTriple::ValueTriple(value) => {
+                        let start_i = *start_value % N;
+
+                        for i in (0..N).skip(start_i) {
+                            let mut value = *value;
+                            if value[0] == N {
+                                value[0] = i;
+                            } else if value[1] == N {
+                                value[1] = i;
+                            } else {
+                                value[2] = i;
+                            }
+
+                            let cells = constraints.cells_for_value(value);
+
+                            let start_cell = *start_value / N;
+
+                            for (j, cell) in cells.into_iter().enumerate().skip(start_cell) {
+                                *start_value = i + (j + 1) * N;
+
+                                let mut new = constraints.clone();
+                                new.set(cell, value);
+
+                                if !new.is_solvable() {
+                                    continue;
+                                }
+
+                                match new.most_constrained() {
+                                    Some(cell_or_values) => {
+                                        self.stack.push((new.clone(), cell_or_values, 0));
+                                        if self.stack.len() > best {
+                                            best = self.stack.len();
+                                            dbg!(new.squares(), best, Instant::now() - start);
+                                        }
+                                        continue 'w;
+                                    }
+                                    None => {
+                                        if constraints.is_solved() {
+                                            return Some(constraints.squares().map(|sq| sq.into()));
+                                        }
                                     }
                                 }
                             }
