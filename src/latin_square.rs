@@ -13,6 +13,10 @@ pub struct Cell(pub usize, pub usize);
 pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
 
 impl<const N: usize> LatinSquare<N> {
+    pub fn new(values: [[usize; N]; N]) -> Self {
+        LatinSquare { values }
+    }
+
     pub fn get(&self, i: usize, j: usize) -> usize {
         self.values[i][j]
     }
@@ -202,8 +206,8 @@ impl<const N: usize> PartialLatinSquare<N> {
         }
     }
 
-    pub fn get(&self, i: usize, j: usize) -> Option<usize> {
-        self.values[i][j].map(|val| val.into())
+    pub fn get(&self, cell: Cell) -> Option<usize> {
+        self.values[cell.0][cell.1].map(|val| val.into())
     }
 
     pub fn set(&mut self, i: usize, j: usize, value: usize) {
@@ -214,12 +218,12 @@ impl<const N: usize> PartialLatinSquare<N> {
         for j in 0..(N + 1) / 2 {
             for j in [j, N - j - 1] {
                 for i in 0..N {
-                    if self.get(j, i).is_none() {
+                    if self.get(Cell(j, i)).is_none() {
                         return Some((j, i));
                     }
                 }
                 for i in 0..N {
-                    if self.get(i, j).is_none() {
+                    if self.get(Cell(i, j)).is_none() {
                         return Some((i, j));
                     }
                 }
@@ -237,7 +241,7 @@ impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
 
         for i in 0..N {
             for j in 0..N {
-                sq.values[i][j] = value.get(i, j).unwrap();
+                sq.values[i][j] = value.get(Cell(i, j)).unwrap();
             }
         }
 
@@ -251,7 +255,7 @@ impl<const N: usize> Debug for PartialLatinSquare<N> {
         for i in 0..N {
             write!(f, "    [")?;
             for j in 0..N {
-                if let Some(value) = self.get(i, j) {
+                if let Some(value) = self.get(Cell(i, j)) {
                     write!(f, "{:2}, ", value)?;
                 } else {
                     write!(f, "??, ")?;

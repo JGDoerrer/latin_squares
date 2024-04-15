@@ -10,7 +10,7 @@ pub struct OrthogonalLatinSquareGenerator<const N: usize> {
 
 impl<const N: usize> OrthogonalLatinSquareGenerator<N> {
     pub fn new(sqs: Vec<LatinSquare<N>>) -> Self {
-        let mut constraints = Constraints::new();
+        let mut constraints = Constraints::new_first_row();
         for sq in &sqs {
             constraints.make_orthogonal_to_sq(sq)
         }
@@ -62,7 +62,7 @@ impl<const N: usize> Iterator for OrthogonalLatinSquareGenerator<N> {
                     if self.sqs.iter().all(|sq| sq.is_orthogonal_to(&new_sq)) {
                         return Some(new_sq);
                     }
-                    dbg!(new_sq, self.stack.len());
+                    // dbg!(new_sq, self.stack.len());
                     continue 'w;
                 }
             }

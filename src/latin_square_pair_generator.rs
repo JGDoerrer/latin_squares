@@ -1,22 +1,17 @@
 use crate::{
+    bitset::BitSet,
     latin_square::{Cell, LatinSquarePair, PartialLatinSquare},
-    pair_constraints::{CellOrValuePair, PairConstraints},
+    pair_constraints::{CellOrValuePair, PairConstraints, ValuePair},
 };
 
 pub struct LatinSquarePairGenerator<const N: usize> {
-    stack: Vec<(
-        PartialLatinSquarePair<N>,
-        PairConstraints<N>,
-        CellOrValuePair,
-        usize,
-    )>,
+    stack: Vec<(PairConstraints<N>, CellOrValuePair, usize)>,
 }
 
 pub type PartialLatinSquarePair<const N: usize> = (PartialLatinSquare<N>, PartialLatinSquare<N>);
 
 impl<const N: usize> LatinSquarePairGenerator<N> {
     pub fn new() -> Self {
-        let mut sq_pair = (PartialLatinSquare::new(), PartialLatinSquare::new());
         let mut constraints = PairConstraints::new();
 
         for i in 0..N {
@@ -25,10 +20,8 @@ impl<const N: usize> LatinSquarePairGenerator<N> {
                 .into_iter()
                 .next()
                 .unwrap();
-            let value_pair = ((value % N) as usize, (value / N) as usize);
+            let value_pair = ValuePair::from_index::<N>(value);
             constraints.set(0, i, value_pair);
-            sq_pair.0.set(0, i, value_pair.0);
-            sq_pair.1.set(0, i, value_pair.1);
         }
 
         // for j in 1..N {
@@ -37,15 +30,12 @@ impl<const N: usize> LatinSquarePairGenerator<N> {
         //         .into_iter()
         //         .next()
         //         .unwrap();
-        //     let value_pair = ((value % N) as usize, (value / N) as usize);
+        //     let value_pair = ValuePair::from_index::<N>(value);
         //     constraints.set(j, 0, value_pair);
-        //     sq_pair.0.set(j, 0, value_pair.0);
-        //     sq_pair.1.set(j, 0, value_pair.1);
         // }
 
         LatinSquarePairGenerator {
             stack: vec![(
-                sq_pair,
                 constraints.clone(),
                 constraints.most_constrained().unwrap(),
                 0,
@@ -62,27 +52,23 @@ impl<const N: usize> Iterator for LatinSquarePairGenerator<N> {
             return None;
         }
 
-        'w: while let Some((sq_pair, constraints, cell_or_value, start_value)) =
-            self.stack.last_mut()
-        {
+        let mut best = 0;
+
+        'w: while let Some((constraints, cell_or_value, start_value)) = self.stack.last_mut() {
             // dbg!(&sq_pair);
             match *cell_or_value {
                 CellOrValuePair::Cell(Cell(i, j)) => {
                     let values = constraints.values_for_cell(i, j);
 
-                    for value in values {
-                        if value < (*start_value).into() {
-                            continue;
-                        }
+                    for value in values.intersect(BitSet::all_less_than(*start_value).complement())
+                    {
                         *start_value = value + 1;
 
-                        let value_pair = ((value % N) as usize, (value / N) as usize);
+                        let value_pair = ValuePair::from_index::<N>(value);
 
                         let mut new = constraints.clone();
-                        let mut sq_pair = sq_pair.clone();
                         new.set(i, j, value_pair);
-                        sq_pair.0.set(i, j, value_pair.0);
-                        sq_pair.1.set(i, j, value_pair.1);
+                        new.find_and_set_singles();
 
                         if !new.is_solvable() {
                             continue;
@@ -90,33 +76,30 @@ impl<const N: usize> Iterator for LatinSquarePairGenerator<N> {
 
                         match new.most_constrained() {
                             Some(cell_or_value) => {
-                                self.stack.push((sq_pair, new, cell_or_value, 0));
+                                self.stack.push((new.clone(), cell_or_value, 0));
+
+                                if self.stack.len() >= best {
+                                    best = self.stack.len();
+                                    dbg!(new.sq_pair(), best);
+                                }
+
                                 continue 'w;
                             }
-                            None => {
-                                if sq_pair.0.next_unknown().is_none() {
-                                    return Some((sq_pair.0.into(), sq_pair.1.into()));
-                                }
-                            }
+                            None => return Some((new.sq_pair().0.into(), new.sq_pair().1.into())),
                         }
                     }
                 }
                 CellOrValuePair::ValuePair(value_pair) => {
-                    let cells = constraints.cells_for_value((value_pair.0, value_pair.1));
+                    let cells = constraints.cells_for_value(value_pair);
 
-                    for value in cells {
-                        if value < (*start_value).into() {
-                            continue;
-                        }
+                    for value in cells.intersect(BitSet::all_less_than(*start_value).complement()) {
                         *start_value = value + 1;
 
                         let cell = (value / N, value % N);
 
                         let mut new = constraints.clone();
-                        let mut sq_pair = sq_pair.clone();
-                        new.set(cell.0, cell.1, (value_pair.0, value_pair.1));
-                        sq_pair.0.set(cell.0, cell.1, value_pair.0);
-                        sq_pair.1.set(cell.0, cell.1, value_pair.1);
+                        new.set(cell.0, cell.1, value_pair);
+                        new.find_and_set_singles();
 
                         if !new.is_solvable() {
                             continue;
@@ -124,14 +107,16 @@ impl<const N: usize> Iterator for LatinSquarePairGenerator<N> {
 
                         match new.most_constrained() {
                             Some(cell_or_value) => {
-                                self.stack.push((sq_pair, new, cell_or_value, 0));
+                                self.stack.push((new.clone(), cell_or_value, 0));
+
+                                if self.stack.len() >= best {
+                                    best = self.stack.len();
+                                    dbg!(new.sq_pair(), best);
+                                }
+
                                 continue 'w;
                             }
-                            None => {
-                                if sq_pair.0.next_unknown().is_none() {
-                                    return Some((sq_pair.0.into(), sq_pair.1.into()));
-                                }
-                            }
+                            None => return Some((new.sq_pair().0.into(), new.sq_pair().1.into())),
                         }
                     }
                 }
