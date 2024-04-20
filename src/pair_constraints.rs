@@ -1,5 +1,5 @@
 use crate::{
-    bitset::BitSet,
+    bitset::BitSet128,
     latin_square::{Cell, LatinSquarePair, PartialLatinSquare},
     latin_square_pair_generator::PartialLatinSquarePair,
 };
@@ -8,12 +8,12 @@ use std::fmt::Debug;
 #[derive(Debug, Clone)]
 pub struct PairConstraints<const N: usize> {
     sq_pair: PartialLatinSquarePair<N>,
-    values_left: BitSet,
-    empty_cells: BitSet,
-    rows: [BitSet; N],
-    cols: [BitSet; N],
-    first_values: [BitSet; N],
-    second_values: [BitSet; N],
+    values_left: BitSet128,
+    empty_cells: BitSet128,
+    rows: [BitSet128; N],
+    cols: [BitSet128; N],
+    first_values: [BitSet128; N],
+    second_values: [BitSet128; N],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,8 +26,8 @@ pub enum CellOrValuePair {
 }
 
 impl<const N: usize> PairConstraints<N> {
-    const VALUE_PAIRS_WITHOUT_FIRST: [BitSet; N] = {
-        let mut table = [BitSet::empty(); N];
+    const VALUE_PAIRS_WITHOUT_FIRST: [BitSet128; N] = {
+        let mut table = [BitSet128::empty(); N];
 
         let every_nth = {
             let mut num = 1u128;
@@ -41,84 +41,85 @@ impl<const N: usize> PairConstraints<N> {
 
         let mut i = 0;
         while i < N {
-            table[i] = BitSet::from_bits(BitSet::single(i).bits() * every_nth).complement();
+            table[i] = BitSet128::from_bits(BitSet128::single(i).bits() * every_nth).complement();
             i += 1;
         }
 
         table
     };
-    const VALUE_PAIRS_WITHOUT_SECOND: [BitSet; N] = {
-        let mut table = [BitSet::empty(); N];
+    const VALUE_PAIRS_WITHOUT_SECOND: [BitSet128; N] = {
+        let mut table = [BitSet128::empty(); N];
 
         let mut i = 0;
         while i < N {
-            table[i] = BitSet::from_bits(BitSet::all_less_than(N).bits() << (i * N)).complement();
+            table[i] =
+                BitSet128::from_bits(BitSet128::all_less_than(N).bits() << (i * N)).complement();
             i += 1;
         }
 
         table
     };
-    const CELLS_WITHOUT_ROW: [BitSet; N] = Self::VALUE_PAIRS_WITHOUT_SECOND;
-    const CELLS_WITHOUT_COLUMN: [BitSet; N] = Self::VALUE_PAIRS_WITHOUT_FIRST;
+    const CELLS_WITHOUT_ROW: [BitSet128; N] = Self::VALUE_PAIRS_WITHOUT_SECOND;
+    const CELLS_WITHOUT_COLUMN: [BitSet128; N] = Self::VALUE_PAIRS_WITHOUT_FIRST;
 
-    const RELATIONS: [[BitSet; 4]; 3] = [
+    const RELATIONS: [[BitSet128; 4]; 3] = [
         [
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 00, 11, 12, 13, 21, 22, 23, 31, 32, 33, 44, 45, 46, 54, 55, 56, 64, 65, 66, 77, 78,
                 79, 87, 88, 89, 97, 98, 99,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 01, 02, 03, 10, 20, 30, 47, 48, 49, 57, 58, 59, 67, 68, 69, 74, 75, 76, 84, 85, 86,
                 94, 95, 96,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 04, 05, 06, 17, 18, 19, 27, 28, 29, 37, 38, 39, 40, 50, 60, 71, 72, 73, 81, 82, 83,
                 91, 92, 93,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 07, 08, 09, 14, 15, 16, 24, 25, 26, 34, 35, 36, 41, 42, 43, 51, 52, 53, 61, 62, 63,
                 70, 80, 90,
             ]),
         ],
         [
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 00, 01, 10, 11, 22, 23, 32, 33, 44, 45, 54, 55, 66, 67, 68, 69, 76, 77, 78, 79, 86,
                 87, 88, 89, 96, 97, 98, 99,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 02, 03, 12, 13, 20, 21, 30, 31, 46, 47, 48, 49, 56, 57, 58, 59, 64, 65, 74, 75, 84,
                 85, 94, 95,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 04, 05, 14, 15, 26, 27, 28, 29, 36, 37, 38, 39, 40, 41, 50, 51, 62, 63, 72, 73, 82,
                 83, 92, 93,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 06, 07, 08, 09, 16, 17, 18, 19, 24, 25, 34, 35, 42, 43, 52, 53, 60, 61, 70, 71, 80,
                 81, 90, 91,
             ]),
         ],
         [
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 00, 01, 10, 11, 22, 23, 32, 33, 44, 45, 54, 55, 66, 67, 68, 69, 76, 77, 78, 79, 86,
                 87, 88, 89, 96, 97, 98, 99,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 02, 03, 12, 13, 20, 21, 30, 31, 46, 47, 48, 49, 56, 57, 58, 59, 64, 65, 74, 75, 84,
                 85, 94, 95,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 04, 05, 14, 15, 26, 27, 28, 29, 36, 37, 38, 39, 40, 41, 50, 51, 62, 63, 72, 73, 82,
                 83, 92, 93,
             ]),
-            BitSet::from_slice(&[
+            BitSet128::from_slice(&[
                 06, 07, 08, 09, 16, 17, 18, 19, 24, 25, 34, 35, 42, 43, 52, 53, 60, 61, 70, 71, 80,
                 81, 90, 91,
             ]),
         ],
     ];
 
-    fn get_class(i: usize) -> BitSet {
+    fn get_class(i: usize) -> BitSet128 {
         *Self::RELATIONS[2]
             .iter()
             .find(|bitset| bitset.contains(i))
@@ -128,12 +129,12 @@ impl<const N: usize> PairConstraints<N> {
     pub fn new() -> Self {
         PairConstraints {
             sq_pair: (PartialLatinSquare::new(), PartialLatinSquare::new()),
-            values_left: BitSet::all_less_than(N * N),
-            empty_cells: BitSet::all_less_than(N * N),
-            rows: [(BitSet::all_less_than(N * N)); N],
-            cols: [(BitSet::all_less_than(N * N)); N],
-            first_values: [(BitSet::all_less_than(N * N)); N],
-            second_values: [(BitSet::all_less_than(N * N)); N],
+            values_left: BitSet128::all_less_than(N * N),
+            empty_cells: BitSet128::all_less_than(N * N),
+            rows: [(BitSet128::all_less_than(N * N)); N],
+            cols: [(BitSet128::all_less_than(N * N)); N],
+            first_values: [(BitSet128::all_less_than(N * N)); N],
+            second_values: [(BitSet128::all_less_than(N * N)); N],
         }
     }
 
@@ -182,22 +183,36 @@ impl<const N: usize> PairConstraints<N> {
     }
 
     pub fn set_first_value(&mut self, cell: Cell, value: usize) {
-        self.first_values[value] = self.first_values[value]
-            .intersect(Self::CELLS_WITHOUT_ROW[cell.0])
-            .intersect(Self::CELLS_WITHOUT_COLUMN[cell.1]);
+        assert!(
+            self.first_values[value].contains(cell.to_index::<N>())
+                || self.sq_pair().0.get(cell).is_some_and(|v| v == value),
+            "{:?}, {:?}, {:?}",
+            self.sq_pair(),
+            cell,
+            value
+        );
+
+        // self.first_values[value] = self.first_values[value]
+        //     .intersect(Self::CELLS_WITHOUT_ROW[cell.0])
+        //     .intersect(Self::CELLS_WITHOUT_COLUMN[cell.1]);
 
         self.sq_pair.0.set(cell.0, cell.1, value);
     }
 
     pub fn set_second_value(&mut self, cell: Cell, value: usize) {
-        self.second_values[value] = self.second_values[value]
-            .intersect(Self::CELLS_WITHOUT_ROW[cell.0])
-            .intersect(Self::CELLS_WITHOUT_COLUMN[cell.1]);
+        assert!(
+            self.second_values[value].contains(cell.to_index::<N>())
+                || self.sq_pair().1.get(cell).is_some_and(|v| v == value)
+        );
+
+        // self.second_values[value] = self.second_values[value]
+        //     .intersect(Self::CELLS_WITHOUT_ROW[cell.0])
+        //     .intersect(Self::CELLS_WITHOUT_COLUMN[cell.1]);
 
         self.sq_pair.1.set(cell.0, cell.1, value);
     }
 
-    pub fn values_for_cell(&self, i: usize, j: usize) -> BitSet {
+    pub fn values_for_cell(&self, i: usize, j: usize) -> BitSet128 {
         if let Some((i, j)) = self
             .sq_pair
             .0
@@ -205,7 +220,7 @@ impl<const N: usize> PairConstraints<N> {
             .map(|s| self.sq_pair.1.get(Cell(i, j)).map(|t| (s, t)))
             .flatten()
         {
-            return BitSet::single(ValuePair(i, j).to_index::<N>());
+            return BitSet128::single(ValuePair(i, j).to_index::<N>());
         }
 
         if let Some(first) = self.sq_pair.0.get(Cell(i, j)) {
@@ -227,26 +242,40 @@ impl<const N: usize> PairConstraints<N> {
         // .intersect(Self::get_class(i * N + j))
     }
 
-    pub fn first_values_for_cell(&self, cell: Cell) -> BitSet {
-        BitSet::from_iter(
+    pub fn first_values_for_cell(&self, cell: Cell) -> BitSet128 {
+        BitSet128::from_iter(
             self.values_for_cell(cell.0, cell.1)
                 .into_iter()
                 .map(|index| index % N),
         )
     }
 
-    pub fn second_values_for_cell(&self, cell: Cell) -> BitSet {
-        BitSet::from_iter(
+    pub fn second_values_for_cell(&self, cell: Cell) -> BitSet128 {
+        BitSet128::from_iter(
             self.values_for_cell(cell.0, cell.1)
                 .into_iter()
                 .map(|index| index / N),
         )
     }
 
-    pub fn cells_for_value(&self, value: ValuePair) -> BitSet {
-        self.first_values[value.0]
-            .intersect(self.second_values[value.1])
-            .intersect(self.empty_cells)
+    pub fn cells_for_value(&self, value: ValuePair) -> BitSet128 {
+        let mut cells = BitSet128::empty();
+
+        for cell_index in 0..N * N {
+            let cell = Cell::from_index::<N>(cell_index);
+
+            if self
+                .values_for_cell(cell.0, cell.1)
+                .contains(value.to_index::<N>())
+            {
+                cells.insert(cell_index);
+            }
+        }
+
+        cells
+        // self.first_values[value.0]
+        //     .intersect(self.second_values[value.1])
+        //     .intersect(self.empty_cells)
         // .intersect(Self::get_class(value.0 + value.1 * N))
     }
 
@@ -301,7 +330,7 @@ impl<const N: usize> PairConstraints<N> {
     }
 
     pub fn is_solvable(&self) -> bool {
-        self.is_solvable_rec(5)
+        self.is_solvable_rec(1)
     }
 
     fn is_solvable_rec(&self, max_depth: usize) -> bool {
@@ -324,41 +353,55 @@ impl<const N: usize> PairConstraints<N> {
         }
 
         if max_depth > 0 {
-            for cell_index in self.empty_cells {
-                let cell = Cell::from_index::<N>(cell_index);
+            let mut values: Vec<_> = self
+                .empty_cells
+                .into_iter()
+                .map(|cell_index| {
+                    let cell = Cell::from_index::<N>(cell_index);
+                    let values = self.values_for_cell(cell.0, cell.1);
+                    (cell, values)
+                })
+                .filter(|(_, values)| values.len() > 1 && values.len() <= N)
+                .collect();
 
-                let values = &self.values_for_cell(cell.0, cell.1);
+            values.sort_by_key(|(_, values)| values.len());
 
-                if values.len() > 1
-                    && values.len() < N
-                    && values.into_iter().all(|value| {
-                        let value_pair = ValuePair::from_index::<N>(value);
-                        let mut copy = self.clone();
-                        copy.set(cell.0, cell.1, value_pair);
-                        copy.find_and_set_singles();
+            for (cell, values) in values {
+                if values.into_iter().all(|value| {
+                    let value_pair = ValuePair::from_index::<N>(value);
+                    let mut copy = self.clone();
+                    copy.set(cell.0, cell.1, value_pair);
+                    copy.find_and_set_singles();
 
-                        !copy.is_solvable_rec(max_depth - 1)
-                    })
-                {
+                    !copy.is_solvable_rec(max_depth - 1)
+                }) {
                     return false;
                 }
             }
 
-            for value_index in self.values_left {
-                let value_pair = ValuePair::from_index::<N>(value_index);
+            let mut values: Vec<_> = self
+                .values_left
+                .into_iter()
+                .map(|value_index| {
+                    let value_pair = ValuePair::from_index::<N>(value_index);
 
-                let cells = self.cells_for_value(value_pair);
+                    let cells = self.cells_for_value(value_pair);
 
-                if cells.len() > 1
-                    && cells.len() < N
-                    && cells.into_iter().all(|cell| {
-                        let cell = Cell::from_index::<N>(cell);
-                        let mut copy = self.clone();
-                        copy.set(cell.0, cell.1, value_pair);
-                        copy.find_and_set_singles();
-                        !copy.is_solvable_rec(max_depth - 1)
-                    })
-                {
+                    (value_pair, cells)
+                })
+                .filter(|(_, cells)| cells.len() > 1 && cells.len() <= N)
+                .collect();
+
+            values.sort_by_key(|(_, cells)| cells.len());
+
+            for (value_pair, cells) in values {
+                if cells.into_iter().all(|cell| {
+                    let cell = Cell::from_index::<N>(cell);
+                    let mut copy = self.clone();
+                    copy.set(cell.0, cell.1, value_pair);
+                    copy.find_and_set_singles();
+                    !copy.is_solvable_rec(max_depth - 1)
+                }) {
                     return false;
                 }
             }

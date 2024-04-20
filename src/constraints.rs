@@ -1,17 +1,17 @@
 use crate::{
-    bitset::BitSet,
+    bitset::BitSet128,
     latin_square::{Cell, LatinSquare},
 };
 
 #[derive(Debug, Clone)]
 pub struct Constraints<const N: usize> {
-    constraints: [[BitSet; N]; N],
+    constraints: [[BitSet128; N]; N],
 }
 
 impl<const N: usize> Constraints<N> {
     pub fn new() -> Self {
         Constraints {
-            constraints: [[BitSet::all_less_than(N); N]; N],
+            constraints: [[BitSet128::all_less_than(N); N]; N],
         }
     }
 
@@ -41,18 +41,18 @@ impl<const N: usize> Constraints<N> {
         self.propagate_value(i, j, value);
     }
 
-    pub fn get(&self, i: usize, j: usize) -> BitSet {
+    pub fn get(&self, i: usize, j: usize) -> BitSet128 {
         self.constraints[i][j]
     }
 
     fn propagate_value(&mut self, i: usize, j: usize, value: usize) {
         let value_index = value;
         assert!(self.constraints[i][j].contains(value_index));
-        self.constraints[i][j] = BitSet::single(value_index);
+        self.constraints[i][j] = BitSet128::single(value_index);
 
-        let mask = BitSet::single(value)
+        let mask = BitSet128::single(value)
             .complement()
-            .intersect(BitSet::all_less_than(N * N));
+            .intersect(BitSet128::all_less_than(N * N));
 
         for k in 0..N {
             if k != j {
@@ -193,7 +193,7 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn make_orthogonal_to_sq(&mut self, sq: &LatinSquare<N>) {
-        let mut known_values = [BitSet::empty(); N];
+        let mut known_values = [BitSet128::empty(); N];
         for i in 0..N {
             for j in 0..N {
                 if self.get(i, j).is_single() {

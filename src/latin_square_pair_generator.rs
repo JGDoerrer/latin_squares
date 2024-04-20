@@ -1,5 +1,5 @@
 use crate::{
-    bitset::BitSet,
+    bitset::BitSet128,
     latin_square::{Cell, LatinSquarePair, PartialLatinSquare},
     pair_constraints::{CellOrValuePair, PairConstraints, ValuePair},
 };
@@ -60,7 +60,8 @@ impl<const N: usize> Iterator for LatinSquarePairGenerator<N> {
                 CellOrValuePair::Cell(Cell(i, j)) => {
                     let values = constraints.values_for_cell(i, j);
 
-                    for value in values.intersect(BitSet::all_less_than(*start_value).complement())
+                    for value in
+                        values.intersect(BitSet128::all_less_than(*start_value).complement())
                     {
                         *start_value = value + 1;
 
@@ -92,7 +93,9 @@ impl<const N: usize> Iterator for LatinSquarePairGenerator<N> {
                 CellOrValuePair::ValuePair(value_pair) => {
                     let cells = constraints.cells_for_value(value_pair);
 
-                    for value in cells.intersect(BitSet::all_less_than(*start_value).complement()) {
+                    for value in
+                        cells.intersect(BitSet128::all_less_than(*start_value).complement())
+                    {
                         *start_value = value + 1;
 
                         let cell = (value / N, value % N);

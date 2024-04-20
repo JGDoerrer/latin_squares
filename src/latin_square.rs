@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{bitset::BitSet, constraints::Constraints, pair_constraints::PairConstraints};
+use crate::{bitset::BitSet128, constraints::Constraints, pair_constraints::PairConstraints};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LatinSquare<const N: usize> {
@@ -23,7 +23,7 @@ impl<const N: usize> LatinSquare<N> {
 
     pub fn is_orthogonal_to(&self, other: &Self) -> bool {
         for value in 0..N as usize {
-            let mut other_values = BitSet::empty();
+            let mut other_values = BitSet128::empty();
 
             for i in 0..N {
                 for j in 0..N {
@@ -33,7 +33,7 @@ impl<const N: usize> LatinSquare<N> {
                 }
             }
 
-            if other_values != BitSet::all_less_than(N) {
+            if other_values != BitSet128::all_less_than(N) {
                 return false;
             }
         }
@@ -48,8 +48,8 @@ impl<const N: usize> LatinSquare<N> {
         'a: for _ in 0..N {
             let mut transversal = vec![];
 
-            let mut values_left = BitSet::all_less_than(N);
-            let mut columns = BitSet::all_less_than(N);
+            let mut values_left = BitSet128::all_less_than(N);
+            let mut columns = BitSet128::all_less_than(N);
 
             'row: for row in 0..N {
                 for col in columns {
@@ -77,8 +77,8 @@ impl<const N: usize> LatinSquare<N> {
             0,
             [[false; N]; N],
             0,
-            BitSet::all_less_than(N),
-            BitSet::all_less_than(N),
+            BitSet128::all_less_than(N),
+            BitSet128::all_less_than(N),
             0,
         )];
         let mut max = 0;
@@ -86,7 +86,7 @@ impl<const N: usize> LatinSquare<N> {
         'w: while let Some(state) = stack.last_mut() {
             let (count, mut used, row, mut values, mut columns, col_start) = state.clone();
 
-            for col in columns.intersect(BitSet::all_less_than(col_start).complement()) {
+            for col in columns.intersect(BitSet128::all_less_than(col_start).complement()) {
                 state.5 = col;
                 let value = self.get(row, col);
                 if !used[row][col] && values.contains(value as usize) {
@@ -105,8 +105,8 @@ impl<const N: usize> LatinSquare<N> {
                             count + 1,
                             used,
                             0,
-                            BitSet::all_less_than(N),
-                            BitSet::all_less_than(N),
+                            BitSet128::all_less_than(N),
+                            BitSet128::all_less_than(N),
                             0,
                         ));
                     } else {
@@ -204,6 +204,10 @@ impl<const N: usize> PartialLatinSquare<N> {
         PartialLatinSquare {
             values: [[None; N]; N],
         }
+    }
+
+    pub fn from_array(values: [[Option<u8>; N]; N]) -> Self {
+        PartialLatinSquare { values }
     }
 
     pub fn get(&self, cell: Cell) -> Option<usize> {

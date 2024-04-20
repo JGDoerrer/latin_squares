@@ -1,5 +1,5 @@
 use crate::{
-    bitset::BitSet,
+    bitset::BitSet128,
     latin_square::{Cell, PartialLatinSquare},
     pair_constraints::{CellOrValuePair, PairConstraints, ValuePair},
 };
@@ -7,10 +7,10 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct TripleConstraints<const N: usize> {
     squares: [PartialLatinSquare<N>; 3],
-    empty_cells: BitSet,
-    rows: [[BitSet; N]; 3],
-    cols: [[BitSet; N]; 3],
-    vals: [[BitSet; N]; 3],
+    empty_cells: BitSet128,
+    rows: [[BitSet128; N]; 3],
+    cols: [[BitSet128; N]; 3],
+    vals: [[BitSet128; N]; 3],
     pair01: PairConstraints<N>,
     pair02: PairConstraints<N>,
     pair12: PairConstraints<N>,
@@ -25,8 +25,8 @@ pub enum CellOrValueTriple {
 }
 
 impl<const N: usize> TripleConstraints<N> {
-    const CELLS_WITHOUT_COLUMN: [BitSet; N] = {
-        let mut table = [BitSet::empty(); N];
+    const CELLS_WITHOUT_COLUMN: [BitSet128; N] = {
+        let mut table = [BitSet128::empty(); N];
 
         let every_nth = {
             let mut num = 1u128;
@@ -40,18 +40,19 @@ impl<const N: usize> TripleConstraints<N> {
 
         let mut i = 0;
         while i < N {
-            table[i] = BitSet::from_bits(BitSet::single(i).bits() * every_nth).complement();
+            table[i] = BitSet128::from_bits(BitSet128::single(i).bits() * every_nth).complement();
             i += 1;
         }
 
         table
     };
-    const CELLS_WITHOUT_ROW: [BitSet; N] = {
-        let mut table = [BitSet::empty(); N];
+    const CELLS_WITHOUT_ROW: [BitSet128; N] = {
+        let mut table = [BitSet128::empty(); N];
 
         let mut i = 0;
         while i < N {
-            table[i] = BitSet::from_bits(BitSet::all_less_than(N).bits() << (i * N)).complement();
+            table[i] =
+                BitSet128::from_bits(BitSet128::all_less_than(N).bits() << (i * N)).complement();
             i += 1;
         }
 
@@ -61,10 +62,10 @@ impl<const N: usize> TripleConstraints<N> {
     pub fn new() -> Self {
         TripleConstraints {
             squares: [PartialLatinSquare::new(); 3],
-            empty_cells: BitSet::all_less_than(N * N),
-            rows: [[BitSet::all_less_than(N); N]; 3],
-            cols: [[BitSet::all_less_than(N); N]; 3],
-            vals: [[BitSet::all_less_than(N * N); N]; 3],
+            empty_cells: BitSet128::all_less_than(N * N),
+            rows: [[BitSet128::all_less_than(N); N]; 3],
+            cols: [[BitSet128::all_less_than(N); N]; 3],
+            vals: [[BitSet128::all_less_than(N * N); N]; 3],
             pair01: PairConstraints::new(),
             pair02: PairConstraints::new(),
             pair12: PairConstraints::new(),
@@ -74,7 +75,7 @@ impl<const N: usize> TripleConstraints<N> {
     pub fn filled_cells(&self) -> usize {
         self.empty_cells
             .complement()
-            .intersect(BitSet::all_less_than(N * N))
+            .intersect(BitSet128::all_less_than(N * N))
             .len()
     }
 
@@ -189,13 +190,13 @@ impl<const N: usize> TripleConstraints<N> {
         //     }
         // }
 
-        // let mut values02map = [BitSet::empty(); N];
+        // let mut values02map = [BitSet128::empty(); N];
         // for index in values02 {
         //     let (i, j) = (index % N, index / N);
         //     values02map[i].insert(j);
         // }
 
-        // let mut values12map = [BitSet::empty(); N];
+        // let mut values12map = [BitSet128::empty(); N];
         // for index in values12 {
         //     let (i, j) = (index % N, index / N);
         //     values12map[i].insert(j);
@@ -264,13 +265,13 @@ impl<const N: usize> TripleConstraints<N> {
 
         // values
 
-        // let mut values02map = [BitSet::empty(); N];
+        // let mut values02map = [BitSet128::empty(); N];
         // for index in values02 {
         //     let (i, j) = (index % N, index / N);
         //     values02map[i].insert(j);
         // }
 
-        // let mut values12map = [BitSet::empty(); N];
+        // let mut values12map = [BitSet128::empty(); N];
         // for index in values12 {
         //     let (i, j) = (index % N, index / N);
         //     values12map[i].insert(j);
@@ -287,19 +288,19 @@ impl<const N: usize> TripleConstraints<N> {
         // values
     }
 
-    pub fn first_values_for_cell(&self, cell: Cell) -> BitSet {
+    pub fn first_values_for_cell(&self, cell: Cell) -> BitSet128 {
         self.pair01
             .first_values_for_cell(cell)
             .intersect(self.pair02.first_values_for_cell(cell))
     }
 
-    pub fn second_values_for_cell(&self, cell: Cell) -> BitSet {
+    pub fn second_values_for_cell(&self, cell: Cell) -> BitSet128 {
         self.pair01
             .second_values_for_cell(cell)
             .intersect(self.pair12.first_values_for_cell(cell))
     }
 
-    pub fn third_values_for_cell(&self, cell: Cell) -> BitSet {
+    pub fn third_values_for_cell(&self, cell: Cell) -> BitSet128 {
         self.pair02
             .second_values_for_cell(cell)
             .intersect(self.pair12.second_values_for_cell(cell))
@@ -455,61 +456,61 @@ impl<const N: usize> TripleConstraints<N> {
         //     None
         // }
 
-        let value_pair01 = self.pair01.most_constrained_value();
-        let value_pair02 = self.pair02.most_constrained_value();
-        let value_pair12 = self.pair12.most_constrained_value();
+        // let value_pair01 = self.pair01.most_constrained_value();
+        // let value_pair02 = self.pair02.most_constrained_value();
+        // let value_pair12 = self.pair12.most_constrained_value();
 
-        if let Some((value_pair, 1)) = value_pair01 {
-            let cell = Cell::from_index::<N>(
-                self.pair01
-                    .cells_for_value(value_pair)
-                    .into_iter()
-                    .next()
-                    .unwrap(),
-            );
+        // if let Some((value_pair, 1)) = value_pair01 {
+        //     let cell = Cell::from_index::<N>(
+        //         self.pair01
+        //             .cells_for_value(value_pair)
+        //             .into_iter()
+        //             .next()
+        //             .unwrap(),
+        //     );
 
-            let values = self.values_for_cell(cell);
+        //     let values = self.values_for_cell(cell);
 
-            if values.len() == 1 {
-                return Some((values[0], 1));
-            }
-        }
-        if let Some((value_pair, 1)) = value_pair02 {
-            let cell = Cell::from_index::<N>(
-                self.pair02
-                    .cells_for_value(value_pair)
-                    .into_iter()
-                    .next()
-                    .unwrap(),
-            );
+        //     if values.len() == 1 {
+        //         return Some((values[0], 1));
+        //     }
+        // }
+        // if let Some((value_pair, 1)) = value_pair02 {
+        //     let cell = Cell::from_index::<N>(
+        //         self.pair02
+        //             .cells_for_value(value_pair)
+        //             .into_iter()
+        //             .next()
+        //             .unwrap(),
+        //     );
 
-            let values = self.values_for_cell(cell);
+        //     let values = self.values_for_cell(cell);
 
-            if values.len() == 1 {
-                return Some((values[0], 1));
-            }
-        }
-        if let Some((value_pair, 1)) = value_pair12 {
-            let cell = Cell::from_index::<N>(
-                self.pair12
-                    .cells_for_value(value_pair)
-                    .into_iter()
-                    .next()
-                    .unwrap(),
-            );
+        //     if values.len() == 1 {
+        //         return Some((values[0], 1));
+        //     }
+        // }
+        // if let Some((value_pair, 1)) = value_pair12 {
+        //     let cell = Cell::from_index::<N>(
+        //         self.pair12
+        //             .cells_for_value(value_pair)
+        //             .into_iter()
+        //             .next()
+        //             .unwrap(),
+        //     );
 
-            let values = self.values_for_cell(cell);
+        //     let values = self.values_for_cell(cell);
 
-            if values.len() == 1 {
-                return Some((values[0], 1));
-            }
-        }
+        //     if values.len() == 1 {
+        //         return Some((values[0], 1));
+        //     }
+        // }
 
         None
     }
 
     pub fn is_solvable(&self) -> bool {
-        self.is_solvable_rec(0)
+        self.is_solvable_rec(6)
     }
 
     fn is_solvable_rec(&self, max_depth: usize) -> bool {
@@ -521,26 +522,37 @@ impl<const N: usize> TripleConstraints<N> {
             {
                 return false;
             }
+        }
 
-            let values = self.values_for_cell(cell);
+        if !self.pair01.is_solvable() || !self.pair02.is_solvable() || !self.pair12.is_solvable() {
+            return false;
+        }
 
-            if max_depth > 0
-                && values.len() > 1
-                && values.len() < N
-                && values.into_iter().all(|value| {
+        if max_depth > 0 {
+            let mut values: Vec<_> = self
+                .empty_cells
+                .into_iter()
+                .map(|i| {
+                    let cell = Cell::from_index::<N>(i);
+
+                    (cell, self.values_for_cell(cell))
+                })
+                .filter(|(_, values)| values.len() > 1 && values.len() <= N)
+                .collect();
+
+            values.sort_by_key(|(_, val)| val.len());
+
+            for (cell, values) in values {
+                if values.into_iter().all(|value| {
                     let mut copy = self.clone();
                     copy.set(cell, value);
                     copy.find_and_set_singles();
 
                     !copy.is_solvable_rec(max_depth - 1)
-                })
-            {
-                return false;
+                }) {
+                    return false;
+                }
             }
-        }
-
-        if !self.pair01.is_solvable() || !self.pair02.is_solvable() || !self.pair12.is_solvable() {
-            return false;
         }
 
         true
@@ -570,6 +582,18 @@ impl<const N: usize> TripleConstraints<N> {
                         };
                         let value_pair = ValuePair::from_index::<N>(index);
 
+                        if !self
+                            .pair02
+                            .first_values_for_cell(cell)
+                            .contains(value_pair.0)
+                            || !self
+                                .pair12
+                                .first_values_for_cell(cell)
+                                .contains(value_pair.1)
+                        {
+                            continue;
+                        }
+
                         self.pair01.set(cell.0, cell.1, value_pair);
                         self.pair02.set_first_value(cell, value_pair.0);
                         self.pair12.set_first_value(cell, value_pair.1);
@@ -585,6 +609,18 @@ impl<const N: usize> TripleConstraints<N> {
                             continue;
                         };
                         let cell = Cell::from_index::<N>(index);
+
+                        if !self
+                            .pair02
+                            .first_values_for_cell(cell)
+                            .contains(value_pair.0)
+                            || !self
+                                .pair12
+                                .first_values_for_cell(cell)
+                                .contains(value_pair.1)
+                        {
+                            continue;
+                        }
 
                         self.pair01.set(cell.0, cell.1, value_pair);
                         self.pair02.set_first_value(cell, value_pair.0);
@@ -612,6 +648,18 @@ impl<const N: usize> TripleConstraints<N> {
                         };
                         let value_pair = ValuePair::from_index::<N>(index);
 
+                        if !self
+                            .pair01
+                            .first_values_for_cell(cell)
+                            .contains(value_pair.0)
+                            || !self
+                                .pair12
+                                .second_values_for_cell(cell)
+                                .contains(value_pair.1)
+                        {
+                            continue;
+                        }
+
                         self.pair02.set(cell.0, cell.1, value_pair);
                         self.pair01.set_first_value(cell, value_pair.0);
                         self.pair12.set_second_value(cell, value_pair.1);
@@ -627,6 +675,18 @@ impl<const N: usize> TripleConstraints<N> {
                             continue;
                         };
                         let cell = Cell::from_index::<N>(index);
+
+                        if !self
+                            .pair01
+                            .first_values_for_cell(cell)
+                            .contains(value_pair.0)
+                            || !self
+                                .pair12
+                                .second_values_for_cell(cell)
+                                .contains(value_pair.1)
+                        {
+                            continue;
+                        }
 
                         self.pair02.set(cell.0, cell.1, value_pair);
                         self.pair01.set_first_value(cell, value_pair.0);
@@ -654,6 +714,18 @@ impl<const N: usize> TripleConstraints<N> {
                         };
                         let value_pair = ValuePair::from_index::<N>(index);
 
+                        if !self
+                            .pair01
+                            .second_values_for_cell(cell)
+                            .contains(value_pair.0)
+                            || !self
+                                .pair02
+                                .second_values_for_cell(cell)
+                                .contains(value_pair.1)
+                        {
+                            continue;
+                        }
+
                         self.pair12.set(cell.0, cell.1, value_pair);
                         self.pair01.set_second_value(cell, value_pair.0);
                         self.pair02.set_second_value(cell, value_pair.1);
@@ -669,6 +741,18 @@ impl<const N: usize> TripleConstraints<N> {
                             continue;
                         };
                         let cell = Cell::from_index::<N>(index);
+
+                        if !self
+                            .pair01
+                            .second_values_for_cell(cell)
+                            .contains(value_pair.0)
+                            || !self
+                                .pair02
+                                .second_values_for_cell(cell)
+                                .contains(value_pair.1)
+                        {
+                            continue;
+                        }
 
                         self.pair12.set(cell.0, cell.1, value_pair);
                         self.pair01.set_second_value(cell, value_pair.0);

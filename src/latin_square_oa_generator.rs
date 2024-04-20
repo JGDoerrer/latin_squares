@@ -9,32 +9,22 @@ use std::{
 
 use crate::{
     latin_square::{Cell, LatinSquare, PartialLatinSquare},
+    orthogonal_array::{self, OAConstraints, N},
     pair_constraints::CellOrValuePair,
     triple_constraints::{CellOrValueTriple, TripleConstraints, ValueTriple},
 };
 
-pub struct LatinSquareTripleGenerator<const N: usize> {
-    stack: Vec<(TripleConstraints<N>, Cell, usize)>,
+pub struct LatinSquareOAGenerator {
+    stack: Vec<(OAConstraints, Cell, usize)>,
 }
-impl<const N: usize> LatinSquareTripleGenerator<N> {
+
+impl LatinSquareOAGenerator {
     pub fn new() -> Self {
-        let mut constraints = TripleConstraints::new();
+        let mut constraints = OAConstraints::new();
 
-        for i in 0..N {
-            let value = constraints
-                .values_for_cell(Cell(0, i))
-                .into_iter()
-                .next()
-                .unwrap();
-            constraints.set(Cell(0, i), value);
-        }
-
-        for i in 1..N {
-            constraints.set_first_value(Cell(i, 0), i);
-        }
-
-        LatinSquareTripleGenerator {
-            stack: vec![(constraints.clone(), Cell(1, 0), 0)],
+        let cell = constraints.most_constrained_cell().unwrap();
+        LatinSquareOAGenerator {
+            stack: vec![(constraints, cell, 0)],
         }
     }
 
@@ -48,32 +38,33 @@ impl<const N: usize> LatinSquareTripleGenerator<N> {
     }
 
     fn save_indices(&self) {
-        return;
         let vals: Vec<_> = self
             .stack
             .iter()
             .map(|(_, _, val)| val.saturating_sub(1))
             .collect();
-
-        let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("stack.txt")
-        else {
-            return;
-        };
-
         let string = vals
             .into_iter()
             .map(|val| format!("{val}"))
             .reduce(|a, b| format!("{a}, {b}"))
             .unwrap();
 
+        // println!("{string}");
+        // return;
+
+        let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("stack_oa.txt")
+        else {
+            return;
+        };
+
         writeln!(file, "{string}").unwrap();
     }
 
     pub fn load() -> Option<Self> {
-        let Ok(file) = OpenOptions::new().read(true).open("stack.txt") else {
+        let Ok(file) = OpenOptions::new().read(true).open("stack_oa.txt") else {
             return None;
         };
 
@@ -97,8 +88,8 @@ impl<const N: usize> LatinSquareTripleGenerator<N> {
             let mut constraints = constraints.clone();
             constraints.set(cell, value);
             constraints.find_and_set_singles();
-            match constraints.most_constrained() {
-                Some(CellOrValueTriple::Cell(cell)) => {
+            match constraints.most_constrained_cell() {
+                Some(cell) => {
                     new.stack.push((constraints, cell, 0));
                 }
                 _ => return None,
@@ -109,15 +100,13 @@ impl<const N: usize> LatinSquareTripleGenerator<N> {
     }
 }
 
-impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
+impl Iterator for LatinSquareOAGenerator {
     type Item = [LatinSquare<N>; 3];
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.stack.is_empty() {
             return None;
         }
-
-        dbg!(self.stack.last().unwrap().0.squares());
 
         let start = Instant::now();
         let mut last_write = Instant::now();
@@ -179,6 +168,7 @@ impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
                 // Self::shuffle(self.seed + cell.to_index::<N>(), &mut values);
                 // }
 
+                // dbg!(cell, values, *start_value);
                 for (i, value) in values.into_iter().enumerate().skip(*start_value) {
                     *start_value = i + 1;
 
@@ -194,8 +184,8 @@ impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
                         continue 'w;
                     }
 
-                    match new.most_constrained() {
-                        Some(CellOrValueTriple::Cell(cell)) => {
+                    match new.most_constrained_cell() {
+                        Some(cell) => {
                             self.stack.push((new.clone(), cell, 0));
                             if new.filled_cells() >= best {
                                 best = new.filled_cells();
@@ -213,7 +203,6 @@ impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
                                 return Some(new.squares().map(|sq| sq.into()));
                             }
                         }
-                        _ => unreachable!(),
                     }
                 }
             }
