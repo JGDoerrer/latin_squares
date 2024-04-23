@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     latin_square::{Cell, LatinSquare, PartialLatinSquare},
-    orthogonal_array::{self, OAConstraints, N},
+    orthogonal_array::{self, OAConstraints, MOLS, N},
     pair_constraints::CellOrValuePair,
     triple_constraints::{CellOrValueTriple, TripleConstraints, ValueTriple},
 };
@@ -46,11 +46,11 @@ impl LatinSquareOAGenerator {
         let string = vals
             .into_iter()
             .map(|val| format!("{val}"))
-            .reduce(|a, b| format!("{a}, {b}"))
+            .reduce(|a, b| format!("{a},{b}"))
             .unwrap();
 
-        // println!("{string}");
-        // return;
+        println!("{string}");
+        return;
 
         let Ok(mut file) = OpenOptions::new()
             .create(true)
@@ -63,16 +63,16 @@ impl LatinSquareOAGenerator {
         writeln!(file, "{string}").unwrap();
     }
 
-    pub fn load() -> Option<Self> {
-        let Ok(file) = OpenOptions::new().read(true).open("stack_oa.txt") else {
-            return None;
-        };
+    pub fn load(string: String) -> Option<Self> {
+        // let Ok(file) = OpenOptions::new().read(true).open("stack_oa.txt") else {
+        //     return None;
+        // };
 
-        let string = BufReader::new(file).lines().last().unwrap().unwrap();
+        // let string = BufReader::new(file).lines().last().unwrap().unwrap();
 
-        let vals: Vec<usize> = string
+        let vals: Vec<_> = string
             .split(',')
-            .map(|val| val.trim().parse().unwrap())
+            .map(|val| val.trim().parse().ok())
             .collect();
 
         let mut new = Self::new();
@@ -80,6 +80,10 @@ impl LatinSquareOAGenerator {
             let Some((constraints, cell, start_value)) = new.stack.last_mut() else {
                 return None;
             };
+            let Some(val) = val else {
+                return None;
+            };
+
             let cell = *cell;
             let values = constraints.values_for_cell(cell);
             let (i, value) = values.into_iter().enumerate().skip(val).next().unwrap();
@@ -101,7 +105,7 @@ impl LatinSquareOAGenerator {
 }
 
 impl Iterator for LatinSquareOAGenerator {
-    type Item = [LatinSquare<N>; 3];
+    type Item = [LatinSquare<N>; MOLS];
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.stack.is_empty() {
@@ -114,7 +118,6 @@ impl Iterator for LatinSquareOAGenerator {
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {
             // if let CellOrValueTriple::Cell(Cell(i, 0)) = *cell_or_value {
-            //     dbg!(constraints.squares());
 
             //     let cell = Cell(i, 0);
             //     let values = constraints.values_for_cell(cell);

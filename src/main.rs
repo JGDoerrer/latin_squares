@@ -71,10 +71,10 @@ fn main() {
     //     .unwrap_or(LatinSquareTripleGenerator::new())
     //     .next();
     // let triple = LatinSquareTripleGenerator::<N>::new().next();
-    let triple = LatinSquareOAGenerator::new().next();
-    // let triple = LatinSquareOAGenerator::load()
-    //     .unwrap_or(LatinSquareOAGenerator::new())
-    //     .next();
+    // let triple = LatinSquareOAGenerator::new().next();
+    let triple = LatinSquareOAGenerator::load(std::env::args().nth(1).unwrap_or(String::new()))
+        .unwrap_or(LatinSquareOAGenerator::new())
+        .next();
     println!("{triple:?}");
     // }));
     // }
