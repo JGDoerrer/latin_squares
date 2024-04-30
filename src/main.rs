@@ -1,15 +1,24 @@
-use std::{num::NonZeroUsize, thread};
+use std::{
+    fs::OpenOptions,
+    io::{BufWriter, Write},
+    num::NonZeroUsize,
+    thread,
+};
 
+use clap::{self, builder::Str, Parser};
 use latin_square::LatinSquare;
 use latin_square_pair_generator::LatinSquarePairGenerator;
 use latin_square_triple_generator::LatinSquareTripleGenerator;
+use pairs5::LATIN_PAIRS_5;
 
 use crate::{
+    compressed_latin_square::CompressedLatinSquare, latin_square_generator::LatinSquareGenerator,
     latin_square_oa_generator::LatinSquareOAGenerator,
-    orthogonal_generator::OrthogonalLatinSquareGenerator,
+    orthogonal_generator::OrthogonalLatinSquareGenerator, squares5::LATIN_SQUARES_5,
 };
 
 mod bitset;
+mod compressed_latin_square;
 mod constraints;
 mod latin_square;
 mod latin_square_generator;
@@ -19,38 +28,22 @@ mod latin_square_triple_generator;
 mod orthogonal_array;
 mod orthogonal_generator;
 mod pair_constraints;
+mod pairs5;
+mod squares5;
 mod triple_constraints;
 
+#[derive(Parser)]
+struct Args {}
+
 fn main() {
-    const N: usize = 7;
+    let _args = Args::parse();
 
-    // let sq1 = LatinSquare::new([
-    //     [0, 7, 8, 6, 9, 3, 5, 4, 1, 2],
-    //     [6, 1, 7, 8, 0, 9, 4, 5, 2, 3],
-    //     [5, 0, 2, 7, 8, 1, 9, 6, 3, 4],
-    //     [9, 6, 1, 3, 7, 8, 2, 0, 4, 5],
-    //     [3, 9, 0, 2, 4, 7, 8, 1, 5, 6],
-    //     [8, 4, 9, 1, 3, 5, 7, 2, 6, 0],
-    //     [7, 8, 5, 9, 2, 4, 6, 3, 0, 1],
-    //     [4, 5, 6, 0, 1, 2, 3, 7, 8, 9],
-    //     [1, 2, 3, 4, 5, 6, 0, 9, 7, 8],
-    //     [2, 3, 4, 5, 6, 0, 1, 8, 9, 7],
-    // ]);
+    // LatinSquareOAGenerator::load("0,0,2,1,0,2,2,3,0,1,1,1,1,0,0,1,2,0,1,0,0,1".to_string())
+    //     .unwrap()
+    //     .for_each(|pair| println!("{pair:?}"));
 
-    // let sq2 = LatinSquare::new([
-    //     [0, 4, 1, 7, 2, 9, 8, 3, 6, 5],
-    //     [8, 1, 5, 2, 7, 3, 9, 4, 0, 6],
-    //     [9, 8, 2, 6, 3, 7, 4, 5, 1, 0],
-    //     [5, 9, 8, 3, 0, 4, 7, 6, 2, 1],
-    //     [7, 6, 9, 8, 4, 1, 5, 0, 3, 2],
-    //     [6, 7, 0, 9, 8, 5, 2, 1, 4, 3],
-    //     [3, 0, 7, 1, 9, 8, 6, 2, 5, 4],
-    //     [1, 2, 3, 4, 5, 6, 0, 7, 8, 9],
-    //     [2, 3, 4, 5, 6, 0, 1, 8, 9, 7],
-    //     [4, 5, 6, 0, 1, 2, 3, 9, 7, 8],
-    // ]);
-
-    // assert!(sq1.is_orthogonal_to(&sq2));
+    // generate_5_graph();
+    // generate_7_graph();
 
     // LatinSquarePairGenerator::<N>::new().for_each(|pair| {
     //     println!("{pair:?}");
@@ -71,15 +64,127 @@ fn main() {
     //     .unwrap_or(LatinSquareTripleGenerator::new())
     //     .next();
     // let triple = LatinSquareTripleGenerator::<N>::new().next();
-    // let triple = LatinSquareOAGenerator::new().next();
-    let triple = LatinSquareOAGenerator::load(std::env::args().nth(1).unwrap_or(String::new()))
-        .unwrap_or(LatinSquareOAGenerator::new())
-        .next();
-    println!("{triple:?}");
+    let sq = LatinSquareOAGenerator::new().next();
+    // let sq = LatinSquareGenerator::<9>::new().next().unwrap();
+    println!("{sq:?}");
+
+    // let triple = LatinSquareOAGenerator::load(std::env::args().nth(1).unwrap_or(String::new()))
+    //     .unwrap_or(LatinSquareOAGenerator::new())
+    //     .next();
+    // println!("{triple:?}");
     // }));
     // }
 
     // threads
     //     .into_iter()
     //     .for_each(|thread| thread.join().unwrap());
+}
+
+fn generate_5_graph() {
+    // let all_pairs: Vec<_> = LatinSquareOAGenerator::new().collect();
+
+    let indices: Vec<_> = LATIN_PAIRS_5
+        .iter()
+        .map(|sqs| {
+            (
+                LATIN_SQUARES_5
+                    .iter()
+                    .position(|sq| sq.is_isotopic_to(&sqs[0]))
+                    .unwrap(),
+                LATIN_SQUARES_5
+                    .iter()
+                    .position(|sq| sq.is_isotopic_to(&sqs[1]))
+                    .unwrap(),
+            )
+        })
+        .collect();
+
+    let mut connected_parts: Vec<Vec<_>> = Vec::new();
+
+    for (i, j) in indices {
+        if let Some(part) = connected_parts.iter_mut().find(|part| {
+            part.iter()
+                .find(|(a, b)| *a == i || *a == j || *b == i || *b == j)
+                .is_some()
+        }) {
+            part.push((i, j));
+        } else {
+            connected_parts.push(vec![(i, j)]);
+        }
+    }
+
+    for (part_index, part) in connected_parts.into_iter().enumerate() {
+        let mut nodes: Vec<_> = part.iter().map(|(i, j)| vec![*i, *j]).flatten().collect();
+        nodes.sort();
+        nodes.dedup();
+
+        let mut nodes_str = String::new();
+        let len = nodes.len();
+
+        for (i, index) in nodes.into_iter().enumerate() {
+            let angle = i as f64 * 360.0 / len as f64;
+
+            let square = LATIN_SQUARES_5[index];
+            let mut rows = String::new();
+
+            for i in 0..5 {
+                for j in 0..5 {
+                    let entry = square.get(i, j);
+
+                    rows.push_str(format!("{entry}").as_str());
+                    if j != 4 {
+                        rows.push_str(" & ");
+                    }
+                }
+                rows.push_str("\\\\");
+            }
+
+            nodes_str.push_str(
+                format!("\\node ({index}) at ({angle}:4cm) {{$\\begin{{pmatrix}}{rows}\\end{{pmatrix}}$}};\n").as_str(),
+            );
+        }
+
+        let mut path = "\\path[-]\n".to_string();
+
+        for (i, j) in &part {
+            path.push_str(format!("({i}) edge ({j})").as_str());
+        }
+
+        let string = format!("\\begin{{tikzpicture}}{nodes_str}{path};\\end{{tikzpicture}}");
+
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(format!("figures/5_{part_index}.tex"))
+            .unwrap();
+
+        let mut writer = BufWriter::new(file);
+        writer.write(string.as_bytes()).unwrap();
+    }
+
+    // println!("{indices:?}");
+
+    // let string = indices
+    //     .into_iter()
+    //     .map(|(i, j)| format!("{i} - {j}"))
+    //     .reduce(|a, b| format!("{a}\n{b}"))
+    //     .unwrap();
+
+    // println!("{string}");
+}
+
+fn generate_7_graph() {
+
+    // let all_pairs: Vec<[LatinSquare<7>; 2]> = vec![];
+
+    // println!("{indices:?}");
+
+    // let string = indices
+    //     .into_iter()
+    //     .map(|(i, j)| format!("{i} - {j}"))
+    //     .reduce(|a, b| format!("{a}\n{b}"))
+    //     .unwrap();
+
+    // println!("{string}");
 }

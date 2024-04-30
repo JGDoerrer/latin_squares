@@ -4,7 +4,7 @@ use std::{
     fs::OpenOptions,
     hash::Hasher,
     io::{BufRead, BufReader, Write},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -28,28 +28,24 @@ impl LatinSquareOAGenerator {
         }
     }
 
-    fn shuffle(seed: usize, vec: &mut Vec<ValueTriple>) {
-        vec.sort_by_key(|vals| {
-            let mut default_hasher = DefaultHasher::new();
-            default_hasher
-                .write_usize((vals[0] + vals[1] * N + vals[2] * N.pow(2) + seed) % N.pow(3));
-            default_hasher.finish()
-        })
-    }
-
     fn save_indices(&self) {
-        let vals: Vec<_> = self
+        let string = self
             .stack
             .iter()
             .map(|(_, _, val)| val.saturating_sub(1))
-            .collect();
-        let string = vals
-            .into_iter()
             .map(|val| format!("{val}"))
             .reduce(|a, b| format!("{a},{b}"))
             .unwrap();
 
-        println!("{string}");
+        let total = self
+            .stack
+            .iter()
+            .map(|(constraints, cell, _)| constraints.values_for_cell(*cell).len() as f64)
+            .reduce(|a, b| a * b)
+            .unwrap();
+
+        dbg!(self.progress());
+        dbg!(string);
         return;
 
         let Ok(mut file) = OpenOptions::new()
@@ -90,7 +86,7 @@ impl LatinSquareOAGenerator {
             *start_value = i + 1;
 
             let mut constraints = constraints.clone();
-            constraints.set(cell, value);
+            constraints.set_and_propagate(cell, value);
             constraints.find_and_set_singles();
             match constraints.most_constrained_cell() {
                 Some(cell) => {
@@ -101,6 +97,28 @@ impl LatinSquareOAGenerator {
         }
 
         Some(new)
+    }
+
+    fn progress(&self) -> f64 {
+        let totals: Vec<_> = self
+            .stack
+            .iter()
+            .map(|(constraints, cell, _)| constraints.values_for_cell(*cell).len() as f64)
+            .collect();
+
+        self.stack
+            .iter()
+            .enumerate()
+            .map(|(i, (_, _, val))| {
+                val.saturating_sub(1) as f64
+                    / totals[0..=i]
+                        .iter()
+                        .map(|val| (*val) as f64)
+                        .reduce(|a, b| a * b)
+                        .unwrap_or(1.0)
+            })
+            .reduce(|a, b| a + b)
+            .unwrap()
     }
 }
 
@@ -117,146 +135,58 @@ impl Iterator for LatinSquareOAGenerator {
         let mut best = 0;
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {
-            // if let CellOrValueTriple::Cell(Cell(i, 0)) = *cell_or_value {
+            let cell = *cell;
+            let values = constraints.values_for_cell(cell);
 
-            //     let cell = Cell(i, 0);
-            //     let values = constraints.values_for_cell(cell);
-
-            //     for (j, value) in values.into_iter().enumerate().skip(*start_value) {
-            //         *start_value = j + 1;
-
-            //         let mut new = constraints.clone();
-            //         new.set(cell, value);
-
-            //         if !new.is_solvable() {
-            //             continue;
-            //         }
-
-            //         if i == N - 1 {
-            //             match new.most_constrained() {
-            //                 Some(cell_or_values) => {
-            //                     self.stack.push((new.clone(), cell_or_values, 0));
-            //                     if self.stack.len() > best {
-            //                         best = self.stack.len();
-            //                         dbg!(new.squares(), best, Instant::now() - start);
-            //                     }
-
-            //                     continue 'w;
-            //                 }
-            //                 None => {
-            //                     if constraints.is_solved() {
-            //                         return Some(constraints.squares().map(|sq| sq.into()));
-            //                     }
-            //                 }
-            //             }
-            //             continue 'w;
-            //         } else {
-            //             self.stack
-            //                 .push((new.clone(), CellOrValueTriple::Cell(Cell(i + 1, 0)), 0));
-            //             if self.stack.len() > best {
-            //                 best = self.stack.len();
-            //                 dbg!(new.squares(), best, Instant::now() - start);
-            //             }
-            //             continue 'w;
-            //         }
-            //     }
-            // } else
-            {
-                // match cell_or_value {
-                //     CellOrValueTriple::Cell(cell) => {
-                let cell = *cell;
-                let values = constraints.values_for_cell(cell);
-
-                // if cell.1 == 0 {
-                // Self::shuffle(self.seed + cell.to_index::<N>(), &mut values);
-                // }
-
-                // dbg!(cell, values, *start_value);
-                for (i, value) in values.into_iter().enumerate().skip(*start_value) {
-                    *start_value = i + 1;
-
+            let mut new_constraints: Vec<_> = values
+                .into_iter()
+                .map(|value| {
                     let mut new = constraints.clone();
-                    new.set(cell, value);
+                    new.set_and_propagate(cell, value);
                     new.find_and_set_singles();
+                    new
+                })
+                .collect();
+            new_constraints
+                .sort_by_cached_key(|c| (c.sum_possible_values() as u64, c.filled_cells()));
+            new_constraints.reverse();
 
-                    if !new.is_solvable() {
-                        // if (Instant::now() - last_write).as_secs() >= 10 {
+            for (i, new) in new_constraints.into_iter().enumerate().skip(*start_value) {
+                *start_value = i + 1;
+
+                if !new.is_solvable() {
+                    let time_passed = (Instant::now() - last_write).as_secs_f64();
+                    if time_passed >= 1.0 {
                         self.save_indices();
-                        //     last_write = Instant::now();
-                        // }
+
+                        last_write = Instant::now();
+                    }
+                    continue 'w;
+                }
+
+                match new.most_constrained_cell() {
+                    Some(cell) => {
+                        self.stack.push((new.clone(), cell, 0));
+                        if new.filled_cells() >= best {
+                            best = new.filled_cells();
+                            dbg!(new.squares(), best, Instant::now() - start);
+                        }
+                        let time_passed = (Instant::now() - last_write).as_secs_f64();
+                        if time_passed >= 1.0 {
+                            self.save_indices();
+
+                            last_write = Instant::now();
+                        }
                         continue 'w;
                     }
 
-                    match new.most_constrained_cell() {
-                        Some(cell) => {
-                            self.stack.push((new.clone(), cell, 0));
-                            if new.filled_cells() >= best {
-                                best = new.filled_cells();
-                                dbg!(new.squares(), best, Instant::now() - start);
-                            }
-                            // if (Instant::now() - last_write).as_secs() >= 10 {
-                            self.save_indices();
-                            //     last_write = Instant::now();
-                            // }
-                            continue 'w;
-                        }
-
-                        None => {
-                            if new.is_solved() {
-                                return Some(new.squares().map(|sq| sq.into()));
-                            }
+                    None => {
+                        if new.is_solved() {
+                            return Some(new.squares().map(|sq| sq.into()));
                         }
                     }
                 }
             }
-            // CellOrValueTriple::ValueTriple(value) => {
-            //     unreachable!();
-            //     let start_i = *start_value % N;
-
-            //     for i in (0..N).skip(start_i) {
-            //         let mut value = *value;
-            //         if value[0] == N {
-            //             value[0] = i;
-            //         } else if value[1] == N {
-            //             value[1] = i;
-            //         } else {
-            //             value[2] = i;
-            //         }
-
-            //         let cells = constraints.cells_for_value(value);
-
-            //         let start_cell = *start_value / N;
-
-            //         for (j, cell) in cells.into_iter().enumerate().skip(start_cell) {
-            //             *start_value = i + (j + 1) * N;
-
-            //             let mut new = constraints.clone();
-            //             new.set(cell, value);
-
-            //             if !new.is_solvable() {
-            //                 continue;
-            //             }
-
-            //             match new.most_constrained() {
-            //                 Some(cell_or_values) => {
-            //                     self.stack.push((new.clone(), cell_or_values, 0));
-            //                     if new.filled_cells() >= best {
-            //                         best = new.filled_cells();
-            //                         dbg!(new.squares(), best, Instant::now() - start);
-            //                     }
-            //                     continue 'w;
-            //                 }
-            //                 None => {
-            //                     if new.is_solved() {
-            //                         return Some(new.squares().map(|sq| sq.into()));
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-            // }
-            // }
 
             self.stack.pop();
         }

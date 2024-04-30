@@ -1,10 +1,14 @@
 use std::fmt::Debug;
 
-use crate::{bitset::BitSet128, constraints::Constraints, pair_constraints::PairConstraints};
+use crate::{
+    bitset::BitSet128,
+    constraints::Constraints,
+    pair_constraints::{PairConstraints, ValuePair},
+};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct LatinSquare<const N: usize> {
-    values: [[usize; N]; N],
+    pub values: [[u8; N]; N],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -13,12 +17,12 @@ pub struct Cell(pub usize, pub usize);
 pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
 
 impl<const N: usize> LatinSquare<N> {
-    pub fn new(values: [[usize; N]; N]) -> Self {
+    pub fn new(values: [[u8; N]; N]) -> Self {
         LatinSquare { values }
     }
 
     pub fn get(&self, i: usize, j: usize) -> usize {
-        self.values[i][j]
+        self.values[i][j] as usize
     }
 
     pub fn is_orthogonal_to(&self, other: &Self) -> bool {
@@ -41,86 +45,35 @@ impl<const N: usize> LatinSquare<N> {
         true
     }
 
-    pub fn max_disjoint_transversals2(&self) -> usize {
-        let mut used = [[false; N]; N];
-
-        let mut count = 0;
-        'a: for _ in 0..N {
-            let mut transversal = vec![];
-
-            let mut values_left = BitSet128::all_less_than(N);
-            let mut columns = BitSet128::all_less_than(N);
-
-            'row: for row in 0..N {
-                for col in columns {
-                    let value = self.get(row, col);
-                    if !used[row][col] && values_left.contains(value as usize) {
-                        columns.remove(col);
-                        values_left.remove(value as usize);
-                        transversal.push((row, col));
-                        used[row][col] = true;
-                        continue 'row;
-                    }
-                }
-
-                break 'a;
+    pub fn is_reduced(&self) -> bool {
+        for i in 0..N {
+            if self.values[0][i] != i as u8 || self.values[i][0] != i as u8 {
+                return false;
             }
-
-            count += 1;
         }
-
-        count
+        true
     }
 
-    pub fn max_disjoint_transversals(&self) -> usize {
-        let mut stack = vec![(
-            0,
-            [[false; N]; N],
-            0,
-            BitSet128::all_less_than(N),
-            BitSet128::all_less_than(N),
-            0,
-        )];
-        let mut max = 0;
+    pub fn is_isotopic_to(&self, other: &Self) -> bool {
+        if self.values[0] == other.values[0] {
+            // is it enough to check the rows?
+            for row in 1..N {
+                let first_value = self.values[row][0];
 
-        'w: while let Some(state) = stack.last_mut() {
-            let (count, mut used, row, mut values, mut columns, col_start) = state.clone();
+                let other_row = other
+                    .values
+                    .iter()
+                    .find(|row| row[0] == first_value)
+                    .unwrap();
 
-            for col in columns.intersect(BitSet128::all_less_than(col_start).complement()) {
-                state.5 = col;
-                let value = self.get(row, col);
-                if !used[row][col] && values.contains(value as usize) {
-                    columns.remove(col);
-                    values.remove(value as usize);
-                    used[row][col] = true;
-
-                    if row == N - 1 {
-                        max = max.max(count + 1);
-
-                        if max == N {
-                            return N;
-                        }
-
-                        stack.push((
-                            count + 1,
-                            used,
-                            0,
-                            BitSet128::all_less_than(N),
-                            BitSet128::all_less_than(N),
-                            0,
-                        ));
-                    } else {
-                        stack.push((count, used, row + 1, values, columns, 0));
-                    }
-
-                    continue 'w;
+                if self.values[row] != *other_row {
+                    return false;
                 }
             }
-
-            stack.pop();
+            true
+        } else {
+            todo!()
         }
-
-        max
     }
 }
 
@@ -145,10 +98,10 @@ impl<const N: usize> From<PairConstraints<N>> for LatinSquarePair<N> {
                     .next()
                     .unwrap();
 
-                let value_pair = ((value % N) as usize, (value / N) as usize);
+                let value_pair = ValuePair::from_index::<N>(value);
 
-                pair.0.values[i][j] = value_pair.0;
-                pair.1.values[i][j] = value_pair.1;
+                pair.0.values[i][j] = value_pair.0 as u8;
+                pair.1.values[i][j] = value_pair.1 as u8;
             }
         }
 
@@ -168,7 +121,7 @@ impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
             for j in 0..N {
                 let value = constraints.get(i, j).into_iter().next().unwrap();
 
-                square.values[i][j] = value as usize;
+                square.values[i][j] = value as u8;
             }
         }
 
@@ -176,23 +129,23 @@ impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
     }
 }
 
-impl<const N: usize> Debug for LatinSquare<N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[\n")?;
-        for i in 0..N {
-            write!(f, "    [")?;
-            for j in 0..N {
-                write!(f, "{:2}, ", self.get(i, j))?;
-            }
-            write!(f, "]")?;
-            if i != N - 1 {
-                writeln!(f, ",")?;
-            }
-        }
-        write!(f, "\n]")?;
-        Ok(())
-    }
-}
+// impl<const N: usize> Debug for LatinSquare<N> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "[\n")?;
+//         for i in 0..N {
+//             write!(f, "    [")?;
+//             for j in 0..N {
+//                 write!(f, "{:2}, ", self.get(i, j))?;
+//             }
+//             write!(f, "]")?;
+//             if i != N - 1 {
+//                 writeln!(f, ",")?;
+//             }
+//         }
+//         write!(f, "\n]")?;
+//         Ok(())
+//     }
+// }
 
 #[derive(Clone, Copy)]
 pub struct PartialLatinSquare<const N: usize> {
@@ -245,7 +198,7 @@ impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
 
         for i in 0..N {
             for j in 0..N {
-                sq.values[i][j] = value.get(Cell(i, j)).unwrap();
+                sq.values[i][j] = value.get(Cell(i, j)).unwrap() as u8;
             }
         }
 

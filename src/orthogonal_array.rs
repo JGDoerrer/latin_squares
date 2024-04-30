@@ -6,8 +6,8 @@ use crate::{
     pair_constraints::ValuePair,
 };
 
-pub const N: usize = 8;
-pub const MOLS: usize = 7;
+pub const N: usize = 10;
+pub const MOLS: usize = 8;
 
 const COLUMNS: usize = MOLS + 2;
 
@@ -65,27 +65,98 @@ impl OAConstraints {
             empty_cells: [BigBitSet::all_less_than(N * N); COLUMNS],
         };
 
+        let index = N;
+        for col in 2..(COLUMNS - 1) {
+            let next_col = col + 1;
+
+            let min_val = constraints
+                .values_for_cell(Cell(col, index))
+                .into_iter()
+                .next()
+                .or(constraints.oa.columns[col][index].map(|val| val as usize))
+                .unwrap();
+
+            dbg!(min_val);
+
+            let mask = BitSet16::all_less_than(min_val + 1).complement();
+
+            let values = &mut constraints.cell_values[next_col][index];
+            *values = values.intersect(mask);
+        }
+
         for i in 0..N {
             for j in 0..N {
-                constraints.set(Cell(0, i * N + j), i);
+                constraints.set_and_propagate(Cell(0, i * N + j), i);
             }
         }
 
         for i in 0..N {
             for j in 0..N {
-                constraints.set(Cell(1, i * N + j), j);
+                constraints.set_and_propagate(Cell(1, i * N + j), j);
             }
         }
 
         for i in 2..COLUMNS {
             for j in 0..N {
-                constraints.set(Cell(i, j), j);
+                constraints.set_and_propagate(Cell(i, j), j);
             }
         }
 
         for j in 1..N {
-            constraints.set(Cell(2, j * N), j);
+            constraints.set_and_propagate(Cell(2, j * N), j);
         }
+
+        constraints.find_and_set_singles();
+
+        constraints
+    }
+
+    pub fn new_first_row() -> Self {
+        let mut constraints = OAConstraints {
+            oa: PartialOrthogonalArray::new(),
+            column_pair_values: [BigBitSet::all_less_than(N * N); (COLUMNS * (COLUMNS - 1)) / 2],
+            cell_values: [[BitSet16::all_less_than(N); N * N]; COLUMNS],
+            empty_cells: [BigBitSet::all_less_than(N * N); COLUMNS],
+        };
+
+        let index = N;
+        for col in 2..(COLUMNS - 1) {
+            let next_col = col + 1;
+
+            let min_val = constraints
+                .values_for_cell(Cell(col, index))
+                .into_iter()
+                .next()
+                .or(constraints.oa.columns[col][index].map(|val| val as usize))
+                .unwrap();
+
+            dbg!(min_val);
+
+            let mask = BitSet16::all_less_than(min_val + 1).complement();
+
+            let values = &mut constraints.cell_values[next_col][index];
+            *values = values.intersect(mask);
+        }
+
+        for i in 0..N {
+            for j in 0..N {
+                constraints.set_and_propagate(Cell(0, i * N + j), i);
+            }
+        }
+
+        for i in 0..N {
+            for j in 0..N {
+                constraints.set_and_propagate(Cell(1, i * N + j), j);
+            }
+        }
+
+        for i in 2..COLUMNS {
+            for j in 0..N {
+                constraints.set_and_propagate(Cell(i, j), j);
+            }
+        }
+
+        constraints.find_and_set_singles();
 
         constraints
     }
@@ -149,7 +220,12 @@ impl OAConstraints {
         (self.oa.columns[min][index], self.oa.columns[max][index])
     }
 
-    pub fn set(&mut self, cell: Cell, value: usize) {
+    pub fn set_and_propagate(&mut self, cell: Cell, value: usize) {
+        self.set(cell, value);
+        self.propagate_constraints();
+    }
+
+    fn set(&mut self, cell: Cell, value: usize) {
         let Cell(column, index) = cell;
 
         assert!(
@@ -176,68 +252,11 @@ impl OAConstraints {
 
             let value_pair = self.get_value_pair(column, i, index);
             let pair = self.get_column_pair_values_mut(column, i);
-            // let first_column = column.min(i);
-            // let second_column = column.max(i);
 
             if let (Some(v1), Some(v2)) = value_pair {
                 pair.remove(ValuePair(v1 as usize, v2 as usize).to_index::<N>());
             }
-
-            // let mut second_vals_for_first_val = [BitSet16::empty(); N];
-            // let mut first_vals_for_second_val = [BitSet16::empty(); N];
-
-            // for index in *pair {
-            //     let ValuePair(first_val, second_val) = ValuePair::from_index::<N>(index);
-
-            //     second_vals_for_first_val[first_val].insert(second_val);
-            //     first_vals_for_second_val[second_val].insert(first_val);
-            // }
-
-            // for index in self.empty_cells[first_column]
-            //     .complement()
-            //     .intersect(BigBitSet::all_less_than(N * N))
-            // {
-            //     let first_value = self.oa.columns[first_column][index].unwrap() as usize;
-
-            //     let second_values = &mut self.cell_values[second_column][index];
-            //     *second_values = second_values.intersect(second_vals_for_first_val[first_value]);
-            // }
-
-            // for index in self.empty_cells[second_column]
-            //     .complement()
-            //     .intersect(BigBitSet::all_less_than(N * N))
-            // {
-            //     let second_value = self.oa.columns[second_column][index].unwrap() as usize;
-
-            //     let first_values = &mut self.cell_values[first_column][index];
-            //     *first_values = first_values.intersect(first_vals_for_second_val[second_value]);
-            // }
-
-            // for index in self.empty_cells[first_column].union(self.empty_cells[second_column]) {
-            //     let pairs = self.pairs_for_cell(first_column, second_column, index);
-
-            //     let first_pair_values = pairs
-            //         .into_iter()
-            //         .map(|index| ValuePair::from_index::<N>(index).0)
-            //         .collect();
-            //     let second_pair_values = pairs
-            //         .into_iter()
-            //         .map(|index| ValuePair::from_index::<N>(index).1)
-            //         .collect();
-
-            //     if self.empty_cells[first_column].contains(index) {
-            //         let first_values = &mut self.cell_values[first_column][index];
-            //         *first_values = first_values.intersect(first_pair_values);
-            //     }
-
-            //     if self.empty_cells[second_column].contains(index) {
-            //         let second_values = &mut self.cell_values[second_column][index];
-            //         *second_values = second_values.intersect(second_pair_values);
-            //     }
-            // }
         }
-
-        self.propagate_constraints();
     }
 
     fn propagate_constraints(&mut self) {
@@ -286,32 +305,24 @@ impl OAConstraints {
                             changed = true;
                         }
                     }
-
-                    // for index in self.empty_cells[first_column]
-                    // // .union(self.empty_cells[second_column])
-                    // {
-                    //     let pairs = self.pairs_for_cell(first_column, second_column, index);
-
-                    //     let first_pair_values = pairs
-                    //         .into_iter()
-                    //         .map(|index| ValuePair::from_index::<N>(index).0)
-                    //         .collect();
-                    //     // let second_pair_values = pairs
-                    //     //     .into_iter()
-                    //     //     .map(|index| ValuePair::from_index::<N>(index).1)
-                    //     //     .collect();
-
-                    //     if self.empty_cells[first_column].contains(index) {
-                    //         let first_values = &mut self.cell_values[first_column][index];
-                    //         *first_values = first_values.intersect(first_pair_values);
-                    //     }
-
-                    //     // if self.empty_cells[second_column].contains(index) {
-                    //     //     let second_values = &mut self.cell_values[second_column][index];
-                    //     //     *second_values = second_values.intersect(second_pair_values);
-                    //     // }
-                    // }
                 }
+            }
+
+            let index = N;
+            for col in 2..(COLUMNS - 1) {
+                let next_col = col + 1;
+
+                let min_val = self
+                    .values_for_cell(Cell(col, index))
+                    .into_iter()
+                    .next()
+                    .or(self.oa.columns[col][index].map(|val| val as usize))
+                    .unwrap();
+
+                let mask = BitSet16::all_less_than(min_val + 1).complement();
+
+                let values = &mut self.cell_values[next_col][index];
+                *values = values.intersect(mask);
             }
         }
     }
@@ -336,44 +347,68 @@ impl OAConstraints {
         assert!(pair.contains(value_pair_index));
 
         let mut cells = BigBitSet::empty();
-        for index in 0..N * N {
-            match (self.oa.columns[min][index], self.oa.columns[max][index]) {
-                (None, None) => {
-                    if self
-                        .values_for_cell(Cell(min, index))
-                        .contains(value_pair.0)
-                        && self
-                            .values_for_cell(Cell(max, index))
-                            .contains(value_pair.1)
-                    {
-                        cells.insert(index);
-                    }
-                }
-                (None, Some(v2)) => {
-                    if self
-                        .values_for_cell(Cell(min, index))
-                        .contains(value_pair.0)
-                        && v2 as usize == value_pair.1
-                    {
-                        cells.insert(index);
-                    }
-                }
-                (Some(v1), None) => {
-                    if v1 as usize == value_pair.0
-                        && self
-                            .values_for_cell(Cell(max, index))
-                            .contains(value_pair.1)
-                    {
-                        cells.insert(index);
-                    }
-                }
-                (Some(v1), Some(v2)) => {
-                    if v1 as usize == value_pair.0 && v2 as usize == value_pair.1 {
-                        cells.insert(index);
-                    }
-                }
-            }
+
+        let mut first_values = [false; N * N];
+        for i in 0..N * N {
+            first_values[i] = if let Some(val) = self.oa.columns[min][i] {
+                val as usize == value_pair.0
+            } else {
+                self.values_for_cell(Cell(min, i)).contains(value_pair.0)
+            };
         }
+
+        let mut second_values = [false; N * N];
+        for i in 0..N * N {
+            second_values[i] = if let Some(val) = self.oa.columns[max][i] {
+                val as usize == value_pair.1
+            } else {
+                self.values_for_cell(Cell(max, i)).contains(value_pair.1)
+            };
+        }
+
+        let cells: BigBitSet = first_values
+            .into_iter()
+            .zip(second_values.into_iter())
+            .map(|(a, b)| a && b)
+            .enumerate()
+            .filter(|(_, b)| *b)
+            .map(|(i, _)| i)
+            .collect();
+
+        // for index in self.empty_cells[column1].union(self.empty_cells[column2]) {
+        //     match (self.oa.columns[min][index], self.oa.columns[max][index]) {
+        //         (None, None) => {
+        //             if self
+        //                 .values_for_cell(Cell(min, index))
+        //                 .contains(value_pair.0)
+        //                 && self
+        //                     .values_for_cell(Cell(max, index))
+        //                     .contains(value_pair.1)
+        //             {
+        //                 cells.insert(index);
+        //             }
+        //         }
+        //         (None, Some(v2)) => {
+        //             if v2 as usize == value_pair.1
+        //                 && self
+        //                     .values_for_cell(Cell(min, index))
+        //                     .contains(value_pair.0)
+        //             {
+        //                 cells.insert(index);
+        //             }
+        //         }
+        //         (Some(v1), None) => {
+        //             if v1 as usize == value_pair.0
+        //                 && self
+        //                     .values_for_cell(Cell(max, index))
+        //                     .contains(value_pair.1)
+        //             {
+        //                 cells.insert(index);
+        //             }
+        //         }
+        //         _ => unreachable!(),
+        //     }
+        // }
         cells
     }
 
@@ -409,7 +444,7 @@ impl OAConstraints {
         pairs
     }
 
-    pub fn most_constrained_cell(&mut self) -> Option<Cell> {
+    pub fn most_constrained_cell(&self) -> Option<Cell> {
         let mut min = N + 1;
         let mut min_dist = N * N;
         let mut min_cell = Cell(0, 0);
@@ -484,7 +519,7 @@ impl OAConstraints {
             for (cell, _) in cells {
                 if self.values_for_cell(cell).into_iter().all(|value| {
                     let mut copy = self.clone();
-                    copy.set(cell, value);
+                    copy.set_and_propagate(cell, value);
                     copy.find_and_set_singles();
 
                     !copy.is_solvable_rec(max_depth - 1)
@@ -509,14 +544,14 @@ impl OAConstraints {
                                 {
                                     return false;
                                 }
-                                copy.set(Cell(col1, cell), value_pair.0);
+                                copy.set_and_propagate(Cell(col1, cell), value_pair.0);
                                 if !copy
                                     .values_for_cell(Cell(col2, cell))
                                     .contains(value_pair.1)
                                 {
                                     return false;
                                 }
-                                copy.set(Cell(col2, cell), value_pair.1);
+                                copy.set_and_propagate(Cell(col2, cell), value_pair.1);
                                 copy.find_and_set_singles();
 
                                 !copy.is_solvable_rec(max_depth - 1)
@@ -543,7 +578,7 @@ impl OAConstraints {
 
                     if self.values_for_cell(cell).is_single() {
                         let value = self.values_for_cell(cell).into_iter().next().unwrap();
-                        self.set(cell, value);
+                        self.set_and_propagate(cell, value);
                         changed = true;
                     }
                 }
@@ -561,11 +596,11 @@ impl OAConstraints {
                             let cell = cells_for_pair.into_iter().next().unwrap();
 
                             if self.empty_cells[column1].contains(cell) {
-                                self.set(Cell(column1, cell), value_pair.0);
+                                self.set_and_propagate(Cell(column1, cell), value_pair.0);
                                 changed = true;
                             }
                             if self.empty_cells[column2].contains(cell) {
-                                self.set(Cell(column2, cell), value_pair.1);
+                                self.set_and_propagate(Cell(column2, cell), value_pair.1);
                                 changed = true;
                             }
                             break;
@@ -580,11 +615,11 @@ impl OAConstraints {
                             let value_pair = ValuePair::from_index::<N>(pair_index);
 
                             if self.empty_cells[column1].contains(index) {
-                                self.set(Cell(column1, index), value_pair.0);
+                                self.set_and_propagate(Cell(column1, index), value_pair.0);
                                 changed = true;
                             }
                             if self.empty_cells[column2].contains(index) {
-                                self.set(Cell(column2, index), value_pair.1);
+                                self.set_and_propagate(Cell(column2, index), value_pair.1);
                                 changed = true;
                             }
                             break;
@@ -604,6 +639,13 @@ impl OAConstraints {
                     .len()
             })
             .into_iter()
+            .sum()
+    }
+
+    pub fn sum_possible_values(&self) -> f64 {
+        self.cell_values
+            .iter()
+            .map(|col| col.iter().map(|val| (val.len() as f64).log2()).sum::<f64>())
             .sum()
     }
 

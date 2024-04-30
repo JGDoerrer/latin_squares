@@ -409,20 +409,17 @@ impl Iterator for BitSet192Iter {
         let mut next = 0;
 
         for i in 0..3 {
-            if self.bitset.words[i] == 0 {
+            let word = &mut self.bitset.words[i];
+            if *word == 0 {
                 next += 64;
             } else {
-                next += self.bitset.words[i].trailing_zeros() as usize;
-                break;
+                next += word.trailing_zeros() as usize;
+                *word = (*word - 1) & *word;
+                return Some(next);
             }
         }
 
-        if next < 192 {
-            self.bitset.remove(next);
-            Some(next)
-        } else {
-            None
-        }
+        None
     }
 }
 
