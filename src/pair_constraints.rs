@@ -25,6 +25,12 @@ pub enum CellOrValuePair {
     ValuePair(ValuePair),
 }
 
+impl<const N: usize> Default for PairConstraints<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize> PairConstraints<N> {
     const VALUE_PAIRS_WITHOUT_FIRST: [BitSet128; N] = {
         let mut table = [BitSet128::empty(); N];
@@ -217,8 +223,7 @@ impl<const N: usize> PairConstraints<N> {
             .sq_pair
             .0
             .get(Cell(i, j))
-            .map(|s| self.sq_pair.1.get(Cell(i, j)).map(|t| (s, t)))
-            .flatten()
+            .and_then(|s| self.sq_pair.1.get(Cell(i, j)).map(|t| (s, t)))
         {
             return BitSet128::single(ValuePair(i, j).to_index::<N>());
         }

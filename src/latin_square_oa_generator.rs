@@ -104,9 +104,7 @@ impl LatinSquareOAGenerator {
 
             let (i, constraints) = new_constraints
                 .into_iter()
-                .enumerate()
-                .skip(val)
-                .next()
+                .enumerate().nth(val)
                 .unwrap();
             *start_value = i + 1;
 
@@ -134,8 +132,7 @@ impl LatinSquareOAGenerator {
             .map(|(i, (_, _, val))| {
                 val.saturating_sub(1) as f64
                     / totals[0..=i]
-                        .iter()
-                        .map(|val| (*val) as f64)
+                        .iter().copied()
                         .reduce(|a, b| a * b)
                         .unwrap_or(1.0)
             })

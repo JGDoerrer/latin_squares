@@ -5,13 +5,9 @@ use std::{
 
 use clap::{self, Parser};
 
-
-
 use pairs5::LATIN_PAIRS_5;
 
-use crate::{
-    squares5::LATIN_SQUARES_5,
-};
+use crate::squares5::LATIN_SQUARES_5;
 
 mod bitset;
 mod compressed_latin_square;
@@ -100,8 +96,7 @@ fn generate_5_graph() {
     for (i, j) in indices {
         if let Some(part) = connected_parts.iter_mut().find(|part| {
             part.iter()
-                .find(|(a, b)| *a == i || *a == j || *b == i || *b == j)
-                .is_some()
+                .any(|(a, b)| *a == i || *a == j || *b == i || *b == j)
         }) {
             part.push((i, j));
         } else {
@@ -110,7 +105,7 @@ fn generate_5_graph() {
     }
 
     for (part_index, part) in connected_parts.into_iter().enumerate() {
-        let mut nodes: Vec<_> = part.iter().map(|(i, j)| vec![*i, *j]).flatten().collect();
+        let mut nodes: Vec<_> = part.iter().flat_map(|(i, j)| vec![*i, *j]).collect();
         nodes.sort();
         nodes.dedup();
 
@@ -156,7 +151,7 @@ fn generate_5_graph() {
             .unwrap();
 
         let mut writer = BufWriter::new(file);
-        writer.write(string.as_bytes()).unwrap();
+        let _ = writer.write(string.as_bytes()).unwrap();
     }
 
     // println!("{indices:?}");

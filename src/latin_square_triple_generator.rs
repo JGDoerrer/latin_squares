@@ -89,7 +89,7 @@ impl<const N: usize> LatinSquareTripleGenerator<N> {
             };
             let cell = *cell;
             let values = constraints.values_for_cell(cell);
-            let (i, value) = values.into_iter().enumerate().skip(val).next().unwrap();
+            let (i, value) = values.into_iter().enumerate().nth(val).unwrap();
             *start_value = i + 1;
 
             let mut constraints = constraints.clone();

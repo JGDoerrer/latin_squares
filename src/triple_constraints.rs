@@ -409,7 +409,7 @@ impl<const N: usize> TripleConstraints<N> {
             }
         }
 
-        (min != N * N * N + 1).then(|| (min_cell, min))
+        (min != N * N * N + 1).then_some((min_cell, min))
     }
 
     pub fn most_constrained_value(&self) -> Option<(ValueTriple, usize)> {

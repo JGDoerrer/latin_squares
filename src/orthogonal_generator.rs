@@ -36,10 +36,10 @@ impl<const N: usize> Iterator for OrthogonalLatinSquareGenerator<N> {
             let values = constraints.get(i, j);
 
             for value in values {
-                if value < (*start_value).into() {
+                if value < (*start_value) {
                     continue;
                 }
-                *start_value = value as usize + 1;
+                *start_value = value + 1;
 
                 let mut new = constraints.clone();
                 new.set(i, j, value);

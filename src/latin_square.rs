@@ -26,13 +26,13 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn is_orthogonal_to(&self, other: &Self) -> bool {
-        for value in 0..N as usize {
+        for value in 0..N {
             let mut other_values = BitSet128::empty();
 
             for i in 0..N {
                 for j in 0..N {
                     if self.get(i, j) == value {
-                        other_values.insert(other.get(i, j).into());
+                        other_values.insert(other.get(i, j));
                     }
                 }
             }
@@ -152,6 +152,12 @@ pub struct PartialLatinSquare<const N: usize> {
     values: [[Option<u8>; N]; N],
 }
 
+impl<const N: usize> Default for PartialLatinSquare<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize> PartialLatinSquare<N> {
     pub fn new() -> Self {
         PartialLatinSquare {
@@ -208,7 +214,7 @@ impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
 
 impl<const N: usize> Debug for PartialLatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[\n")?;
+        writeln!(f, "[")?;
         for i in 0..N {
             write!(f, "    [")?;
             for j in 0..N {

@@ -8,6 +8,12 @@ pub struct Constraints<const N: usize> {
     constraints: [[BitSet128; N]; N],
 }
 
+impl<const N: usize> Default for Constraints<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize> Constraints<N> {
     pub fn new() -> Self {
         Constraints {
@@ -55,22 +61,18 @@ impl<const N: usize> Constraints<N> {
             .intersect(BitSet128::all_less_than(N * N));
 
         for k in 0..N {
-            if k != j {
-                if self.constraints[i][k].intersect(mask) != self.constraints[i][k] {
-                    self.constraints[i][k] = self.constraints[i][k].intersect(mask);
-                    if self.constraints[i][k].is_single() {
-                        let value = self.constraints[i][k].into_iter().next().unwrap();
-                        self.propagate_value(i, k, value);
-                    }
+            if k != j && self.constraints[i][k].intersect(mask) != self.constraints[i][k] {
+                self.constraints[i][k] = self.constraints[i][k].intersect(mask);
+                if self.constraints[i][k].is_single() {
+                    let value = self.constraints[i][k].into_iter().next().unwrap();
+                    self.propagate_value(i, k, value);
                 }
             }
-            if k != i {
-                if self.constraints[k][j].intersect(mask) != self.constraints[k][j] {
-                    self.constraints[k][j] = self.constraints[k][j].intersect(mask);
-                    if self.constraints[k][j].is_single() {
-                        let value = self.constraints[k][j].into_iter().next().unwrap();
-                        self.propagate_value(k, j, value);
-                    }
+            if k != i && self.constraints[k][j].intersect(mask) != self.constraints[k][j] {
+                self.constraints[k][j] = self.constraints[k][j].intersect(mask);
+                if self.constraints[k][j].is_single() {
+                    let value = self.constraints[k][j].into_iter().next().unwrap();
+                    self.propagate_value(k, j, value);
                 }
             }
         }
@@ -104,7 +106,7 @@ impl<const N: usize> Constraints<N> {
             }
         }
 
-        (min_values < N * N + 1).then(|| index)
+        (min_values < N * N + 1).then_some(index)
     }
 
     pub fn most_constrained_cell(&self) -> Option<Cell> {
@@ -158,10 +160,8 @@ impl<const N: usize> Constraints<N> {
                 .map(|(i, _)| i)
             {
                 for j in 0..N {
-                    if !self.get(i, j).is_single() {
-                        if self.get(i, j).contains(value) {
-                            self.propagate_value(i, j, value);
-                        }
+                    if !self.get(i, j).is_single() && self.get(i, j).contains(value) {
+                        self.propagate_value(i, j, value);
                     }
                 }
             }
@@ -182,10 +182,8 @@ impl<const N: usize> Constraints<N> {
                 .map(|(i, _)| i)
             {
                 for j in 0..N {
-                    if !self.get(j, i).is_single() {
-                        if self.get(j, i).contains(value) {
-                            self.propagate_value(j, i, value);
-                        }
+                    if !self.get(j, i).is_single() && self.get(j, i).contains(value) {
+                        self.propagate_value(j, i, value);
                     }
                 }
             }
@@ -197,7 +195,7 @@ impl<const N: usize> Constraints<N> {
         for i in 0..N {
             for j in 0..N {
                 if self.get(i, j).is_single() {
-                    let value = sq.get(i, j) as usize;
+                    let value = sq.get(i, j);
                     known_values[value].insert(self.get(i, j).into_iter().next().unwrap());
                 }
             }
@@ -205,7 +203,7 @@ impl<const N: usize> Constraints<N> {
 
         for i in 0..N {
             for j in 0..N {
-                let value = sq.get(i, j) as usize;
+                let value = sq.get(i, j);
                 if !self.get(i, j).is_single() {
                     let new = self.get(i, j).intersect(known_values[value].complement());
                     self.constraints[i][j] = new;

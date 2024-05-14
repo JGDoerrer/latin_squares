@@ -247,7 +247,7 @@ impl OAConstraints {
             }
 
             let index = N;
-            for col in 2..(MOLS - 1) {
+            for col in 0..(MOLS - 1) {
                 let next_col = col + 1;
 
                 let min_val = self
@@ -311,7 +311,7 @@ impl OAConstraints {
 
         let cells: BigBitSet = first_values
             .into_iter()
-            .zip(second_values.into_iter())
+            .zip(second_values)
             .map(|(a, b)| a && b)
             .enumerate()
             .filter(|(_, b)| *b)
@@ -409,7 +409,7 @@ impl OAConstraints {
             }
         }
 
-        (min != N + 1).then(|| min_cell)
+        (min != N + 1).then_some(min_cell)
     }
 
     pub fn is_solvable(&self) -> bool {
@@ -651,7 +651,7 @@ impl OAConstraints {
 
 impl Debug for PartialOrthogonalArray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[\n")?;
+        writeln!(f, "[")?;
         for i in 0..N * N {
             write!(f, "    [")?;
             for j in 0..MOLS {
