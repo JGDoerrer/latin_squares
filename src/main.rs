@@ -38,9 +38,9 @@ struct Args {}
 fn main() {
     let _args = Args::parse();
 
-    // LatinSquareOAGenerator::load("0,0,2,1,0,2,2,3,0,1,1,1,1,0,0,1,2,0,1,0,0,1".to_string())
+    // LatinSquareOAGenerator::load("0,3,0,0,1,1,2,0,0,2,0,1,1,3,0,1,1,1,1,1,1,1,0,1,1,1".to_string())
     //     .unwrap()
-    //     .for_each(|pair| println!("{pair:?}"));
+    // LatinSquareOAGenerator::new().for_each(|pair| println!("{pair:?}"));
 
     // generate_5_graph();
     // generate_7_graph();
@@ -64,9 +64,9 @@ fn main() {
     //     .unwrap_or(LatinSquareTripleGenerator::new())
     //     .next();
     // let triple = LatinSquareTripleGenerator::<N>::new().next();
-    let sq = LatinSquareOAGenerator::new().next();
+    // let sq = LatinSquareOAGenerator::new().next();
     // let sq = LatinSquareGenerator::<9>::new().next().unwrap();
-    println!("{sq:?}");
+    // println!("{sq:?}");
 
     // let triple = LatinSquareOAGenerator::load(std::env::args().nth(1).unwrap_or(String::new()))
     //     .unwrap_or(LatinSquareOAGenerator::new())

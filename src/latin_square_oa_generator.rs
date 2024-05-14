@@ -15,11 +15,20 @@ use crate::{
 };
 
 pub struct LatinSquareOAGenerator {
-    stack: Vec<(OAConstraints, Cell, usize)>,
+    stack: Vec<(OAConstraints, (usize, usize), usize)>,
 }
 
 impl LatinSquareOAGenerator {
     pub fn new() -> Self {
+        let mut constraints = OAConstraints::new();
+
+        let cell = constraints.most_constrained_cell().unwrap();
+        LatinSquareOAGenerator {
+            stack: vec![(constraints, cell, 0)],
+        }
+    }
+
+    pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
         let mut constraints = OAConstraints::new();
 
         let cell = constraints.most_constrained_cell().unwrap();
@@ -40,7 +49,7 @@ impl LatinSquareOAGenerator {
         let total = self
             .stack
             .iter()
-            .map(|(constraints, cell, _)| constraints.values_for_cell(*cell).len() as f64)
+            .map(|(constraints, cell, _)| constraints.values_for_cell(cell.0, cell.1).len() as f64)
             .reduce(|a, b| a * b)
             .unwrap();
 
@@ -80,14 +89,32 @@ impl LatinSquareOAGenerator {
                 return None;
             };
 
-            let cell = *cell;
-            let values = constraints.values_for_cell(cell);
-            let (i, value) = values.into_iter().enumerate().skip(val).next().unwrap();
+            let values = constraints.values_for_cell(cell.0, cell.1);
+
+            let mut new_constraints: Vec<_> = values
+                .into_iter()
+                .map(|value| {
+                    let mut new = constraints.clone();
+                    new.set_and_propagate(cell.0, cell.1, value);
+                    new.find_and_set_singles();
+                    new
+                })
+                .collect();
+            new_constraints.sort_by_cached_key(|c| {
+                (
+                    c.possible_values_log() as u64,
+                    c.filled_cells().wrapping_neg(),
+                )
+            });
+
+            let (i, constraints) = new_constraints
+                .into_iter()
+                .enumerate()
+                .skip(val)
+                .next()
+                .unwrap();
             *start_value = i + 1;
 
-            let mut constraints = constraints.clone();
-            constraints.set_and_propagate(cell, value);
-            constraints.find_and_set_singles();
             match constraints.most_constrained_cell() {
                 Some(cell) => {
                     new.stack.push((constraints, cell, 0));
@@ -103,7 +130,7 @@ impl LatinSquareOAGenerator {
         let totals: Vec<_> = self
             .stack
             .iter()
-            .map(|(constraints, cell, _)| constraints.values_for_cell(*cell).len() as f64)
+            .map(|(constraints, cell, _)| constraints.values_for_cell(cell.0, cell.1).len() as f64)
             .collect();
 
         self.stack
@@ -136,20 +163,23 @@ impl Iterator for LatinSquareOAGenerator {
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {
             let cell = *cell;
-            let values = constraints.values_for_cell(cell);
+            let values = constraints.values_for_cell(cell.0, cell.1);
 
             let mut new_constraints: Vec<_> = values
                 .into_iter()
                 .map(|value| {
                     let mut new = constraints.clone();
-                    new.set_and_propagate(cell, value);
+                    new.set_and_propagate(cell.0, cell.1, value);
                     new.find_and_set_singles();
                     new
                 })
                 .collect();
-            new_constraints
-                .sort_by_cached_key(|c| (c.sum_possible_values() as u64, c.filled_cells()));
-            new_constraints.reverse();
+            new_constraints.sort_by_cached_key(|c| {
+                (
+                    c.possible_values_log() as u64,
+                    c.filled_cells().wrapping_neg(),
+                )
+            });
 
             for (i, new) in new_constraints.into_iter().enumerate().skip(*start_value) {
                 *start_value = i + 1;
@@ -169,7 +199,7 @@ impl Iterator for LatinSquareOAGenerator {
                         self.stack.push((new.clone(), cell, 0));
                         if new.filled_cells() >= best {
                             best = new.filled_cells();
-                            dbg!(new.squares(), best, Instant::now() - start);
+                            // dbg!(new.squares(), best, Instant::now() - start);
                         }
                         let time_passed = (Instant::now() - last_write).as_secs_f64();
                         if time_passed >= 1.0 {
