@@ -1,17 +1,12 @@
 use std::{
-    cell,
-    collections::hash_map::DefaultHasher,
     fs::OpenOptions,
-    hash::Hasher,
-    io::{BufRead, BufReader, Write},
-    time::{Duration, Instant},
+    io::{BufRead, Write},
+    time::{Instant},
 };
 
 use crate::{
-    latin_square::{Cell, LatinSquare, PartialLatinSquare},
-    orthogonal_array::{self, OAConstraints, MOLS, N},
-    pair_constraints::CellOrValuePair,
-    triple_constraints::{CellOrValueTriple, TripleConstraints, ValueTriple},
+    latin_square::{LatinSquare, PartialLatinSquare},
+    orthogonal_array::{OAConstraints, MOLS, N},
 };
 
 pub struct LatinSquareOAGenerator {
@@ -20,7 +15,7 @@ pub struct LatinSquareOAGenerator {
 
 impl LatinSquareOAGenerator {
     pub fn new() -> Self {
-        let mut constraints = OAConstraints::new();
+        let constraints = OAConstraints::new();
 
         let cell = constraints.most_constrained_cell().unwrap();
         LatinSquareOAGenerator {
@@ -28,8 +23,8 @@ impl LatinSquareOAGenerator {
         }
     }
 
-    pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
-        let mut constraints = OAConstraints::new();
+    pub fn from_partial(_sq: PartialLatinSquare<N>) -> Self {
+        let constraints = OAConstraints::new();
 
         let cell = constraints.most_constrained_cell().unwrap();
         LatinSquareOAGenerator {
@@ -46,7 +41,7 @@ impl LatinSquareOAGenerator {
             .reduce(|a, b| format!("{a},{b}"))
             .unwrap();
 
-        let total = self
+        let _total = self
             .stack
             .iter()
             .map(|(constraints, cell, _)| constraints.values_for_cell(cell.0, cell.1).len() as f64)
@@ -157,7 +152,7 @@ impl Iterator for LatinSquareOAGenerator {
             return None;
         }
 
-        let start = Instant::now();
+        let _start = Instant::now();
         let mut last_write = Instant::now();
         let mut best = 0;
 

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    bitset::{BitSet128, BitSet16, BitSet192, BitSet64},
+    bitset::{BitSet128, BitSet16},
     latin_square::{Cell, PartialLatinSquare},
     pair_constraints::ValuePair,
 };

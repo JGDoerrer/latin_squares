@@ -1,5 +1,4 @@
 use std::{
-    cell,
     collections::hash_map::DefaultHasher,
     fs::OpenOptions,
     hash::Hasher,
@@ -8,8 +7,7 @@ use std::{
 };
 
 use crate::{
-    latin_square::{Cell, LatinSquare, PartialLatinSquare},
-    pair_constraints::CellOrValuePair,
+    latin_square::{Cell, LatinSquare},
     triple_constraints::{CellOrValueTriple, TripleConstraints, ValueTriple},
 };
 
@@ -120,7 +118,7 @@ impl<const N: usize> Iterator for LatinSquareTripleGenerator<N> {
         dbg!(self.stack.last().unwrap().0.squares());
 
         let start = Instant::now();
-        let mut last_write = Instant::now();
+        let _last_write = Instant::now();
         let mut best = 0;
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {

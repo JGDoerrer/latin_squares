@@ -289,7 +289,7 @@ impl BitSet192 {
     }
 
     #[inline]
-    pub const fn single(i: usize) -> Self {
+    pub const fn single(_i: usize) -> Self {
         todo!()
     }
 

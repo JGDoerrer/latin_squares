@@ -1,20 +1,16 @@
 use std::{
     fs::OpenOptions,
     io::{BufWriter, Write},
-    num::NonZeroUsize,
-    thread,
 };
 
-use clap::{self, builder::Str, Parser};
-use latin_square::LatinSquare;
-use latin_square_pair_generator::LatinSquarePairGenerator;
-use latin_square_triple_generator::LatinSquareTripleGenerator;
+use clap::{self, Parser};
+
+
+
 use pairs5::LATIN_PAIRS_5;
 
 use crate::{
-    compressed_latin_square::CompressedLatinSquare, latin_square_generator::LatinSquareGenerator,
-    latin_square_oa_generator::LatinSquareOAGenerator,
-    orthogonal_generator::OrthogonalLatinSquareGenerator, squares5::LATIN_SQUARES_5,
+    squares5::LATIN_SQUARES_5,
 };
 
 mod bitset;
