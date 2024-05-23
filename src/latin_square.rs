@@ -285,7 +285,7 @@ impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
 
 impl<const N: usize> Debug for LatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[\n")?;
+        writeln!(f, "[")?;
         for i in 0..N {
             write!(f, "    [")?;
             for j in 0..N {
@@ -385,8 +385,7 @@ impl<const N: usize> PartialLatinSquare<N> {
 
     pub fn num_unique_values(&self) -> usize {
         (0..N)
-            .map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
-            .flatten()
+            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
             .flatten()
             .collect::<BitSet16>()
             .len()

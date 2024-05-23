@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     latin_square::{LatinSquare, PartialLatinSquare},
-    orthogonal_array::{OAConstraints, MOLS, N},
+    orthogonal_array::{OAConstraints, MOLS},
 };
 
 pub struct LatinSquareOAGenerator<const N: usize> {

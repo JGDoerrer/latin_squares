@@ -86,7 +86,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                 continue;
             }
 
-            let mut new_hitting_set = hitting_set.clone();
+            let mut new_hitting_set = *hitting_set;
             new_hitting_set.insert(next_entry);
             // if entries_left == 1
             //     && self

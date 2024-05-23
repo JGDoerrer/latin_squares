@@ -122,7 +122,6 @@ impl BitVec {
         self.words
             .iter()
             .map(|word| word.count_ones() as usize)
-            .into_iter()
             .sum()
     }
 

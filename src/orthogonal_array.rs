@@ -51,16 +51,16 @@ pub struct OAConstraints<const N: usize> {
 
 impl<const N: usize> OAConstraints<N> {
     pub fn new() -> Self {
-        let mut constraints = OAConstraints {
+        
+
+        OAConstraints {
             oa: PartialOrthogonalArray::new(),
             column_pair_values: [BigBitSet::all_less_than(N * N); (MOLS * (MOLS - 1)) / 2],
             cell_values: [[[SmallBitSet::all_less_than(N); N]; N]; MOLS],
             empty_cells: [BigBitSet::all_less_than(N * N); MOLS],
             rows: [[SmallBitSet::all_less_than(N); N]; MOLS],
             columns: [[SmallBitSet::all_less_than(N); N]; MOLS],
-        };
-
-        constraints
+        }
     }
 
     pub fn new_reduced() -> Self {
