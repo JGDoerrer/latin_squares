@@ -106,7 +106,7 @@ impl<const N: usize> TripleConstraints<N> {
         self.empty_cells.remove(cell.to_index::<N>());
 
         for i in 0..3 {
-            self.squares[i].set(cell.0, cell.1, values[i]);
+            self.squares[i].set(cell.0, cell.1, Some(values[i]));
         }
     }
 
@@ -117,7 +117,7 @@ impl<const N: usize> TripleConstraints<N> {
         self.pair01.set_first_value(cell, value);
         self.pair02.set_first_value(cell, value);
 
-        self.squares[0].set(cell.0, cell.1, value);
+        self.squares[0].set(cell.0, cell.1, Some(value));
     }
 
     pub fn set_second_value(&mut self, cell: Cell, value: usize) {
@@ -127,7 +127,7 @@ impl<const N: usize> TripleConstraints<N> {
         self.pair01.set_second_value(cell, value);
         self.pair12.set_first_value(cell, value);
 
-        self.squares[1].set(cell.0, cell.1, value);
+        self.squares[1].set(cell.0, cell.1, Some(value));
     }
 
     pub fn set_third_value(&mut self, cell: Cell, value: usize) {
@@ -137,7 +137,7 @@ impl<const N: usize> TripleConstraints<N> {
         self.pair02.set_second_value(cell, value);
         self.pair12.set_second_value(cell, value);
 
-        self.squares[2].set(cell.0, cell.1, value);
+        self.squares[2].set(cell.0, cell.1, Some(value));
     }
 
     pub fn values_for_cell(&self, cell: Cell) -> Vec<ValueTriple> {
@@ -598,8 +598,8 @@ impl<const N: usize> TripleConstraints<N> {
                         self.pair02.set_first_value(cell, value_pair.0);
                         self.pair12.set_first_value(cell, value_pair.1);
 
-                        self.squares[0].set(cell.0, cell.1, value_pair.0);
-                        self.squares[1].set(cell.0, cell.1, value_pair.1);
+                        self.squares[0].set(cell.0, cell.1, Some(value_pair.0));
+                        self.squares[1].set(cell.0, cell.1, Some(value_pair.1));
                         changed = true;
                     }
                     CellOrValuePair::ValuePair(value_pair) => {
@@ -626,8 +626,8 @@ impl<const N: usize> TripleConstraints<N> {
                         self.pair02.set_first_value(cell, value_pair.0);
                         self.pair12.set_first_value(cell, value_pair.1);
 
-                        self.squares[0].set(cell.0, cell.1, value_pair.0);
-                        self.squares[1].set(cell.0, cell.1, value_pair.1);
+                        self.squares[0].set(cell.0, cell.1, Some(value_pair.0));
+                        self.squares[1].set(cell.0, cell.1, Some(value_pair.1));
                         changed = true;
                     }
                 }
@@ -664,8 +664,8 @@ impl<const N: usize> TripleConstraints<N> {
                         self.pair01.set_first_value(cell, value_pair.0);
                         self.pair12.set_second_value(cell, value_pair.1);
 
-                        self.squares[0].set(cell.0, cell.1, value_pair.0);
-                        self.squares[2].set(cell.0, cell.1, value_pair.1);
+                        self.squares[0].set(cell.0, cell.1, Some(value_pair.0));
+                        self.squares[2].set(cell.0, cell.1, Some(value_pair.1));
                         changed = true;
                     }
                     CellOrValuePair::ValuePair(value_pair) => {
@@ -692,8 +692,8 @@ impl<const N: usize> TripleConstraints<N> {
                         self.pair01.set_first_value(cell, value_pair.0);
                         self.pair12.set_second_value(cell, value_pair.1);
 
-                        self.squares[0].set(cell.0, cell.1, value_pair.0);
-                        self.squares[2].set(cell.0, cell.1, value_pair.1);
+                        self.squares[0].set(cell.0, cell.1, Some(value_pair.0));
+                        self.squares[2].set(cell.0, cell.1, Some(value_pair.1));
                         changed = true;
                     }
                 }
@@ -730,8 +730,8 @@ impl<const N: usize> TripleConstraints<N> {
                         self.pair01.set_second_value(cell, value_pair.0);
                         self.pair02.set_second_value(cell, value_pair.1);
 
-                        self.squares[1].set(cell.0, cell.1, value_pair.0);
-                        self.squares[2].set(cell.0, cell.1, value_pair.1);
+                        self.squares[1].set(cell.0, cell.1, Some(value_pair.0));
+                        self.squares[2].set(cell.0, cell.1, Some(value_pair.1));
                         changed = true;
                     }
                     CellOrValuePair::ValuePair(value_pair) => {
@@ -758,8 +758,8 @@ impl<const N: usize> TripleConstraints<N> {
                         self.pair01.set_second_value(cell, value_pair.0);
                         self.pair02.set_second_value(cell, value_pair.1);
 
-                        self.squares[1].set(cell.0, cell.1, value_pair.0);
-                        self.squares[2].set(cell.0, cell.1, value_pair.1);
+                        self.squares[1].set(cell.0, cell.1, Some(value_pair.0));
+                        self.squares[2].set(cell.0, cell.1, Some(value_pair.1));
                         changed = true;
                     }
                 }

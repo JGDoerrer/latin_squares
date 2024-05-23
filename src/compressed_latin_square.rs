@@ -9,7 +9,7 @@ impl<const N: usize> From<LatinSquare<N>> for CompressedLatinSquare<N> {
     fn from(sq: LatinSquare<N>) -> Self {
         let mut ranks = [0; N];
         for i in 0..N {
-            let row = sq.values[i];
+            let row = sq.get_row(i);
 
             let rank = rank_of_permutation(&row);
             ranks[i] = rank;
@@ -27,7 +27,7 @@ impl<const N: usize> From<CompressedLatinSquare<N>> for LatinSquare<N> {
             let permutation = permutation_from_rank(rank);
             values[i] = permutation;
         }
-        LatinSquare { values }
+        LatinSquare::new(values)
     }
 }
 

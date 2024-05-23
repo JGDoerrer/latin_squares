@@ -6,21 +6,21 @@ use crate::{
     pair_constraints::ValuePair,
 };
 
-pub const N: usize = 7;
-pub const MOLS: usize = 2;
+pub const N: usize = 5;
+pub const MOLS: usize = 1;
 
 type BigBitSet = BitSet128;
 type SmallBitSet = BitSet16;
 
 #[derive(Clone)]
-pub struct PartialOrthogonalArray {
-    columns: [[Option<u8>; N * N]; MOLS],
+pub struct PartialOrthogonalArray<const N: usize> {
+    columns: [[[Option<u8>; N]; N]; MOLS],
 }
 
-impl PartialOrthogonalArray {
+impl<const N: usize> PartialOrthogonalArray<N> {
     pub fn new() -> Self {
         PartialOrthogonalArray {
-            columns: [[None; N * N]; MOLS],
+            columns: [[[None; N]; N]; MOLS],
         }
     }
 
@@ -30,7 +30,7 @@ impl PartialOrthogonalArray {
 
             for i in 0..N {
                 for j in 0..N {
-                    new_col[i][j] = col[i * N + j];
+                    new_col[i][j] = col[i][j];
                 }
             }
 
@@ -40,40 +40,46 @@ impl PartialOrthogonalArray {
 }
 
 #[derive(Clone, Debug)]
-pub struct OAConstraints {
-    oa: PartialOrthogonalArray,
+pub struct OAConstraints<const N: usize> {
+    oa: PartialOrthogonalArray<N>,
     column_pair_values: [BigBitSet; (MOLS * (MOLS - 1)) / 2],
-    cell_values: [[SmallBitSet; N * N]; MOLS],
+    cell_values: [[[SmallBitSet; N]; N]; MOLS],
     empty_cells: [BigBitSet; MOLS],
     rows: [[SmallBitSet; N]; MOLS],
     columns: [[SmallBitSet; N]; MOLS],
 }
 
-impl OAConstraints {
+impl<const N: usize> OAConstraints<N> {
     pub fn new() -> Self {
         let mut constraints = OAConstraints {
             oa: PartialOrthogonalArray::new(),
             column_pair_values: [BigBitSet::all_less_than(N * N); (MOLS * (MOLS - 1)) / 2],
-            cell_values: [[SmallBitSet::all_less_than(N); N * N]; MOLS],
+            cell_values: [[[SmallBitSet::all_less_than(N); N]; N]; MOLS],
             empty_cells: [BigBitSet::all_less_than(N * N); MOLS],
             rows: [[SmallBitSet::all_less_than(N); N]; MOLS],
             columns: [[SmallBitSet::all_less_than(N); N]; MOLS],
         };
 
+        constraints
+    }
+
+    pub fn new_reduced() -> Self {
+        let mut constraints = Self::new();
+
         let index = N;
-        for col in 0..(MOLS - 1) {
+        for col in 1..(MOLS - 1) {
             let next_col = col + 1;
 
             let min_val = constraints
                 .values_for_cell(col, index)
                 .into_iter()
                 .next()
-                .or(constraints.oa.columns[col][index].map(|val| val as usize))
+                .or(constraints.oa.columns[col][0][1].map(|val| val as usize))
                 .unwrap();
 
             let mask = SmallBitSet::all_less_than(min_val + 1).complement();
 
-            let values = &mut constraints.cell_values[next_col][index];
+            let values = &mut constraints.cell_values[next_col][0][1];
             *values = values.intersect(mask);
         }
 
@@ -152,7 +158,9 @@ impl OAConstraints {
 
         assert!(min != max);
 
-        (self.oa.columns[min][index], self.oa.columns[max][index])
+        let Cell(i, j) = Cell::from_index::<N>(index);
+
+        (self.oa.columns[min][i][j], self.oa.columns[max][i][j])
     }
 
     pub fn set_and_propagate(&mut self, column: usize, index: usize, value: usize) {
@@ -174,14 +182,13 @@ impl OAConstraints {
             self.empty_cells[column]
         );
 
-        let cell_row = index / N;
-        let cell_column = index % N;
+        let Cell(row, col) = Cell::from_index::<N>(index);
 
-        self.oa.columns[column][index] = Some(value as u8);
+        self.oa.columns[column][row][col] = Some(value as u8);
         self.empty_cells[column].remove(index);
-        self.cell_values[column][index] = SmallBitSet::empty();
-        self.rows[column][cell_row].remove(value);
-        self.columns[column][cell_column].remove(value);
+        self.cell_values[column][row][col] = SmallBitSet::empty();
+        self.rows[column][row].remove(value);
+        self.columns[column][col].remove(value);
 
         for i in 0..MOLS {
             if i == column {
@@ -220,9 +227,10 @@ impl OAConstraints {
                         .complement()
                         .intersect(BigBitSet::all_less_than(N * N))
                     {
-                        let first_value = self.oa.columns[first_column][index].unwrap() as usize;
+                        let Cell(i, j) = Cell::from_index::<N>(index);
+                        let first_value = self.oa.columns[first_column][i][j].unwrap() as usize;
 
-                        let second_values = &mut self.cell_values[second_column][index];
+                        let second_values = &mut self.cell_values[second_column][i][j];
                         if !second_values.is_subset_of(second_vals_for_first_val[first_value]) {
                             *second_values =
                                 second_values.intersect(second_vals_for_first_val[first_value]);
@@ -234,9 +242,10 @@ impl OAConstraints {
                         .complement()
                         .intersect(BigBitSet::all_less_than(N * N))
                     {
-                        let second_value = self.oa.columns[second_column][index].unwrap() as usize;
+                        let Cell(i, j) = Cell::from_index::<N>(index);
+                        let second_value = self.oa.columns[second_column][i][j].unwrap() as usize;
 
-                        let first_values = &mut self.cell_values[first_column][index];
+                        let first_values = &mut self.cell_values[first_column][i][j];
                         if !first_values.is_subset_of(first_vals_for_second_val[second_value]) {
                             *first_values =
                                 first_values.intersect(first_vals_for_second_val[second_value]);
@@ -254,25 +263,24 @@ impl OAConstraints {
                     .values_for_cell(col, index)
                     .into_iter()
                     .next()
-                    .or(self.oa.columns[col][index].map(|val| val as usize))
+                    .or(self.oa.columns[col][0][1].map(|val| val as usize))
                     .unwrap();
 
                 let mask = SmallBitSet::all_less_than(min_val + 1).complement();
 
-                let values = &mut self.cell_values[next_col][index];
+                let values = &mut self.cell_values[next_col][0][1];
                 *values = values.intersect(mask);
             }
         }
     }
 
     pub fn values_for_cell(&self, column: usize, index: usize) -> SmallBitSet {
-        let cell_row = index / N;
-        let cell_column = index % N;
+        let Cell(row, col) = Cell::from_index::<N>(index);
 
-        let row_values = self.rows[column][cell_row];
-        let column_values = self.columns[column][cell_column];
+        let row_values = self.rows[column][row];
+        let column_values = self.columns[column][col];
 
-        self.cell_values[column][index]
+        self.cell_values[column][row][col]
             .intersect(row_values)
             .intersect(column_values)
     }
@@ -291,22 +299,26 @@ impl OAConstraints {
         let value_pair_index = value_pair.to_index::<N>();
         assert!(pair.contains(value_pair_index));
 
-        let mut first_values = [false; N * N];
-        for i in 0..N * N {
-            first_values[i] = if let Some(val) = self.oa.columns[min][i] {
-                val as usize == value_pair.0
-            } else {
-                self.values_for_cell(min, i).contains(value_pair.0)
-            };
+        let mut first_values = vec![false; N * N];
+        for i in 0..N {
+            for j in 0..N {
+                first_values[i] = if let Some(val) = self.oa.columns[min][i][j] {
+                    val as usize == value_pair.0
+                } else {
+                    self.values_for_cell(min, i).contains(value_pair.0)
+                };
+            }
         }
 
-        let mut second_values = [false; N * N];
-        for i in 0..N * N {
-            second_values[i] = if let Some(val) = self.oa.columns[max][i] {
-                val as usize == value_pair.1
-            } else {
-                self.values_for_cell(max, i).contains(value_pair.1)
-            };
+        let mut second_values = vec![false; N * N];
+        for i in 0..N {
+            for j in 0..N {
+                second_values[i] = if let Some(val) = self.oa.columns[max][i][j] {
+                    val as usize == value_pair.1
+                } else {
+                    self.values_for_cell(max, i).contains(value_pair.1)
+                };
+            }
         }
 
         let cells: BigBitSet = first_values
@@ -361,12 +373,14 @@ impl OAConstraints {
         let min = column1.min(column2);
         let max = column1.max(column2);
 
-        let values1 = if let Some(v1) = self.oa.columns[min][index] {
+        let Cell(i, j) = Cell::from_index::<N>(index);
+
+        let values1 = if let Some(v1) = self.oa.columns[min][i][j] {
             SmallBitSet::single(v1 as usize)
         } else {
             self.values_for_cell(min, index)
         };
-        let values2 = if let Some(v2) = self.oa.columns[max][index] {
+        let values2 = if let Some(v2) = self.oa.columns[max][i][j] {
             SmallBitSet::single(v2 as usize)
         } else {
             self.values_for_cell(max, index)
@@ -649,20 +663,23 @@ impl OAConstraints {
     }
 }
 
-impl Debug for PartialOrthogonalArray {
+impl<const N: usize> Debug for PartialOrthogonalArray<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "[")?;
-        for i in 0..N * N {
-            write!(f, "    [")?;
-            for j in 0..MOLS {
-                if let Some(value) = self.columns[j][i] {
-                    write!(f, "{:2}, ", value)?;
-                } else {
-                    write!(f, "??, ")?;
+        for i in 0..N {
+            for j in 0..N {
+                write!(f, "    [")?;
+                for k in 0..MOLS {
+                    if let Some(value) = self.columns[k][i][j] {
+                        write!(f, "{:2}, ", value)?;
+                    } else {
+                        write!(f, "??, ")?;
+                    }
                 }
+                write!(f, "]")?;
             }
-            write!(f, "]")?;
-            if i != N * N - 1 {
+
+            if i != N - 1 {
                 writeln!(f, ",")?;
             }
         }

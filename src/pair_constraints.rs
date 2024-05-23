@@ -184,8 +184,8 @@ impl<const N: usize> PairConstraints<N> {
         self.empty_cells.remove(i * N + j);
         self.values_left.remove(value_index);
 
-        self.sq_pair.0.set(i, j, value.0);
-        self.sq_pair.1.set(i, j, value.1);
+        self.sq_pair.0.set(i, j, Some(value.0));
+        self.sq_pair.1.set(i, j, Some(value.1));
     }
 
     pub fn set_first_value(&mut self, cell: Cell, value: usize) {
@@ -202,7 +202,7 @@ impl<const N: usize> PairConstraints<N> {
         //     .intersect(Self::CELLS_WITHOUT_ROW[cell.0])
         //     .intersect(Self::CELLS_WITHOUT_COLUMN[cell.1]);
 
-        self.sq_pair.0.set(cell.0, cell.1, value);
+        self.sq_pair.0.set(cell.0, cell.1, Some(value));
     }
 
     pub fn set_second_value(&mut self, cell: Cell, value: usize) {
@@ -215,7 +215,7 @@ impl<const N: usize> PairConstraints<N> {
         //     .intersect(Self::CELLS_WITHOUT_ROW[cell.0])
         //     .intersect(Self::CELLS_WITHOUT_COLUMN[cell.1]);
 
-        self.sq_pair.1.set(cell.0, cell.1, value);
+        self.sq_pair.1.set(cell.0, cell.1, Some(value));
     }
 
     pub fn values_for_cell(&self, i: usize, j: usize) -> BitSet128 {

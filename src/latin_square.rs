@@ -1,14 +1,15 @@
 use std::fmt::Debug;
 
 use crate::{
-    bitset::BitSet128,
+    bitset::{BitSet128, BitSet16},
     constraints::Constraints,
+    latin_square_oa_generator::LatinSquareOAGenerator,
     pair_constraints::{PairConstraints, ValuePair},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LatinSquare<const N: usize> {
-    pub values: [[u8; N]; N],
+    values: [[u8; N]; N],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -18,11 +19,25 @@ pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
 
 impl<const N: usize> LatinSquare<N> {
     pub fn new(values: [[u8; N]; N]) -> Self {
-        LatinSquare { values }
+        let sq = LatinSquare { values };
+        debug_assert!(sq.is_valid());
+        sq
     }
 
     pub fn get(&self, i: usize, j: usize) -> usize {
         self.values[i][j] as usize
+    }
+
+    pub fn get_row(&self, i: usize) -> [u8; N] {
+        self.values[i]
+    }
+
+    pub fn is_valid(&self) -> bool {
+        (0..N).all(|i| {
+            (0..N).map(|j| self.get(i, j)).collect::<BitSet16>() == BitSet16::all_less_than(N)
+                && (0..N).map(|j| self.get(j, i)).collect::<BitSet16>()
+                    == BitSet16::all_less_than(N)
+        })
     }
 
     pub fn is_orthogonal_to(&self, other: &Self) -> bool {
@@ -74,6 +89,145 @@ impl<const N: usize> LatinSquare<N> {
         } else {
             todo!()
         }
+    }
+
+    pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
+        let order1 = self.unavoidable_sets_order_1();
+
+        let mut order2 = vec![];
+        for (i, set1) in order1.iter().enumerate() {
+            for set2 in order1.iter().skip(i + 1) {
+                if set1.is_disjoint(*set2) {
+                    order2.push(set1.union(*set2));
+                }
+            }
+        }
+
+        order2.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        order2.dedup();
+
+        let mut order3 = vec![];
+        for set1 in order1.iter() {
+            for set2 in order2.iter() {
+                if set1.is_disjoint(*set2) {
+                    order3.push(set1.union(*set2));
+                }
+            }
+        }
+
+        order3.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        order3.dedup();
+
+        vec![order1, order2, order3]
+    }
+
+    pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
+        debug_assert!(self.is_reduced());
+
+        let mut sets = Vec::new();
+
+        let triple_iter = (0..N).flat_map(|first| {
+            ((first + 1)..N)
+                .flat_map(move |second| ((second + 1)..N).map(move |third| [first, second, third]))
+        });
+
+        for triple in triple_iter {
+            for partial in [
+                self.without_rows(triple),
+                self.without_cols(triple),
+                self.without_vals(triple),
+            ] {
+                let solutions = LatinSquareOAGenerator::from_partial(partial).map(|s| s[0]);
+
+                for solution in solutions {
+                    let difference = self.difference_mask(&solution);
+
+                    if !difference.is_empty() && difference.len() < 2 * N {
+                        sets.push(difference);
+                    }
+                }
+            }
+        }
+
+        sets.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        sets.dedup();
+
+        // for [row1, row2, col1, col2] in self.subsquares_order_2_iter() {
+        //     let set = [
+        //         Cell(row1, col1),
+        //         Cell(row1, col2),
+        //         Cell(row2, col1),
+        //         Cell(row2, col2),
+        //     ]
+        //     .map(|cell| cell.to_index::<N>())
+        //     .into_iter()
+        //     .collect();
+        //     sets.push(set);
+        // }
+
+        sets
+    }
+
+    pub fn subsquares_order_2_iter(&self) -> impl Iterator<Item = [usize; 4]> + '_ {
+        let rows_iter = (0..N).flat_map(|row1| ((row1 + 1)..N).map(move |row2| (row1, row2)));
+
+        rows_iter.flat_map(|(row1, row2)| {
+            let cols_iter = (0..N).flat_map(|col1| ((col1 + 1)..N).map(move |col2| (col1, col2)));
+            cols_iter
+                .map(move |(col1, col2)| [row1, row2, col1, col2])
+                .filter(|[row1, row2, col1, col2]| {
+                    self.get(*row1, *col1) == self.get(*row2, *col2)
+                        && self.get(*row1, *col2) == self.get(*row2, *col1)
+                })
+        })
+    }
+
+    pub fn without_rows(&self, rows: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {
+        let mut sq = PartialLatinSquare::from(*self);
+        for row in rows {
+            for i in 0..N {
+                sq.set(row, i, None);
+            }
+        }
+        sq
+    }
+
+    pub fn without_cols(&self, cols: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {
+        let mut sq = PartialLatinSquare::from(*self);
+        for col in cols {
+            for i in 0..N {
+                sq.set(i, col, None);
+            }
+        }
+        sq
+    }
+
+    pub fn without_vals(&self, vals: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {
+        let mut sq = PartialLatinSquare::from(*self);
+        for value in vals {
+            for i in 0..N {
+                for j in 0..N {
+                    if self.get(i, j) == value {
+                        sq.set(i, j, None);
+                    }
+                }
+            }
+        }
+        sq
+    }
+
+    pub fn difference_mask(&self, other: &Self) -> BitSet128 {
+        let mut mask = BitSet128::empty();
+
+        for i in 0..N {
+            for j in 0..N {
+                if self.get(i, j) != other.get(i, j) {
+                    mask.insert(Cell(i, j).to_index::<N>());
+                }
+            }
+        }
+
+        mask
     }
 }
 
@@ -129,23 +283,23 @@ impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
     }
 }
 
-// impl<const N: usize> Debug for LatinSquare<N> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "[\n")?;
-//         for i in 0..N {
-//             write!(f, "    [")?;
-//             for j in 0..N {
-//                 write!(f, "{:2}, ", self.get(i, j))?;
-//             }
-//             write!(f, "]")?;
-//             if i != N - 1 {
-//                 writeln!(f, ",")?;
-//             }
-//         }
-//         write!(f, "\n]")?;
-//         Ok(())
-//     }
-// }
+impl<const N: usize> Debug for LatinSquare<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[\n")?;
+        for i in 0..N {
+            write!(f, "    [")?;
+            for j in 0..N {
+                write!(f, "{:2}, ", self.get(i, j))?;
+            }
+            write!(f, "]")?;
+            if i != N - 1 {
+                writeln!(f, ",")?;
+            }
+        }
+        write!(f, "\n]")?;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct PartialLatinSquare<const N: usize> {
@@ -173,8 +327,8 @@ impl<const N: usize> PartialLatinSquare<N> {
         self.values[cell.0][cell.1].map(|val| val.into())
     }
 
-    pub fn set(&mut self, i: usize, j: usize, value: usize) {
-        self.values[i][j] = Some(value as u8);
+    pub fn set(&mut self, i: usize, j: usize, value: Option<usize>) {
+        self.values[i][j] = value.map(|v| v as u8);
     }
 
     pub fn next_unknown(&self) -> Option<(usize, usize)> {
@@ -194,6 +348,49 @@ impl<const N: usize> PartialLatinSquare<N> {
         }
         None
     }
+
+    pub fn num_entries(&self) -> usize {
+        (0..N)
+            .map(|row| {
+                (0..N)
+                    .filter(|col| self.get(Cell(row, *col)).is_some())
+                    .count()
+            })
+            .sum()
+    }
+
+    pub fn num_empty_rows(&self) -> usize {
+        (0..N)
+            .filter(|row| (0..N).all(|col| self.get(Cell(*row, col)).is_none()))
+            .count()
+    }
+
+    pub fn num_full_rows(&self) -> usize {
+        (0..N)
+            .filter(|row| (0..N).all(|col| self.get(Cell(*row, col)).is_some()))
+            .count()
+    }
+
+    pub fn num_empty_cols(&self) -> usize {
+        (0..N)
+            .filter(|col| (0..N).all(|row| self.get(Cell(row, *col)).is_none()))
+            .count()
+    }
+
+    pub fn num_full_cols(&self) -> usize {
+        (0..N)
+            .filter(|col| (0..N).all(|row| self.get(Cell(row, *col)).is_some()))
+            .count()
+    }
+
+    pub fn num_unique_values(&self) -> usize {
+        (0..N)
+            .map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
+            .flatten()
+            .flatten()
+            .collect::<BitSet16>()
+            .len()
+    }
 }
 
 impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
@@ -205,6 +402,22 @@ impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
         for i in 0..N {
             for j in 0..N {
                 sq.values[i][j] = value.get(Cell(i, j)).unwrap() as u8;
+            }
+        }
+
+        sq
+    }
+}
+
+impl<const N: usize> From<LatinSquare<N>> for PartialLatinSquare<N> {
+    fn from(value: LatinSquare<N>) -> Self {
+        let mut sq = PartialLatinSquare {
+            values: [[None; N]; N],
+        };
+
+        for i in 0..N {
+            for j in 0..N {
+                sq.values[i][j] = Some(value.get(i, j) as u8);
             }
         }
 

@@ -1,7 +1,7 @@
 use std::{
     fs::OpenOptions,
     io::{BufRead, Write},
-    time::{Instant},
+    time::Instant,
 };
 
 use crate::{
@@ -9,11 +9,11 @@ use crate::{
     orthogonal_array::{OAConstraints, MOLS, N},
 };
 
-pub struct LatinSquareOAGenerator {
-    stack: Vec<(OAConstraints, (usize, usize), usize)>,
+pub struct LatinSquareOAGenerator<const N: usize> {
+    stack: Vec<(OAConstraints<N>, (usize, usize), usize)>,
 }
 
-impl LatinSquareOAGenerator {
+impl<const N: usize> LatinSquareOAGenerator<N> {
     pub fn new() -> Self {
         let constraints = OAConstraints::new();
 
@@ -23,8 +23,17 @@ impl LatinSquareOAGenerator {
         }
     }
 
-    pub fn from_partial(_sq: PartialLatinSquare<N>) -> Self {
-        let constraints = OAConstraints::new();
+    pub fn new_reduced() -> Self {
+        let constraints = OAConstraints::new_reduced();
+
+        let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
+        LatinSquareOAGenerator {
+            stack: vec![(constraints, cell, 0)],
+        }
+    }
+
+    pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
+        let constraints = OAConstraints::from_partial(sq);
 
         let cell = constraints.most_constrained_cell().unwrap();
         LatinSquareOAGenerator {
@@ -75,7 +84,7 @@ impl LatinSquareOAGenerator {
             .map(|val| val.trim().parse().ok())
             .collect();
 
-        let mut new = Self::new();
+        let mut new = Self::new_reduced();
         for val in vals {
             let Some((constraints, cell, start_value)) = new.stack.last_mut() else {
                 return None;
@@ -102,10 +111,7 @@ impl LatinSquareOAGenerator {
                 )
             });
 
-            let (i, constraints) = new_constraints
-                .into_iter()
-                .enumerate().nth(val)
-                .unwrap();
+            let (i, constraints) = new_constraints.into_iter().enumerate().nth(val).unwrap();
             *start_value = i + 1;
 
             match constraints.most_constrained_cell() {
@@ -132,7 +138,8 @@ impl LatinSquareOAGenerator {
             .map(|(i, (_, _, val))| {
                 val.saturating_sub(1) as f64
                     / totals[0..=i]
-                        .iter().copied()
+                        .iter()
+                        .copied()
                         .reduce(|a, b| a * b)
                         .unwrap_or(1.0)
             })
@@ -141,7 +148,7 @@ impl LatinSquareOAGenerator {
     }
 }
 
-impl Iterator for LatinSquareOAGenerator {
+impl<const N: usize> Iterator for LatinSquareOAGenerator<N> {
     type Item = [LatinSquare<N>; MOLS];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -154,6 +161,12 @@ impl Iterator for LatinSquareOAGenerator {
         let mut best = 0;
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {
+            if constraints.is_solved() {
+                let map = constraints.squares().map(|sq| sq.into());
+                self.stack.pop();
+                return Some(map);
+            }
+
             let cell = *cell;
             let values = constraints.values_for_cell(cell.0, cell.1);
 
@@ -168,8 +181,8 @@ impl Iterator for LatinSquareOAGenerator {
                 .collect();
             new_constraints.sort_by_cached_key(|c| {
                 (
-                    c.possible_values_log() as u64,
-                    c.filled_cells().wrapping_neg(),
+                    // c.possible_values_log() as u64,
+                    c.filled_cells(),
                 )
             });
 
