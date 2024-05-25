@@ -101,7 +101,7 @@ impl<const N: usize> LatinSquare<N> {
                     .iter()
                     .all(|other| other == *set || !other.is_subset_of(**set))
             })
-            .map(|set| *set)
+            .copied()
             .collect();
 
         order1.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));

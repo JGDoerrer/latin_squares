@@ -105,7 +105,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
             //     continue;
             // }
 
-            let mut next_hitting_set = hitting_set.clone();
+            let mut next_hitting_set = *hitting_set;
             next_hitting_set.insert(next_entry);
 
             if next_hitting_set.len() > self.max_entries {

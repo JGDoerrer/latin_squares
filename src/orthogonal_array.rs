@@ -51,8 +51,6 @@ pub struct OAConstraints<const N: usize> {
 
 impl<const N: usize> OAConstraints<N> {
     pub fn new() -> Self {
-        
-
         OAConstraints {
             oa: PartialOrthogonalArray::new(),
             column_pair_values: [BigBitSet::all_less_than(N * N); (MOLS * (MOLS - 1)) / 2],

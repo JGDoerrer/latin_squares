@@ -170,7 +170,7 @@ impl<const N: usize> Iterator for LatinSquareOAGenerator<N> {
             let cell = *cell;
             let values = constraints.values_for_cell(cell.0, cell.1);
 
-            let mut new_constraints = values
+            let new_constraints = values
                 .into_iter()
                 .map(|value| {
                     let mut new = constraints.clone();
