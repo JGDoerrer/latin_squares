@@ -1,19 +1,14 @@
-
-
-
 use clap::{self, Parser};
 
 use latin_square_oa_generator::LatinSquareOAGenerator;
 
-
-use crate::{
-    hitting_set_generator::HittingSetGenerator,
-};
+use crate::hitting_set_generator::HittingSetGenerator;
 
 mod bitset;
 mod bitvec;
 mod compressed_latin_square;
 mod constraints;
+mod diagonal_latin_square_generator;
 mod hitting_set_generator;
 mod latin_square;
 mod latin_square_generator;
@@ -77,9 +72,10 @@ fn main() {
 }
 
 fn find_min_entries_per_sq() {
-    const N: usize = 5;
+    const N: usize = 4;
 
     let mut min = N * N;
+    let con = N * N / 4;
 
     for sq in LatinSquareOAGenerator::<N>::new_reduced() {
         let sq = sq[0];
@@ -88,12 +84,14 @@ fn find_min_entries_per_sq() {
         unavoidable_sets.iter().for_each(|sets| {
             dbg!(sets.len());
         });
+        dbg!(sq);
 
-        'l: for i in N - 1..min {
-            println!("{i}");
+        'l: for i in con..=con {
+            // println!("{i}");
             let partial_squares = HittingSetGenerator::new(sq, unavoidable_sets.clone(), i);
 
             for partial_sq in partial_squares {
+                // dbg!(partial_sq);
                 let mut solutions = LatinSquareOAGenerator::from_partial(partial_sq);
                 let first_solution = solutions.next();
                 let second_solution = solutions.next();
@@ -106,9 +104,11 @@ fn find_min_entries_per_sq() {
                     println!("{}", partial_sq.num_entries());
 
                     min = min.min(partial_sq.num_entries());
-                    break 'l;
+                    continue 'l;
                 }
             }
+
+            break;
         }
     }
 

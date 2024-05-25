@@ -92,13 +92,30 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
-        let order1 = self.unavoidable_sets_order_1();
+        let mut order1 = self.unavoidable_sets_order_1();
+
+        order1 = order1
+            .iter()
+            .filter(|set| {
+                order1
+                    .iter()
+                    .all(|other| other == *set || !other.is_subset_of(**set))
+            })
+            .map(|set| *set)
+            .collect();
+
+        order1.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        order1.dedup();
 
         let mut order2 = vec![];
         for (i, set1) in order1.iter().enumerate() {
             for set2 in order1.iter().skip(i + 1) {
-                if set1.is_disjoint(*set2) {
-                    order2.push(set1.union(*set2));
+                let new_set = set1.union(*set2);
+                if set1.is_disjoint(*set2)
+                    && order2.iter().all(|set| !new_set.is_subset_of(*set))
+                    && new_set.len() <= 3 * N
+                {
+                    order2.push(new_set);
                 }
             }
         }
@@ -106,19 +123,31 @@ impl<const N: usize> LatinSquare<N> {
         order2.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         order2.dedup();
 
-        let mut order3 = vec![];
-        for set1 in order1.iter() {
-            for set2 in order2.iter() {
-                if set1.is_disjoint(*set2) {
-                    order3.push(set1.union(*set2));
+        let mut all_orders = vec![order1.clone(), order2];
+
+        while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
+            let last_order = all_orders.last().unwrap();
+            let mut next_order = vec![];
+
+            for set1 in &order1 {
+                for set2 in last_order {
+                    let new_set = set1.union(*set2);
+                    if set1.is_disjoint(*set2) && new_set.len() <= all_orders.len() * N
+                    // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
+                    {
+                        next_order.push(new_set);
+                    }
                 }
             }
+
+            next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+            next_order.dedup();
+
+            all_orders.push(next_order);
         }
 
-        order3.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-        order3.dedup();
-
-        vec![order1, order2, order3]
+        let all_orders = vec![order1];
+        all_orders
     }
 
     pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
@@ -142,15 +171,12 @@ impl<const N: usize> LatinSquare<N> {
                 for solution in solutions {
                     let difference = self.difference_mask(&solution);
 
-                    if !difference.is_empty() && difference.len() < 2 * N {
+                    if !difference.is_empty() {
                         sets.push(difference);
                     }
                 }
             }
         }
-
-        sets.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-        sets.dedup();
 
         // for [row1, row2, col1, col2] in self.subsquares_order_2_iter() {
         //     let set = [
@@ -301,7 +327,7 @@ impl<const N: usize> Debug for LatinSquare<N> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PartialLatinSquare<const N: usize> {
     values: [[Option<u8>; N]; N],
 }
@@ -389,6 +415,28 @@ impl<const N: usize> PartialLatinSquare<N> {
             .flatten()
             .collect::<BitSet16>()
             .len()
+    }
+
+    pub fn first_empty_index(&self) -> Option<usize> {
+        (0..N)
+            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
+            .position(|entry| entry.is_none())
+    }
+
+    pub fn next_empty_index(&self, start: usize) -> Option<usize> {
+        (0..N)
+            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
+            .skip(start)
+            .position(|entry| entry.is_none())
+            .map(|index| index + start)
+    }
+
+    pub fn num_next_empty_indices(&self, start: usize) -> usize {
+        (0..N)
+            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
+            .skip(start)
+            .filter(|entry| entry.is_none())
+            .count()
     }
 }
 

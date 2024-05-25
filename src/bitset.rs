@@ -162,6 +162,7 @@ macro_rules! make_bitset {
             }
         }
 
+        #[derive(Debug)]
         pub struct $IterName {
             bitset: $Name,
         }
@@ -180,6 +181,15 @@ macro_rules! make_bitset {
                 } else {
                     None
                 }
+            }
+
+            #[inline]
+            fn nth(&mut self, n: usize) -> Option<Self::Item> {
+                for _ in 0..(n.saturating_sub(1)) {
+                    self.bitset.bits = (self.bitset.bits - 1) & self.bitset.bits;
+                }
+
+                self.next()
             }
         }
 

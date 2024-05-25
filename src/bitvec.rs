@@ -68,10 +68,15 @@ impl BitVec {
     #[inline]
     pub fn union(&self, other: &Self) -> Self {
         let new_len = self.words.len().max(other.words.len());
+        let min = self.words.len().min(other.words.len());
         let mut words = Vec::with_capacity(new_len);
+        words.resize(new_len, 0);
 
-        for i in 0..new_len {
-            words.push(self.words[i] | other.words[i]);
+        for i in 0..min {
+            words[i] = self.words[i] | other.words[i];
+        }
+        for i in min..new_len {
+            words[i] = self.words.get(i).unwrap_or(&0) | other.words.get(i).unwrap_or(&0);
         }
 
         BitVec { words }
