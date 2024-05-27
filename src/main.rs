@@ -2,7 +2,7 @@ use clap::{self, Parser};
 
 use latin_square_oa_generator::LatinSquareOAGenerator;
 
-use crate::{hitting_set_generator::HittingSetGenerator};
+use crate::hitting_set_generator::HittingSetGenerator;
 
 mod bitset;
 mod bitvec;
@@ -13,13 +13,11 @@ mod latin_square;
 mod latin_square_generator;
 mod latin_square_oa_generator;
 mod latin_square_pair_generator;
-mod latin_square_triple_generator;
 mod orthogonal_array;
 mod orthogonal_generator;
 mod pair_constraints;
 mod partial_square_generator;
 mod permutation;
-mod triple_constraints;
 
 #[derive(Parser)]
 struct Args {}
