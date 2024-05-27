@@ -12,10 +12,8 @@ mod hitting_set_generator;
 mod latin_square;
 mod latin_square_generator;
 mod latin_square_oa_generator;
-mod latin_square_pair_generator;
 mod orthogonal_array;
 mod orthogonal_generator;
-mod pair_constraints;
 mod partial_square_generator;
 mod permutation;
 

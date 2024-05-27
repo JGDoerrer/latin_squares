@@ -4,7 +4,6 @@ use crate::{
     bitset::{BitSet128, BitSet16},
     constraints::Constraints,
     latin_square_oa_generator::LatinSquareOAGenerator,
-    pair_constraints::{PairConstraints, ValuePair},
     permutation::{factorial, Permutation, PermutationIter},
 };
 
@@ -371,38 +370,6 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         Self::new(new_values)
-    }
-}
-
-impl<const N: usize> From<PairConstraints<N>> for LatinSquarePair<N> {
-    fn from(constraints: PairConstraints<N>) -> Self {
-        assert!(constraints.is_solved());
-
-        let mut pair = (
-            LatinSquare {
-                values: [[0; N]; N],
-            },
-            LatinSquare {
-                values: [[0; N]; N],
-            },
-        );
-
-        for i in 0..N {
-            for j in 0..N {
-                let value = constraints
-                    .values_for_cell(i, j)
-                    .into_iter()
-                    .next()
-                    .unwrap();
-
-                let value_pair = ValuePair::from_index::<N>(value);
-
-                pair.0.values[i][j] = value_pair.0 as u8;
-                pair.1.values[i][j] = value_pair.1 as u8;
-            }
-        }
-
-        pair
     }
 }
 

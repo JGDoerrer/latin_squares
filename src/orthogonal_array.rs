@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use crate::{
     bitset::{BitSet128, BitSet16},
     latin_square::{Cell, PartialLatinSquare},
-    pair_constraints::ValuePair,
 };
 
 pub const N: usize = 5;
@@ -11,6 +10,19 @@ pub const MOLS: usize = 1;
 
 type BigBitSet = BitSet128;
 type SmallBitSet = BitSet16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ValuePair(pub usize, pub usize);
+
+impl ValuePair {
+    pub fn from_index<const N: usize>(index: usize) -> Self {
+        ValuePair(index % N, index / N)
+    }
+
+    pub fn to_index<const N: usize>(self) -> usize {
+        self.0 + self.1 * N
+    }
+}
 
 #[derive(Clone)]
 pub struct PartialOrthogonalArray<const N: usize> {
