@@ -24,7 +24,16 @@ impl<const N: usize> LatinSquareOAGenerator<N> {
     }
 
     pub fn new_reduced() -> Self {
-        let constraints = OAConstraints::new_reduced();
+        let constraints = OAConstraints::new_reduced(false);
+
+        let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
+        LatinSquareOAGenerator {
+            stack: vec![(constraints, cell, 0)],
+        }
+    }
+
+    pub fn new_reduced_diagonal() -> Self {
+        let constraints = OAConstraints::new_reduced(true);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {

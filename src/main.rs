@@ -2,13 +2,12 @@ use clap::{self, Parser};
 
 use latin_square_oa_generator::LatinSquareOAGenerator;
 
-use crate::hitting_set_generator::HittingSetGenerator;
+use crate::{hitting_set_generator::HittingSetGenerator};
 
 mod bitset;
 mod bitvec;
 mod compressed_latin_square;
 mod constraints;
-mod diagonal_latin_square_generator;
 mod hitting_set_generator;
 mod latin_square;
 mod latin_square_generator;
@@ -19,6 +18,7 @@ mod orthogonal_array;
 mod orthogonal_generator;
 mod pair_constraints;
 mod partial_square_generator;
+mod permutation;
 mod triple_constraints;
 
 #[derive(Parser)]
@@ -72,21 +72,32 @@ fn main() {
 }
 
 fn find_min_entries_per_sq() {
-    const N: usize = 4;
+    const N: usize = 9;
 
     let mut min = N * N;
     let con = N * N / 4;
 
-    for sq in LatinSquareOAGenerator::<N>::new_reduced() {
+    let mut sqs = vec![];
+
+    for sq in LatinSquareOAGenerator::<N>::new_reduced_diagonal() {
         let sq = sq[0];
+        let sq = sq.reduced_isotopic();
+
+        if !sqs.contains(&sq) {
+            sqs.push(sq);
+            dbg!(sq, sqs.len());
+        }
+    }
+
+    for sq in sqs {
+        dbg!(sq);
 
         let unavoidable_sets = sq.unavoidable_sets();
         unavoidable_sets.iter().for_each(|sets| {
             dbg!(sets.len());
         });
-        dbg!(sq);
 
-        'l: for i in con..=con {
+        'l: for i in (0..=con).rev() {
             // println!("{i}");
             let partial_squares = HittingSetGenerator::new(sq, unavoidable_sets.clone(), i);
 

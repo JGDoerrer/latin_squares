@@ -5,6 +5,7 @@ use crate::{
     constraints::Constraints,
     latin_square_oa_generator::LatinSquareOAGenerator,
     pair_constraints::{PairConstraints, ValuePair},
+    permutation::{factorial, Permutation, PermutationIter},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,12 +25,34 @@ impl<const N: usize> LatinSquare<N> {
         sq
     }
 
+    pub fn z() -> Self {
+        let mut values = [[0u8; N]; N];
+
+        for i in 0..N {
+            for j in 0..N {
+                values[i][j] = ((i + j) % N) as u8;
+            }
+        }
+
+        Self::new(values)
+    }
+
     pub fn get(&self, i: usize, j: usize) -> usize {
         self.values[i][j] as usize
     }
 
     pub fn get_row(&self, i: usize) -> [u8; N] {
         self.values[i]
+    }
+
+    pub fn get_col(&self, i: usize) -> [u8; N] {
+        let mut col = [0; N];
+
+        for j in 0..N {
+            col[j] = self.values[j][i];
+        }
+
+        col
     }
 
     pub fn is_valid(&self) -> bool {
@@ -70,25 +93,91 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn is_isotopic_to(&self, other: &Self) -> bool {
-        if self.values[0] == other.values[0] {
-            // is it enough to check the rows?
-            for row in 1..N {
-                let first_value = self.values[row][0];
+        assert!(self.is_reduced());
+        assert!(other.is_reduced());
 
-                let other_row = other
-                    .values
-                    .iter()
-                    .find(|row| row[0] == first_value)
-                    .unwrap();
+        for permutation in PermutationIter::new() {
+            let new = self.permute_vals(permutation).reduced();
 
-                if self.values[row] != *other_row {
+            if new == *other {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn has_diagonal_symmetry(&self) -> bool {
+        for i in 0..N {
+            for j in (i + 1)..N {
+                if self.get(i, j) != self.get(j, i) {
                     return false;
                 }
             }
-            true
-        } else {
-            todo!()
         }
+        true
+    }
+
+    pub fn reduced(&self) -> Self {
+        let first_row = self.get_row(0).map(|i| i as usize);
+        let row_reduced = self.permute_cols(Permutation::from_array(first_row));
+
+        let first_col = row_reduced.get_col(0).map(|i| i as usize);
+        let reduced = row_reduced.permute_rows(Permutation::from_array(first_col));
+
+        debug_assert!(reduced.is_reduced(), "{reduced:?}");
+
+        reduced
+    }
+
+    pub fn reduced_isotopic(&self) -> Self {
+        debug_assert!(self.is_reduced());
+        // the top corner can always look like
+        // 0, 1
+        // 1, 0
+        // or
+        // 0, 1
+        // 1, 2
+
+        let mut min_ranks = [factorial(N); N];
+        let mut isotopic = *self;
+
+        let _subsqs = self.subsquares_order_2_iter();
+
+        // for [row1, row2, col1, col2] in subsqs {
+        //     let mut perm_array = [0; N];
+
+        //     perm_array[col1] = 0;
+        //     perm_array[col2] = 1;
+
+        //     for i in 0..factorial(N - 2) {}
+
+        //     // todo!()
+        // }
+
+        for permutation in PermutationIter::new() {
+            let row_reduced = self.permute_vals(permutation).permute_cols(permutation);
+            let reduced = row_reduced.permute_rows(Permutation::from_array(
+                row_reduced.get_col(0).map(|i| i as usize),
+            ));
+
+            debug_assert!(reduced.is_reduced());
+
+            let mut row_ranks = [0; N];
+            for i in 0..N {
+                row_ranks[i] =
+                    Permutation::from_array(reduced.get_row(i).map(|i| i as usize)).to_rank();
+            }
+
+            if row_ranks < min_ranks {
+                isotopic = reduced;
+                min_ranks = row_ranks;
+            }
+        }
+
+        dbg!(self, isotopic);
+
+        isotopic
     }
 
     pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
@@ -113,7 +202,7 @@ impl<const N: usize> LatinSquare<N> {
                 let new_set = set1.union(*set2);
                 if set1.is_disjoint(*set2)
                     && order2.iter().all(|set| !new_set.is_subset_of(*set))
-                    && new_set.len() <= 3 * N
+                    && new_set.len() <= 2 * N
                 {
                     order2.push(new_set);
                 }
@@ -123,30 +212,30 @@ impl<const N: usize> LatinSquare<N> {
         order2.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         order2.dedup();
 
-        let mut all_orders = vec![order1.clone(), order2];
+        // let mut all_orders = vec![order1.clone(), order2];
 
-        while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
-            let last_order = all_orders.last().unwrap();
-            let mut next_order = vec![];
+        // while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
+        //     let last_order = all_orders.last().unwrap();
+        //     let mut next_order = vec![];
 
-            for set1 in &order1 {
-                for set2 in last_order {
-                    let new_set = set1.union(*set2);
-                    if set1.is_disjoint(*set2) && new_set.len() <= all_orders.len() * N
-                    // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
-                    {
-                        next_order.push(new_set);
-                    }
-                }
-            }
+        //     for set1 in &order1 {
+        //         for set2 in last_order {
+        //             let new_set = set1.union(*set2);
+        //             if set1.is_disjoint(*set2) && new_set.len() <= all_orders.len() * N
+        //             // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
+        //             {
+        //                 next_order.push(new_set);
+        //             }
+        //         }
+        //     }
 
-            next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-            next_order.dedup();
+        //     next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        //     next_order.dedup();
 
-            all_orders.push(next_order);
-        }
+        //     all_orders.push(next_order);
+        // }
 
-        let all_orders = vec![order1];
+        let all_orders = vec![order1, order2];
         all_orders
     }
 
@@ -254,6 +343,34 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         mask
+    }
+
+    pub fn permute_rows(&self, permutation: Permutation<N>) -> Self {
+        let new_values = permutation.apply_array(self.values);
+
+        Self::new(new_values)
+    }
+
+    pub fn permute_cols(&self, permutation: Permutation<N>) -> Self {
+        let mut new_values = self.values;
+
+        new_values.iter_mut().for_each(|row| {
+            *row = permutation.apply_array(*row);
+        });
+
+        Self::new(new_values)
+    }
+
+    pub fn permute_vals(&self, permutation: Permutation<N>) -> Self {
+        let mut new_values = self.values;
+
+        for row in &mut new_values {
+            for val in row {
+                *val = permutation.apply(*val as usize) as u8;
+            }
+        }
+
+        Self::new(new_values)
     }
 }
 

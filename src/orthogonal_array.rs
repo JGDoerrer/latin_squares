@@ -47,6 +47,7 @@ pub struct OAConstraints<const N: usize> {
     empty_cells: [BigBitSet; MOLS],
     rows: [[SmallBitSet; N]; MOLS],
     columns: [[SmallBitSet; N]; MOLS],
+    diagonal_symmetry: bool,
 }
 
 impl<const N: usize> OAConstraints<N> {
@@ -58,11 +59,13 @@ impl<const N: usize> OAConstraints<N> {
             empty_cells: [BigBitSet::all_less_than(N * N); MOLS],
             rows: [[SmallBitSet::all_less_than(N); N]; MOLS],
             columns: [[SmallBitSet::all_less_than(N); N]; MOLS],
+            diagonal_symmetry: false,
         }
     }
 
-    pub fn new_reduced() -> Self {
+    pub fn new_reduced(diagonal_symmetry: bool) -> Self {
         let mut constraints = Self::new();
+        constraints.diagonal_symmetry = diagonal_symmetry;
 
         let index = N;
         for col in 1..(MOLS - 1) {
@@ -87,8 +90,10 @@ impl<const N: usize> OAConstraints<N> {
             }
         }
 
-        for j in 1..N {
-            constraints.set_and_propagate(0, j * N, j);
+        if !diagonal_symmetry {
+            for j in 1..N {
+                constraints.set_and_propagate(0, j * N, j);
+            }
         }
 
         constraints.find_and_set_singles();
@@ -163,6 +168,13 @@ impl<const N: usize> OAConstraints<N> {
 
     pub fn set_and_propagate(&mut self, column: usize, index: usize, value: usize) {
         self.set(column, index, value);
+        if self.diagonal_symmetry {
+            let Cell(row, col) = Cell::from_index::<N>(index);
+
+            if row != col {
+                self.set(column, Cell::to_index::<N>(Cell(col, row)), value);
+            }
+        }
         self.propagate_constraints();
     }
 
@@ -253,6 +265,7 @@ impl<const N: usize> OAConstraints<N> {
                 }
             }
 
+            // mols are in increasing order
             let index = N;
             for col in 0..(MOLS - 1) {
                 let next_col = col + 1;
