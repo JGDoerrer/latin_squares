@@ -4,7 +4,7 @@ use crate::{
     bitset::{BitSet128, BitSet16},
     constraints::Constraints,
     latin_square_oa_generator::LatinSquareOAGenerator,
-    permutation::{factorial, Permutation, PermutationIter},
+    permutation::{Permutation, PermutationIter},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -95,11 +95,16 @@ impl<const N: usize> LatinSquare<N> {
         assert!(self.is_reduced());
         assert!(other.is_reduced());
 
-        for permutation in PermutationIter::new() {
-            let new = self.permute_vals(permutation).reduced();
+        for sq in self.all_reduced() {
+            for permutation in PermutationIter::new() {
+                let row_reduced = sq.permute_vals(permutation).permute_cols(permutation);
+                let reduced = row_reduced.permute_rows(Permutation::from_array(
+                    row_reduced.get_col(0).map(|i| i as usize),
+                ));
 
-            if new == *other {
-                return true;
+                if reduced == *other {
+                    return true;
+                }
             }
         }
 
@@ -129,52 +134,57 @@ impl<const N: usize> LatinSquare<N> {
         reduced
     }
 
+    pub fn all_reduced(&self) -> impl Iterator<Item = Self> + '_ {
+        (0..N).map(|i| {
+            let mut new_values = self.values;
+            new_values.swap(0, i);
+
+            let new = Self::new(new_values).reduced();
+            new
+        })
+    }
+
     pub fn reduced_isotopic(&self) -> Self {
         debug_assert!(self.is_reduced());
-        // the top corner can always look like
-        // 0, 1
-        // 1, 0
-        // or
-        // 0, 1
-        // 1, 2
 
-        let mut min_ranks = [factorial(N); N];
         let mut isotopic = *self;
 
-        let _subsqs = self.subsquares_order_2_iter();
+        for sq in self.all_reduced() {
+            for permutation in PermutationIter::new() {
+                let maps_to_zero = permutation.to_array().iter().position(|i| *i == 0).unwrap();
+                let maps_to_one = permutation.to_array().iter().position(|i| *i == 1).unwrap();
 
-        // for [row1, row2, col1, col2] in subsqs {
-        //     let mut perm_array = [0; N];
+                let new_first_col = sq
+                    .get_col(maps_to_zero)
+                    .map(|i| permutation.apply(i as usize));
+                let new_second_row = new_first_col.iter().position(|i| *i == 1).unwrap();
+                let new_1_1 = permutation.apply(sq.get(new_second_row, maps_to_one));
 
-        //     perm_array[col1] = 0;
-        //     perm_array[col2] = 1;
+                // dbg!(
+                //     maps_to_zero,
+                //     maps_to_one,
+                //     new_first_col,
+                //     new_second_row,
+                //     new_1_1
+                // );
 
-        //     for i in 0..factorial(N - 2) {}
+                if new_1_1 != 0 && new_1_1 != 2 {
+                    continue;
+                }
 
-        //     // todo!()
-        // }
+                let row_reduced = sq.permute_vals(permutation).permute_cols(permutation);
+                let reduced = row_reduced.permute_rows(Permutation::from_array(
+                    row_reduced.get_col(0).map(|i| i as usize),
+                ));
 
-        for permutation in PermutationIter::new() {
-            let row_reduced = self.permute_vals(permutation).permute_cols(permutation);
-            let reduced = row_reduced.permute_rows(Permutation::from_array(
-                row_reduced.get_col(0).map(|i| i as usize),
-            ));
+                debug_assert!(reduced.get(1, 1) == 0 || reduced.get(1, 1) == 2);
+                debug_assert!(reduced.is_reduced());
 
-            debug_assert!(reduced.is_reduced());
-
-            let mut row_ranks = [0; N];
-            for i in 0..N {
-                row_ranks[i] =
-                    Permutation::from_array(reduced.get_row(i).map(|i| i as usize)).to_rank();
-            }
-
-            if row_ranks < min_ranks {
-                isotopic = reduced;
-                min_ranks = row_ranks;
+                if reduced.values < isotopic.values {
+                    isotopic = reduced;
+                }
             }
         }
-
-        dbg!(self, isotopic);
 
         isotopic
     }
@@ -408,6 +418,35 @@ impl<const N: usize> Debug for LatinSquare<N> {
         }
         write!(f, "\n]")?;
         Ok(())
+    }
+}
+
+impl<const N: usize> ToString for LatinSquare<N> {
+    fn to_string(&self) -> String {
+        let mut string = String::with_capacity(N * N);
+        for i in 0..N {
+            for j in 0..N {
+                string.push(char::from_digit(self.get(i, j) as u32, 10).unwrap());
+            }
+        }
+        string
+    }
+}
+
+impl<const N: usize> TryFrom<&str> for LatinSquare<N> {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.len() != N * N {
+            return Err(());
+        }
+
+        let mut values = [[0; N]; N];
+        for (i, c) in value.chars().enumerate() {
+            values[i / N][i % N] = c.to_digit(10).ok_or(())? as u8;
+        }
+
+        Ok(LatinSquare::new(values))
     }
 }
 

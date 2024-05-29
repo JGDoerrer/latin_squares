@@ -5,7 +5,6 @@ use crate::{
     latin_square::{Cell, PartialLatinSquare},
 };
 
-pub const N: usize = 5;
 pub const MOLS: usize = 1;
 
 type BigBitSet = BitSet128;
@@ -107,6 +106,10 @@ impl<const N: usize> OAConstraints<N> {
                 constraints.set_and_propagate(0, j * N, j);
             }
         }
+
+        constraints.cell_values[0][1][1] = SmallBitSet::from_iter([0, 2]);
+        constraints.cell_values[0][1][2] = SmallBitSet::from_iter([0, 3]);
+        constraints.cell_values[0][1][3] = SmallBitSet::from_iter([2, 4]);
 
         constraints.find_and_set_singles();
 

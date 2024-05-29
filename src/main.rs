@@ -68,20 +68,26 @@ fn main() {
 }
 
 fn find_min_entries_per_sq() {
-    const N: usize = 9;
+    const N: usize = 7;
 
     let mut min = N * N;
     let con = N * N / 4;
 
     let mut sqs = vec![];
 
-    for sq in LatinSquareOAGenerator::<N>::new_reduced_diagonal() {
+    // dbg!(
+    //     LatinSquareOAGenerator::<N>::new_reduced_diagonal().count(),
+    //     return
+    // );
+
+    for sq in LatinSquareOAGenerator::<N>::new_reduced() {
         let sq = sq[0];
         let sq = sq.reduced_isotopic();
 
         if !sqs.contains(&sq) {
             sqs.push(sq);
-            dbg!(sq, sqs.len());
+
+            dbg!(sq.to_string(), sqs.len());
         }
     }
 

@@ -1,4 +1,6 @@
+use std::mem::MaybeUninit;
 
+use crate::bitset::BitSet16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Permutation<const N: usize>([usize; N]);
@@ -87,14 +89,17 @@ impl<const N: usize> Permutation<N> {
     }
 
     pub fn to_rank(self) -> usize {
-        let mut elements_left: Vec<_> = (0..N).collect();
+        let mut elements_left = BitSet16::all_less_than(N);
 
         let mut rank = 0;
 
         for i in 0..N {
             let element = self.0[i];
-            let index = elements_left.iter().position(|e| *e == element).unwrap();
-            elements_left.remove(index);
+            let index = elements_left
+                .into_iter()
+                .position(|e| e == element)
+                .unwrap();
+            elements_left.remove(element);
             rank += index * factorial(N - i - 1);
         }
 
@@ -132,13 +137,13 @@ impl<const N: usize> Permutation<N> {
     {
         let permutation = self.to_array();
 
-        let mut new_array = [None; N];
+        let mut new_array = [MaybeUninit::uninit(); N];
 
         for (i, p) in permutation.into_iter().enumerate() {
-            new_array[p] = Some(array[i]);
+            new_array[p].write(array[i]);
         }
 
-        new_array.map(|i| i.unwrap())
+        new_array.map(|i| unsafe { i.assume_init() })
     }
 }
 
@@ -213,11 +218,9 @@ mod test {
 
     #[test]
     fn inverse_test() {
-        let permutation = [3, 1, 4, 2, 0];
-        assert_eq!(
-            Permutation::from_array(permutation).apply_array(permutation),
-            Permutation::identity().to_array()
-        );
+        let permutation = Permutation::from_array([3, 1, 4, 2, 0]);
+        let inverse = permutation.inverse();
+        assert_eq!(inverse.to_array(), [4, 1, 3, 0, 2]);
     }
 
     #[test]
