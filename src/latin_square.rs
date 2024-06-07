@@ -257,10 +257,11 @@ impl<const N: usize> LatinSquare<N> {
                 // dbg!(&triples.len());
 
                 for permutation in PermutationIter::new() {
-                    let maps_to_zero = permutation.to_array().iter().position(|i| *i == 0).unwrap();
-                    let maps_to_one = permutation.to_array().iter().position(|i| *i == 1).unwrap();
-                    let maps_to_two = permutation.to_array().iter().position(|i| *i == 2).unwrap();
-                    let maps_to_three =
+                    let _maps_to_zero =
+                        permutation.to_array().iter().position(|i| *i == 0).unwrap();
+                    let _maps_to_one = permutation.to_array().iter().position(|i| *i == 1).unwrap();
+                    let _maps_to_two = permutation.to_array().iter().position(|i| *i == 2).unwrap();
+                    let _maps_to_three =
                         permutation.to_array().iter().position(|i| *i == 3).unwrap();
 
                     // if !triples.contains(&[maps_to_zero, maps_to_one, maps_to_two]) {

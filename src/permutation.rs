@@ -1,7 +1,5 @@
 use std::mem::MaybeUninit;
 
-use crate::bitset::BitSet16;
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Permutation<const N: usize>([usize; N]);
 
@@ -10,64 +8,6 @@ pub fn factorial(n: usize) -> usize {
 }
 
 impl<const N: usize> Permutation<N> {
-    // pub const fn identity() -> Self {
-    //     Self::from_rank(0)
-    // }
-
-    // pub const fn from_rank(rank: u32) -> Self {
-    //     Self(rank)
-    // }
-
-    // pub fn to_rank(self) -> u32 {
-    //     self.0
-    // }
-
-    // pub fn from_array(elements: [usize; N]) -> Self {
-    //     debug_assert!(N <= 12);
-    //     for i in 0..N {
-    //         debug_assert!(elements.contains(&i));
-    //     }
-
-    //     let len = elements.len();
-    //     let mut elements_left: Vec<_> = (0..len).collect();
-
-    //     let mut rank = 0;
-
-    //     for i in 0..len {
-    //         let element = elements[i];
-    //         let index = elements_left.iter().position(|e| *e == element).unwrap();
-    //         elements_left.remove(index);
-    //         rank += index * factorial(len - i - 1);
-    //     }
-
-    //     Permutation(rank as u32)
-    // }
-
-    // pub fn to_array(self) -> [usize; N] {
-    //     let mut permutation = [0; N];
-    //     let mut elements_left = [None; N];
-
-    //     for i in 0..N {
-    //         elements_left[i] = Some(i);
-    //     }
-
-    //     let mut rank = self.0 as usize;
-
-    //     for k in 0..N {
-    //         let fac = factorial(N - k - 1);
-    //         let d = rank / fac;
-    //         permutation[k] = elements_left
-    //             .iter_mut()
-    //             .filter(|i| i.is_some())
-    //             .nth(d)
-    //             .unwrap()
-    //             .take()
-    //             .unwrap();
-    //         rank %= fac;
-    //     }
-
-    //     permutation
-    // }
     pub fn identity() -> Self {
         let mut elements = [0; N];
         for i in 0..N {
@@ -86,24 +26,6 @@ impl<const N: usize> Permutation<N> {
 
     pub fn to_array(self) -> [usize; N] {
         self.0
-    }
-
-    pub fn to_rank(self) -> usize {
-        let mut elements_left = BitSet16::all_less_than(N);
-
-        let mut rank = 0;
-
-        for i in 0..N {
-            let element = self.0[i];
-            let index = elements_left
-                .into_iter()
-                .position(|e| e == element)
-                .unwrap();
-            elements_left.remove(element);
-            rank += index * factorial(N - i - 1);
-        }
-
-        rank
     }
 
     pub fn inverse(self) -> Self {

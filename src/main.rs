@@ -1,13 +1,12 @@
 use std::{
     collections::HashSet,
     fs::OpenOptions,
-    io::{stdin, BufRead, BufReader, BufWriter, Read, Write},
+    io::{stdin, BufRead, BufReader, Read},
     path::Path,
 };
 
-use clap::{self, parser, Parser, Subcommand};
+use clap::{self, Parser, Subcommand};
 
-use indicatif::ProgressIterator;
 use latin_square::LatinSquare;
 use latin_square_oa_generator::LatinSquareOAGenerator;
 use orderly_sq_generator::OrderlySqGenerator;
@@ -116,7 +115,7 @@ fn generate_latin_squares() {
 
 fn find_scs() {
     let mut min = N * N;
-    let con = N * N / 4;
+    let _con = N * N / 4;
 
     for sq in read_sqs_from_stdin() {
         println!("{}", sq.to_string());

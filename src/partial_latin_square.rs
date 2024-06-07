@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use std::{cmp::Ordering, ffi::FromVecWithNulError};
+use std::cmp::Ordering;
 
 use crate::{bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation};
 
@@ -255,14 +255,14 @@ impl<const N: usize> PartialLatinSquare<N> {
         })
     }
 
-    pub fn is_minimal_subsquare(&self, k: usize) -> bool {
+    pub fn is_minimal_subsquare(&self, _k: usize) -> bool {
         let unique_entries = self.unique_entries();
 
         if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
             return false;
         }
 
-        let mut min = *self;
+        let min = *self;
 
         // for sq in self.all_reduced_subsquares(k) {
         //     min = min.min(sq);
@@ -272,14 +272,14 @@ impl<const N: usize> PartialLatinSquare<N> {
         min == *self
     }
 
-    pub fn is_minimal_diagonal(&self, k: usize) -> bool {
+    pub fn is_minimal_diagonal(&self, _k: usize) -> bool {
         let unique_entries = self.unique_entries();
 
         if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
             return false;
         }
 
-        let mut min = *self;
+        let min = *self;
 
         // for sq in self.all_reduced_subsquares(k) {
         //     min = min.min(sq);

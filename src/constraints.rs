@@ -1,5 +1,5 @@
 use crate::{
-    bitset::{BitSet128, BitSet16},
+    bitset::BitSet16,
     latin_square::{Cell, LatinSquare},
     partial_latin_square::PartialLatinSquare,
 };
@@ -77,7 +77,7 @@ impl<const N: usize> Constraints<N> {
         self.rows[i].intersect(self.cols[j])
     }
 
-    fn propagate_value(&mut self, i: usize, j: usize, value: usize) {
+    fn propagate_value(&mut self, _i: usize, _j: usize, _value: usize) {
         // let value_index = value;
 
         // if !self.constraints[i][j].contains(value_index) {
@@ -226,7 +226,7 @@ impl<const N: usize> Constraints<N> {
         }
     }
 
-    pub fn make_orthogonal_to_sq(&mut self, sq: &LatinSquare<N>) {
+    pub fn make_orthogonal_to_sq(&mut self, _sq: &LatinSquare<N>) {
         // let mut known_values = [BitSet16::empty(); N];
         // for i in 0..N {
         //     for j in 0..N {

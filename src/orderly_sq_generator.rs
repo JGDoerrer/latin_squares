@@ -1,10 +1,4 @@
-use std::path::Iter;
-
-use crate::{
-    constraints::{self, Constraints},
-    latin_square::{Cell, LatinSquare},
-    partial_latin_square::PartialLatinSquare,
-};
+use crate::{constraints::Constraints, partial_latin_square::PartialLatinSquare};
 
 #[derive(Debug)]
 pub struct OrderlySqGenerator<const N: usize> {
