@@ -211,6 +211,12 @@ impl<const N: usize> ExactSizeIterator for PermutationIter<N> {
     }
 }
 
+impl<const N: usize> From<[usize; N]> for Permutation<N> {
+    fn from(value: [usize; N]) -> Self {
+        Permutation::from_array(value)
+    }
+}
+
 #[cfg(test)]
 mod test {
 

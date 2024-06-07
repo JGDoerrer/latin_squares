@@ -11,7 +11,7 @@ impl<const N: usize> From<LatinSquare<N>> for CompressedLatinSquare<N> {
         for i in 0..N {
             let row = sq.get_row(i);
 
-            let rank = rank_of_permutation(&row);
+            let rank = rank_of_permutation(row);
             ranks[i] = rank;
         }
         CompressedLatinSquare { values: ranks }

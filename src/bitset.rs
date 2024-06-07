@@ -185,7 +185,7 @@ macro_rules! make_bitset {
 
             #[inline]
             fn nth(&mut self, n: usize) -> Option<Self::Item> {
-                for _ in 0..(n.saturating_sub(1)) {
+                for _ in 0..n {
                     self.bitset.bits = (self.bitset.bits - 1) & self.bitset.bits;
                 }
 

@@ -3,7 +3,8 @@ use std::vec;
 use crate::{
     bitset::{BitSet128, BitSet128Iter},
     bitvec::BitVec,
-    latin_square::{Cell, LatinSquare, PartialLatinSquare},
+    latin_square::{Cell, LatinSquare},
+    partial_latin_square::PartialLatinSquare,
     partial_square_generator::PartialSquareGenerator,
 };
 

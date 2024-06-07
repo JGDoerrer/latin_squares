@@ -1,11 +1,14 @@
 use crate::{
-    bitset::BitSet128,
+    bitset::{BitSet128, BitSet16},
     latin_square::{Cell, LatinSquare},
+    partial_latin_square::PartialLatinSquare,
 };
 
 #[derive(Debug, Clone)]
 pub struct Constraints<const N: usize> {
-    constraints: [[BitSet128; N]; N],
+    sq: PartialLatinSquare<N>,
+    rows: [BitSet16; N],
+    cols: [BitSet16; N],
 }
 
 impl<const N: usize> Default for Constraints<N> {
@@ -17,7 +20,9 @@ impl<const N: usize> Default for Constraints<N> {
 impl<const N: usize> Constraints<N> {
     pub fn new() -> Self {
         Constraints {
-            constraints: [[BitSet128::all_less_than(N); N]; N],
+            sq: PartialLatinSquare::new(),
+            rows: [BitSet16::all_less_than(N); N],
+            cols: [BitSet16::all_less_than(N); N],
         }
     }
 
@@ -43,39 +48,63 @@ impl<const N: usize> Constraints<N> {
         constraints
     }
 
-    pub fn set(&mut self, i: usize, j: usize, value: usize) {
-        self.propagate_value(i, j, value);
-    }
+    pub fn new_partial(sq: &PartialLatinSquare<N>) -> Self {
+        let mut constraints = Self::new();
 
-    pub fn get(&self, i: usize, j: usize) -> BitSet128 {
-        self.constraints[i][j]
-    }
-
-    fn propagate_value(&mut self, i: usize, j: usize, value: usize) {
-        let value_index = value;
-        assert!(self.constraints[i][j].contains(value_index));
-        self.constraints[i][j] = BitSet128::single(value_index);
-
-        let mask = BitSet128::single(value)
-            .complement()
-            .intersect(BitSet128::all_less_than(N * N));
-
-        for k in 0..N {
-            if k != j && self.constraints[i][k].intersect(mask) != self.constraints[i][k] {
-                self.constraints[i][k] = self.constraints[i][k].intersect(mask);
-                if self.constraints[i][k].is_single() {
-                    let value = self.constraints[i][k].into_iter().next().unwrap();
-                    self.propagate_value(i, k, value);
-                }
-            }
-            if k != i && self.constraints[k][j].intersect(mask) != self.constraints[k][j] {
-                self.constraints[k][j] = self.constraints[k][j].intersect(mask);
-                if self.constraints[k][j].is_single() {
-                    let value = self.constraints[k][j].into_iter().next().unwrap();
-                    self.propagate_value(k, j, value);
+        for i in 0..N {
+            for j in 0..N {
+                if let Some(value) = sq.get(i, j) {
+                    constraints.set(i, j, value);
                 }
             }
         }
+
+        constraints
+    }
+
+    pub fn set(&mut self, i: usize, j: usize, value: usize) {
+        debug_assert!(self.sq.get(i, j).is_none());
+        debug_assert!(self.rows[i].contains(value));
+        debug_assert!(self.cols[j].contains(value));
+
+        self.sq.set(i, j, Some(value));
+        self.rows[i].remove(value);
+        self.cols[j].remove(value);
+        // self.propagate_value(i, j, value);
+    }
+
+    pub fn get(&self, i: usize, j: usize) -> BitSet16 {
+        self.rows[i].intersect(self.cols[j])
+    }
+
+    fn propagate_value(&mut self, i: usize, j: usize, value: usize) {
+        // let value_index = value;
+
+        // if !self.constraints[i][j].contains(value_index) {
+        //     return;
+        // }
+        // self.constraints[i][j] = BitSet16::single(value_index);
+
+        // let mask = BitSet16::single(value)
+        //     .complement()
+        //     .intersect(BitSet16::all_less_than(N));
+
+        // for k in 0..N {
+        //     if k != j && self.constraints[i][k].intersect(mask) != self.constraints[i][k] {
+        //         self.constraints[i][k] = self.constraints[i][k].intersect(mask);
+        //         if self.constraints[i][k].is_single() {
+        //             let value = self.constraints[i][k].into_iter().next().unwrap();
+        //             self.propagate_value(i, k, value);
+        //         }
+        //     }
+        //     if k != i && self.constraints[k][j].intersect(mask) != self.constraints[k][j] {
+        //         self.constraints[k][j] = self.constraints[k][j].intersect(mask);
+        //         if self.constraints[k][j].is_single() {
+        //             let value = self.constraints[k][j].into_iter().next().unwrap();
+        //             self.propagate_value(k, j, value);
+        //         }
+        //     }
+        // }
     }
 
     pub fn get_next(&self) -> Option<(usize, usize)> {
@@ -117,24 +146,17 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn to_latin_square(self) -> LatinSquare<N> {
-        self.into()
+        self.sq.into()
     }
 
     pub fn is_solved(&self) -> bool {
-        for i in 0..N {
-            for j in 0..N {
-                if !self.get(i, j).is_single() {
-                    return false;
-                }
-            }
-        }
-        true
+        self.sq.num_entries() == N * N
     }
 
     pub fn is_solvable(&self) -> bool {
         for i in 0..N {
             for j in 0..N {
-                if self.get(i, j).is_empty() {
+                if self.sq.get(i, j).is_none() && self.get(i, j).is_empty() {
                     return false;
                 }
             }
@@ -143,47 +165,61 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn find_singles(&mut self) {
-        for i in 0..N {
-            let mut counts = [0; N];
-            for j in 0..N {
-                if !self.get(i, j).is_single() {
-                    for value in self.get(i, j) {
-                        counts[value] += 1;
-                    }
-                }
-            }
+        // for i in 0..N {
+        //     let mut counts = [0; N];
+        //     for j in 0..N {
+        //         if !self.get(i, j).is_single() {
+        //             for value in self.get(i, j) {
+        //                 counts[value] += 1;
+        //             }
+        //         }
+        //     }
 
-            for value in counts
-                .into_iter()
-                .enumerate()
-                .filter(|(_, c)| *c == 1)
-                .map(|(i, _)| i)
-            {
+        //     for value in counts
+        //         .into_iter()
+        //         .enumerate()
+        //         .filter(|(_, c)| *c == 1)
+        //         .map(|(i, _)| i)
+        //     {
+        //         for j in 0..N {
+        //             if !self.get(i, j).is_single() && self.get(i, j).contains(value) {
+        //                 self.propagate_value(i, j, value);
+        //             }
+        //         }
+        //     }
+
+        //     let mut counts = [0; N];
+        //     for j in 0..N {
+        //         if !self.get(j, i).is_single() {
+        //             for value in self.get(j, i) {
+        //                 counts[value] += 1;
+        //             }
+        //         }
+        //     }
+
+        //     for value in counts
+        //         .into_iter()
+        //         .enumerate()
+        //         .filter(|(_, c)| *c == 1)
+        //         .map(|(i, _)| i)
+        //     {
+        //         for j in 0..N {
+        //             if !self.get(j, i).is_single() && self.get(j, i).contains(value) {
+        //                 self.propagate_value(j, i, value);
+        //             }
+        //         }
+        //     }
+        // }
+
+        let mut changed = true;
+        while changed {
+            changed = false;
+
+            for i in 0..N {
                 for j in 0..N {
-                    if !self.get(i, j).is_single() && self.get(i, j).contains(value) {
-                        self.propagate_value(i, j, value);
-                    }
-                }
-            }
-
-            let mut counts = [0; N];
-            for j in 0..N {
-                if !self.get(j, i).is_single() {
-                    for value in self.get(j, i) {
-                        counts[value] += 1;
-                    }
-                }
-            }
-
-            for value in counts
-                .into_iter()
-                .enumerate()
-                .filter(|(_, c)| *c == 1)
-                .map(|(i, _)| i)
-            {
-                for j in 0..N {
-                    if !self.get(j, i).is_single() && self.get(j, i).contains(value) {
-                        self.propagate_value(j, i, value);
+                    if self.sq.get(i, j).is_none() && self.get(i, j).is_single() {
+                        self.set(i, j, self.get(i, j).into_iter().next().unwrap());
+                        changed = true;
                     }
                 }
             }
@@ -191,29 +227,29 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn make_orthogonal_to_sq(&mut self, sq: &LatinSquare<N>) {
-        let mut known_values = [BitSet128::empty(); N];
-        for i in 0..N {
-            for j in 0..N {
-                if self.get(i, j).is_single() {
-                    let value = sq.get(i, j);
-                    known_values[value].insert(self.get(i, j).into_iter().next().unwrap());
-                }
-            }
-        }
+        // let mut known_values = [BitSet16::empty(); N];
+        // for i in 0..N {
+        //     for j in 0..N {
+        //         if self.get(i, j).is_single() {
+        //             let value = sq.get(i, j);
+        //             known_values[value].insert(self.get(i, j).into_iter().next().unwrap());
+        //         }
+        //     }
+        // }
 
-        for i in 0..N {
-            for j in 0..N {
-                let value = sq.get(i, j);
-                if !self.get(i, j).is_single() {
-                    let new = self.get(i, j).intersect(known_values[value].complement());
-                    self.constraints[i][j] = new;
+        // for i in 0..N {
+        //     for j in 0..N {
+        //         let value = sq.get(i, j);
+        //         if !self.get(i, j).is_single() {
+        //             let new = self.get(i, j).intersect(known_values[value].complement());
+        //             self.constraints[i][j] = new;
 
-                    if new.is_single() {
-                        let value = new.into_iter().next().unwrap();
-                        self.propagate_value(i, j, value);
-                    }
-                }
-            }
-        }
+        //             if new.is_single() {
+        //                 let value = new.into_iter().next().unwrap();
+        //                 self.propagate_value(i, j, value);
+        //             }
+        //         }
+        //     }
+        // }
     }
 }

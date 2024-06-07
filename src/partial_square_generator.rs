@@ -1,4 +1,7 @@
-use crate::latin_square::{Cell, LatinSquare, PartialLatinSquare};
+use crate::{
+    latin_square::{Cell, LatinSquare},
+    partial_latin_square::PartialLatinSquare,
+};
 
 #[derive(Debug)]
 pub struct PartialSquareGenerator<const N: usize> {

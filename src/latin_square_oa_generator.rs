@@ -5,8 +5,9 @@ use std::{
 };
 
 use crate::{
-    latin_square::{LatinSquare, PartialLatinSquare},
+    latin_square::LatinSquare,
     orthogonal_array::{OAConstraints, MOLS},
+    partial_latin_square::PartialLatinSquare,
 };
 
 pub struct LatinSquareOAGenerator<const N: usize> {
@@ -179,20 +180,19 @@ impl<const N: usize> Iterator for LatinSquareOAGenerator<N> {
             let cell = *cell;
             let values = constraints.values_for_cell(cell.0, cell.1);
 
-            let new_constraints = values
+            let mut new_constraints = values
                 .into_iter()
                 .map(|value| {
                     let mut new = constraints.clone();
                     new.set_and_propagate(cell.0, cell.1, value);
                     new.find_and_set_singles();
+                    // dbg!(new.squares(), new.is_solvable());
+
                     new
                 })
-                // .collect::<Vec<_>>()
-                ;
-            // new_constraints
-            //     .sort_by_cached_key(|c| (
-            //         c.possible_values_log() as u64,
-            //          c.filled_cells()));
+                .collect::<Vec<_>>();
+            new_constraints
+                .sort_by_cached_key(|c| (c.possible_values_log() as u64, c.filled_cells()));
 
             for (i, new) in new_constraints.into_iter().enumerate().skip(*start_value) {
                 *start_value = i + 1;

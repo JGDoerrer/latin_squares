@@ -1,21 +1,20 @@
-use std::fmt::Debug;
+use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{
     bitset::{BitSet128, BitSet16},
     constraints::Constraints,
     latin_square_oa_generator::LatinSquareOAGenerator,
+    partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationIter},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord)]
 pub struct LatinSquare<const N: usize> {
     values: [[u8; N]; N],
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Cell(pub usize, pub usize);
-
-pub type LatinSquarePair<const N: usize> = (LatinSquare<N>, LatinSquare<N>);
 
 impl<const N: usize> LatinSquare<N> {
     pub fn new(values: [[u8; N]; N]) -> Self {
@@ -24,24 +23,28 @@ impl<const N: usize> LatinSquare<N> {
         sq
     }
 
-    pub fn z() -> Self {
-        let mut values = [[0u8; N]; N];
+    pub fn from_rcv(rows: [[usize; N]; N], cols: [[usize; N]; N], vals: [[usize; N]; N]) -> Self {
+        let mut new_values = [[0; N]; N];
 
         for i in 0..N {
             for j in 0..N {
-                values[i][j] = ((i + j) % N) as u8;
+                let row = rows[i][j];
+                let col = cols[i][j];
+                let val = vals[i][j] as u8;
+
+                new_values[row][col] = val;
             }
         }
 
-        Self::new(values)
+        Self::new(new_values)
     }
 
     pub fn get(&self, i: usize, j: usize) -> usize {
         self.values[i][j] as usize
     }
 
-    pub fn get_row(&self, i: usize) -> [u8; N] {
-        self.values[i]
+    pub fn get_row(&self, i: usize) -> &[u8; N] {
+        &self.values[i]
     }
 
     pub fn get_col(&self, i: usize) -> [u8; N] {
@@ -144,6 +147,27 @@ impl<const N: usize> LatinSquare<N> {
         })
     }
 
+    pub fn paratopic(&self) -> impl Iterator<Item = Self> + '_ {
+        let mut rows = [[0; N]; N];
+        for i in 0..N {
+            rows[i] = [i; N];
+        }
+
+        let mut col = [0; N];
+
+        for i in 0..N {
+            col[i] = i;
+        }
+
+        let cols = [col; N];
+        let vals = self.values.map(|row| row.map(|val| val as usize));
+
+        PermutationIter::new().map(move |perm| {
+            let [rows, cols, vals] = perm.apply_array([rows, cols, vals]);
+            Self::from_rcv(rows, cols, vals)
+        })
+    }
+
     pub fn reduced_isotopic(&self) -> Self {
         debug_assert!(self.is_reduced());
 
@@ -153,32 +177,37 @@ impl<const N: usize> LatinSquare<N> {
             for permutation in PermutationIter::new() {
                 let maps_to_zero = permutation.to_array().iter().position(|i| *i == 0).unwrap();
                 let maps_to_one = permutation.to_array().iter().position(|i| *i == 1).unwrap();
+                let maps_to_two = permutation.to_array().iter().position(|i| *i == 2).unwrap();
 
-                let new_first_col = sq
-                    .get_col(maps_to_zero)
-                    .map(|i| permutation.apply(i as usize));
-                let new_second_row = new_first_col.iter().position(|i| *i == 1).unwrap();
-                let new_1_1 = permutation.apply(sq.get(new_second_row, maps_to_one));
+                let new_second_col = sq
+                    .get_row(maps_to_zero)
+                    .into_iter()
+                    .position(|i| *i as usize == maps_to_one)
+                    .unwrap();
 
-                // dbg!(
-                //     maps_to_zero,
-                //     maps_to_one,
-                //     new_first_col,
-                //     new_second_row,
-                //     new_1_1
-                // );
+                let new_1_1 = sq.get(maps_to_one, new_second_col);
 
-                if new_1_1 != 0 && new_1_1 != 2 {
+                if new_1_1 != maps_to_zero && new_1_1 != maps_to_two {
                     continue;
                 }
 
-                let row_reduced = sq.permute_vals(permutation).permute_cols(permutation);
-                let reduced = row_reduced.permute_rows(Permutation::from_array(
-                    row_reduced.get_col(0).map(|i| i as usize),
+                // let new_second_row = Permutation::from_array(new_first_row).apply_array(
+                //     sq.get_row(maps_to_one)
+                //         .map(|i| permutation.apply(i as usize) as u8),
+                // );
+                // if new_second_row > isotopic.get_row(1) {
+                //     continue;
+                // }
+
+                let col_reduced = sq.permute_vals(permutation).permute_rows(permutation);
+                let reduced = col_reduced.permute_cols(Permutation::from_array(
+                    sq.get_row(maps_to_zero)
+                        .map(|i| permutation.apply(i as usize)),
                 ));
 
                 debug_assert!(reduced.get(1, 1) == 0 || reduced.get(1, 1) == 2);
                 debug_assert!(reduced.is_reduced());
+                // debug_assert!(new_second_row == reduced.get_row(1));
 
                 if reduced.values < isotopic.values {
                     isotopic = reduced;
@@ -189,12 +218,105 @@ impl<const N: usize> LatinSquare<N> {
         isotopic
     }
 
+    pub fn reduced_paratopic(&self) -> Self {
+        debug_assert!(self.is_reduced());
+
+        let mut paratopic = *self;
+
+        for sq in self.paratopic() {
+            for sq in sq.all_reduced() {
+                // let mut triples = vec![];
+
+                // for maps_to_zero in 0..N {
+                //     for maps_to_one in 0..N {
+                //         if maps_to_one == maps_to_zero {
+                //             continue;
+                //         }
+
+                //         for maps_to_two in 0..N {
+                //             if maps_to_two == maps_to_zero || maps_to_two == maps_to_one {
+                //                 continue;
+                //             }
+
+                //             let new_first_row = sq.get_row(maps_to_zero).map(|i| i as usize);
+                //             let new_second_col = new_first_row
+                //                 .into_iter()
+                //                 .position(|i| i == maps_to_one)
+                //                 .unwrap();
+                //             let new_1_1 = sq.get(maps_to_one, new_second_col);
+
+                //             if new_1_1 == maps_to_zero || new_1_1 == maps_to_two {
+                //                 triples.push([maps_to_zero, maps_to_one, maps_to_two]);
+                //             }
+                //         }
+                //     }
+                // }
+
+                // triples.sort();
+                // triples.dedup();
+                // dbg!(&triples.len());
+
+                for permutation in PermutationIter::new() {
+                    let maps_to_zero = permutation.to_array().iter().position(|i| *i == 0).unwrap();
+                    let maps_to_one = permutation.to_array().iter().position(|i| *i == 1).unwrap();
+                    let maps_to_two = permutation.to_array().iter().position(|i| *i == 2).unwrap();
+                    let maps_to_three =
+                        permutation.to_array().iter().position(|i| *i == 3).unwrap();
+
+                    // if !triples.contains(&[maps_to_zero, maps_to_one, maps_to_two]) {
+                    //     continue;
+                    // }
+
+                    // let new_first_row = sq.get_row(maps_to_zero).map(|i| i as usize);
+                    // let new_second_col = new_first_row
+                    //     .into_iter()
+                    //     .position(|i| i == maps_to_one)
+                    //     .unwrap();
+
+                    // let new_1_1 = sq.get(maps_to_one, new_second_col);
+
+                    // if new_1_1 != maps_to_zero && new_1_1 != maps_to_two {
+                    //     continue;
+                    // }
+
+                    // let new_third_col = new_first_row
+                    //     .into_iter()
+                    //     .position(|i| i == maps_to_two)
+                    //     .unwrap();
+
+                    // let new_1_2 = sq.get(maps_to_one, new_third_col);
+
+                    // if new_1_2 != maps_to_zero && new_1_2 != maps_to_three {
+                    //     continue;
+                    // }
+
+                    let col_reduced = sq.permute_vals(permutation).permute_rows(permutation);
+                    let reduced = col_reduced.permute_cols(Permutation::from_array(
+                        col_reduced.get_row(0).map(|i| i as usize),
+                    ));
+
+                    debug_assert!(reduced.is_reduced());
+                    // debug_assert!(reduced.get(1, 1) == 0 || reduced.get(1, 1) == 2);
+                    // debug_assert!(new_second_row == reduced.get_row(1));
+
+                    if reduced < paratopic {
+                        paratopic = reduced;
+                    }
+                }
+            }
+        }
+
+        paratopic
+    }
+
     pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
         let mut order1 = self.unavoidable_sets_order_1();
 
         order1 = order1
             .iter()
             .filter(|set| {
+                // set.len() <= N * 2
+                //     &&
                 order1
                     .iter()
                     .all(|other| other == *set || !other.is_subset_of(**set))
@@ -230,7 +352,7 @@ impl<const N: usize> LatinSquare<N> {
         //     for set1 in &order1 {
         //         for set2 in last_order {
         //             let new_set = set1.union(*set2);
-        //             if set1.is_disjoint(*set2) && new_set.len() <= all_orders.len() * N
+        //             if set1.is_disjoint(*set2) && new_set.len() <= all_orders.len() * N * 2 / 4
         //             // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
         //             {
         //                 next_order.push(new_set);
@@ -383,6 +505,42 @@ impl<const N: usize> LatinSquare<N> {
     }
 }
 
+impl<const N: usize> PartialOrd for LatinSquare<N> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        for i in 0..N {
+            match self.values[i][0].cmp(&other.values[i][0]) {
+                Ordering::Less => return Some(Ordering::Less),
+                Ordering::Greater => return Some(Ordering::Greater),
+                Ordering::Equal => {}
+            }
+            match self.values[0][i].cmp(&other.values[0][i]) {
+                Ordering::Less => return Some(Ordering::Less),
+                Ordering::Greater => return Some(Ordering::Greater),
+                Ordering::Equal => {}
+            }
+        }
+
+        for i in 0..N {
+            for j in 0..=i {
+                match self.values[j][i].cmp(&other.values[j][i]) {
+                    Ordering::Less => return Some(Ordering::Less),
+                    Ordering::Greater => return Some(Ordering::Greater),
+                    Ordering::Equal => {}
+                }
+            }
+            for j in 0..i {
+                match self.values[i][j].cmp(&other.values[i][j]) {
+                    Ordering::Less => return Some(Ordering::Less),
+                    Ordering::Greater => return Some(Ordering::Greater),
+                    Ordering::Equal => {}
+                }
+            }
+        }
+
+        Some(Ordering::Equal)
+    }
+}
+
 impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
     fn from(constraints: Constraints<N>) -> Self {
         assert!(constraints.is_solved());
@@ -434,132 +592,23 @@ impl<const N: usize> ToString for LatinSquare<N> {
 }
 
 impl<const N: usize> TryFrom<&str> for LatinSquare<N> {
-    type Error = ();
+    type Error = &'static str;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.len() != N * N {
-            return Err(());
+            return Err("Invalid length");
         }
 
         let mut values = [[0; N]; N];
         for (i, c) in value.chars().enumerate() {
-            values[i / N][i % N] = c.to_digit(10).ok_or(())? as u8;
+            let entry = c.to_digit(10).ok_or("Invalid digit")?;
+            if entry >= N as u32 {
+                return Err("Invalid digit");
+            }
+            values[i / N][i % N] = entry as u8;
         }
 
         Ok(LatinSquare::new(values))
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PartialLatinSquare<const N: usize> {
-    values: [[Option<u8>; N]; N],
-}
-
-impl<const N: usize> Default for PartialLatinSquare<N> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<const N: usize> PartialLatinSquare<N> {
-    pub fn new() -> Self {
-        PartialLatinSquare {
-            values: [[None; N]; N],
-        }
-    }
-
-    pub fn from_array(values: [[Option<u8>; N]; N]) -> Self {
-        PartialLatinSquare { values }
-    }
-
-    pub fn get(&self, cell: Cell) -> Option<usize> {
-        self.values[cell.0][cell.1].map(|val| val.into())
-    }
-
-    pub fn set(&mut self, i: usize, j: usize, value: Option<usize>) {
-        self.values[i][j] = value.map(|v| v as u8);
-    }
-
-    pub fn next_unknown(&self) -> Option<(usize, usize)> {
-        for j in 0..(N + 1) / 2 {
-            for j in [j, N - j - 1] {
-                for i in 0..N {
-                    if self.get(Cell(j, i)).is_none() {
-                        return Some((j, i));
-                    }
-                }
-                for i in 0..N {
-                    if self.get(Cell(i, j)).is_none() {
-                        return Some((i, j));
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    pub fn num_entries(&self) -> usize {
-        (0..N)
-            .map(|row| {
-                (0..N)
-                    .filter(|col| self.get(Cell(row, *col)).is_some())
-                    .count()
-            })
-            .sum()
-    }
-
-    pub fn num_empty_rows(&self) -> usize {
-        (0..N)
-            .filter(|row| (0..N).all(|col| self.get(Cell(*row, col)).is_none()))
-            .count()
-    }
-
-    pub fn num_full_rows(&self) -> usize {
-        (0..N)
-            .filter(|row| (0..N).all(|col| self.get(Cell(*row, col)).is_some()))
-            .count()
-    }
-
-    pub fn num_empty_cols(&self) -> usize {
-        (0..N)
-            .filter(|col| (0..N).all(|row| self.get(Cell(row, *col)).is_none()))
-            .count()
-    }
-
-    pub fn num_full_cols(&self) -> usize {
-        (0..N)
-            .filter(|col| (0..N).all(|row| self.get(Cell(row, *col)).is_some()))
-            .count()
-    }
-
-    pub fn num_unique_values(&self) -> usize {
-        (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
-            .flatten()
-            .collect::<BitSet16>()
-            .len()
-    }
-
-    pub fn first_empty_index(&self) -> Option<usize> {
-        (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
-            .position(|entry| entry.is_none())
-    }
-
-    pub fn next_empty_index(&self, start: usize) -> Option<usize> {
-        (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
-            .skip(start)
-            .position(|entry| entry.is_none())
-            .map(|index| index + start)
-    }
-
-    pub fn num_next_empty_indices(&self, start: usize) -> usize {
-        (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(Cell(row, col))))
-            .skip(start)
-            .filter(|entry| entry.is_none())
-            .count()
     }
 }
 
@@ -571,49 +620,11 @@ impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
 
         for i in 0..N {
             for j in 0..N {
-                sq.values[i][j] = value.get(Cell(i, j)).unwrap() as u8;
+                sq.values[i][j] = value.get(i, j).unwrap() as u8;
             }
         }
 
         sq
-    }
-}
-
-impl<const N: usize> From<LatinSquare<N>> for PartialLatinSquare<N> {
-    fn from(value: LatinSquare<N>) -> Self {
-        let mut sq = PartialLatinSquare {
-            values: [[None; N]; N],
-        };
-
-        for i in 0..N {
-            for j in 0..N {
-                sq.values[i][j] = Some(value.get(i, j) as u8);
-            }
-        }
-
-        sq
-    }
-}
-
-impl<const N: usize> Debug for PartialLatinSquare<N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "[")?;
-        for i in 0..N {
-            write!(f, "    [")?;
-            for j in 0..N {
-                if let Some(value) = self.get(Cell(i, j)) {
-                    write!(f, "{:2}, ", value)?;
-                } else {
-                    write!(f, "??, ")?;
-                }
-            }
-            write!(f, "]")?;
-            if i != N - 1 {
-                writeln!(f, ",")?;
-            }
-        }
-        write!(f, "\n]")?;
-        Ok(())
     }
 }
 

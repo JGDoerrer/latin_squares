@@ -2,7 +2,8 @@ use std::fmt::Debug;
 
 use crate::{
     bitset::{BitSet128, BitSet16},
-    latin_square::{Cell, PartialLatinSquare},
+    latin_square::Cell,
+    partial_latin_square::PartialLatinSquare,
 };
 
 pub const MOLS: usize = 1;
@@ -78,20 +79,19 @@ impl<const N: usize> OAConstraints<N> {
         let mut constraints = Self::new();
         constraints.diagonal_symmetry = diagonal_symmetry;
 
-        let index = N;
         for col in 1..(MOLS - 1) {
             let next_col = col + 1;
 
             let min_val = constraints
-                .values_for_cell(col, index)
+                .values_for_cell(col, N)
                 .into_iter()
                 .next()
-                .or(constraints.oa.columns[col][0][1].map(|val| val as usize))
+                // .or(constraints.oa.columns[col][1][0].map(|val| val as usize))
                 .unwrap();
 
             let mask = SmallBitSet::all_less_than(min_val + 1).complement();
 
-            let values = &mut constraints.cell_values[next_col][0][1];
+            let values = &mut constraints.cell_values[next_col][1][0];
             *values = values.intersect(mask);
         }
 
@@ -107,9 +107,11 @@ impl<const N: usize> OAConstraints<N> {
             }
         }
 
-        constraints.cell_values[0][1][1] = SmallBitSet::from_iter([0, 2]);
-        constraints.cell_values[0][1][2] = SmallBitSet::from_iter([0, 3]);
-        constraints.cell_values[0][1][3] = SmallBitSet::from_iter([2, 4]);
+        // constraints.cell_values[0][1][1] = SmallBitSet::from_iter([0, 2]);
+        // constraints.cell_values[0][1][2] = SmallBitSet::from_iter([0, 3]);
+        // constraints.cell_values[0][1][3] = SmallBitSet::from_iter([2, 4]);
+
+        // constraints.cell_values[0][1][1] = SmallBitSet::from_iter([3, 4]);
 
         constraints.find_and_set_singles();
 
@@ -121,7 +123,7 @@ impl<const N: usize> OAConstraints<N> {
 
         for i in 0..N {
             for j in 0..N {
-                let Some(value) = sq.get(Cell(i, j)) else {
+                let Some(value) = sq.get(i, j) else {
                     continue;
                 };
 
@@ -281,20 +283,19 @@ impl<const N: usize> OAConstraints<N> {
             }
 
             // mols are in increasing order
-            let index = N;
-            for col in 0..(MOLS - 1) {
+            for col in 1..(MOLS - 1) {
                 let next_col = col + 1;
 
                 let min_val = self
-                    .values_for_cell(col, index)
+                    .values_for_cell(col, N)
                     .into_iter()
                     .next()
-                    .or(self.oa.columns[col][0][1].map(|val| val as usize))
+                    .or(self.oa.columns[col][1][0].map(|val| val as usize))
                     .unwrap();
 
                 let mask = SmallBitSet::all_less_than(min_val + 1).complement();
 
-                let values = &mut self.cell_values[next_col][0][1];
+                let values = &mut self.cell_values[next_col][1][0];
                 *values = values.intersect(mask);
             }
         }
@@ -328,10 +329,10 @@ impl<const N: usize> OAConstraints<N> {
         let mut first_values = vec![false; N * N];
         for i in 0..N {
             for j in 0..N {
-                first_values[i] = if let Some(val) = self.oa.columns[min][i][j] {
+                first_values[i * N + j] = if let Some(val) = self.oa.columns[min][i][j] {
                     val as usize == value_pair.0
                 } else {
-                    self.values_for_cell(min, i).contains(value_pair.0)
+                    self.values_for_cell(min, i * N + j).contains(value_pair.0)
                 };
             }
         }
@@ -339,10 +340,10 @@ impl<const N: usize> OAConstraints<N> {
         let mut second_values = vec![false; N * N];
         for i in 0..N {
             for j in 0..N {
-                second_values[i] = if let Some(val) = self.oa.columns[max][i][j] {
+                second_values[i * N + j] = if let Some(val) = self.oa.columns[max][i][j] {
                     val as usize == value_pair.1
                 } else {
-                    self.values_for_cell(max, i).contains(value_pair.1)
+                    self.values_for_cell(max, i * N + j).contains(value_pair.1)
                 };
             }
         }
@@ -669,13 +670,13 @@ impl<const N: usize> OAConstraints<N> {
 
                     for column in 0..MOLS {
                         for cell_index in self.empty_cells[column] {
-                            let cell = Cell::from_index::<N>(cell_index);
+                            let Cell(i, j) = Cell::from_index::<N>(cell_index);
 
-                            if let Some(target_value) = squares[0][column].get(cell) {
+                            if let Some(target_value) = squares[0][column].get(i, j) {
                                 if squares
                                     .iter()
                                     .skip(1)
-                                    .all(|sq| sq[column].get(cell) == Some(target_value))
+                                    .all(|sq| sq[column].get(i, j) == Some(target_value))
                                 {
                                     self.set_and_propagate(column, cell_index, target_value);
                                     changed = true;
