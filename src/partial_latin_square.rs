@@ -1,9 +1,13 @@
 use core::fmt::Debug;
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 
-use crate::{bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation};
+use crate::{
+    bitset::BitSet16,
+    latin_square::LatinSquare,
+    permutation::{Permutation, PermutationDynIter},
+};
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd)]
 pub struct PartialLatinSquare<const N: usize> {
     values: [[Option<u8>; N]; N],
 }
@@ -195,9 +199,9 @@ impl<const N: usize> PartialLatinSquare<N> {
         let mut first_row = *new.get_row(0);
 
         for i in k..N {
-            first_row[i] = (0..N)
+            first_row[i] = first_row[i].or((0..N)
                 .find(|i| !first_row.contains(&Some(*i as u8)))
-                .map(|i| i as u8);
+                .map(|i| i as u8));
         }
 
         for i in 0..k {
@@ -224,9 +228,9 @@ impl<const N: usize> PartialLatinSquare<N> {
         let mut first_row = *new.get_row(0);
 
         for i in k..N {
-            first_row[i] = (0..N)
+            first_row[i] = first_row[i].or((0..N)
                 .find(|i| !first_row.contains(&Some(*i as u8)))
-                .map(|i| i as u8);
+                .map(|i| i as u8));
         }
 
         let mut permutation = Permutation::<N>::identity().to_array();
@@ -255,38 +259,91 @@ impl<const N: usize> PartialLatinSquare<N> {
         })
     }
 
-    pub fn is_minimal_subsquare(&self, _k: usize) -> bool {
-        let unique_entries = self.unique_entries();
+    pub fn is_minimal_subsquare(&self, k: usize) -> bool {
+        let mut subsquare = *self;
+        for i in 0..N {
+            for j in 0..N {
+                if !(i > k || j > k) {
+                    continue;
+                }
+
+                subsquare.set(i, j, None);
+            }
+        }
+
+        let unique_entries = subsquare.unique_entries();
 
         if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
             return false;
         }
 
-        let min = *self;
+        for i in 0..k {
+            if self.get(i, i) != Some(0) {
+                return false;
+            }
+        }
 
-        // for sq in self.all_reduced_subsquares(k) {
-        //     min = min.min(sq);
-        //     min = min.min(sq.transposed());
-        // }
+        let sq = subsquare;
 
-        min == *self
+        for val_permutation in PermutationDynIter::new(unique_entries.len()) {
+            let sq = sq.permute_vals(val_permutation.pad_with_id());
+            for col_permutation in PermutationDynIter::new(k) {
+                if col_permutation.as_vec()[k - 1] == k - 1 {
+                    continue;
+                }
+
+                let sq = sq.permute_cols(col_permutation.pad_with_id());
+                // for row_permutation in PermutationDynIter::new(k) {
+                let sq = sq.permute_rows(col_permutation.pad_with_id());
+
+                if sq < *self {
+                    return false;
+                }
+                // }
+            }
+        }
+
+        true
     }
 
-    pub fn is_minimal_diagonal(&self, _k: usize) -> bool {
+    pub fn is_minimal_diagonal(&self, k: usize) -> bool {
         let unique_entries = self.unique_entries();
 
         if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
             return false;
         }
 
-        let min = *self;
+        for i in 0..k - 1 {
+            if self.get(i, i).unwrap() > self.get(i + 1, i + 1).unwrap() {
+                return false;
+            }
+        }
 
-        // for sq in self.all_reduced_subsquares(k) {
-        //     min = min.min(sq);
-        //     min = min.min(sq.transposed());
-        // }
+        for val_permutation in PermutationDynIter::new(unique_entries.len()) {
+            let sq = self.permute_vals(val_permutation.pad_with_id());
 
-        min == *self
+            'r: for row_permutation in PermutationDynIter::new(k) {
+                if row_permutation.as_vec()[k - 1] == k - 1 {
+                    continue;
+                }
+
+                let sq = sq
+                    .permute_cols(row_permutation.pad_with_id())
+                    .permute_rows(row_permutation.pad_with_id());
+
+                for i in 0..N {
+                    for j in (0..=i).rev() {
+                        match self.values[i][j].cmp(&sq.values[i][j]) {
+                            Ordering::Greater => return false,
+                            Ordering::Less => continue 'r,
+                            Ordering::Equal => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        true
     }
 
     pub fn permute_rows(&self, permutation: Permutation<N>) -> Self {
@@ -318,41 +375,172 @@ impl<const N: usize> PartialLatinSquare<N> {
 
         Self { values }
     }
+
+    pub fn sort_entries_top_left(&self) -> Self {
+        let mut new = *self;
+
+        let top_row_index = (0..N)
+            .max_by_key(|i| new.get_row(*i).iter().flatten().count())
+            .unwrap();
+        let bottom_row_index = (0..N)
+            .max_by_key(|i| {
+                new.get_row(*i)
+                    .iter()
+                    .zip(*new.get_row(top_row_index))
+                    .filter(|(a, b)| a.is_some() && b.is_none())
+                    .count()
+            })
+            .unwrap();
+
+        new.values.swap(0, top_row_index);
+        if bottom_row_index != 0 {
+            new.values.swap(N - 1, bottom_row_index);
+        }
+
+        let mut top_cols = Permutation::<N>::identity().to_array().map(|j| {
+            (
+                j,
+                new.get(0, j)
+                    .is_some()
+                    .then(|| new.get_col(j).iter().flatten().count()),
+            )
+        });
+
+        top_cols.sort_by_key(|(_, c)| Reverse(c.unwrap_or(0)));
+
+        let permutation: Permutation<N> = top_cols.map(|(i, _)| i).into();
+        new = new.permute_cols(permutation.inverse());
+
+        let mut bottom_cols = Permutation::<N>::identity().to_array().map(|j| {
+            (
+                j,
+                new.get(N - 1, j)
+                    .is_some()
+                    .then(|| new.get_col(j).iter().flatten().count()),
+            )
+        });
+
+        bottom_cols.sort_by_key(|(_, c)| (c.unwrap_or(0)));
+
+        let permutation: Permutation<N> = bottom_cols.map(|(i, _)| i).into();
+        new = new.permute_cols(permutation.inverse());
+
+        for i in 1..N - 1 {
+            let (max_row, count) = (i..N - 1)
+                .map(|j| {
+                    (
+                        j,
+                        new.get_row(j)
+                            .iter()
+                            .zip(new.get_row(0))
+                            .filter(|(a, b)| a.is_some() && b.is_some())
+                            .count()
+                            .saturating_sub(
+                                new.get_row(j)
+                                    .iter()
+                                    .zip(new.get_row(N - 1))
+                                    .filter(|(a, b)| a.is_some() && b.is_some())
+                                    .count(),
+                            ),
+                    )
+                })
+                .max_by_key(|(_, count)| *count)
+                .unwrap();
+
+            if count == 0 {
+                continue;
+            }
+
+            new.values.swap(i, max_row);
+        }
+
+        for i in (1..N - 1).rev() {
+            let (max_row, count) = (1..=i)
+                .map(|j| {
+                    (
+                        j,
+                        new.get_row(j)
+                            .iter()
+                            .zip(new.get_row(N - 1))
+                            .filter(|(a, b)| a.is_some() && b.is_some())
+                            .count()
+                            .saturating_sub(
+                                new.get_row(j)
+                                    .iter()
+                                    .zip(new.get_row(0))
+                                    .filter(|(a, b)| a.is_some() && b.is_some())
+                                    .count(),
+                            ),
+                    )
+                })
+                .max_by_key(|(_, count)| *count)
+                .unwrap();
+
+            if count == 0 {
+                continue;
+            }
+
+            new.values.swap(i, max_row);
+        }
+
+        new
+    }
+
+    pub fn has_entry_determined_by_row_col(&self) -> bool {
+        let rows = self.values.map(|row| {
+            row.into_iter()
+                .flatten()
+                .map(|i| i as usize)
+                .collect::<BitSet16>()
+        });
+
+        let cols = {
+            let mut cols = [0; N];
+            for i in 0..N {
+                cols[i] = i;
+            }
+
+            cols.map(|i| {
+                self.get_col(i)
+                    .into_iter()
+                    .flatten()
+                    .map(|i| i as usize)
+                    .collect::<BitSet16>()
+            })
+        };
+
+        for i in 0..N {
+            for j in 0..N {
+                if self.get(i, j).is_none() && rows[i].union(cols[j]).len() == N - 1 {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
-impl<const N: usize> PartialOrd for PartialLatinSquare<N> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl<const N: usize> Ord for PartialLatinSquare<N> {
+    fn cmp(&self, other: &Self) -> Ordering {
         for i in 0..N {
-            match self.values[i][0].cmp(&other.values[i][0]) {
-                Ordering::Less => return Some(Ordering::Less),
-                Ordering::Greater => return Some(Ordering::Greater),
-                Ordering::Equal => {}
-            }
-            match self.values[0][i].cmp(&other.values[0][i]) {
-                Ordering::Less => return Some(Ordering::Less),
-                Ordering::Greater => return Some(Ordering::Greater),
-                Ordering::Equal => {}
-            }
-        }
-
-        for i in 1..N {
-            for j in 1..=i {
+            for j in (0..=i).rev() {
                 match self.values[j][i].cmp(&other.values[j][i]) {
-                    Ordering::Less => return Some(Ordering::Less),
-                    Ordering::Greater => return Some(Ordering::Greater),
+                    Ordering::Less => return Ordering::Less,
+                    Ordering::Greater => return Ordering::Greater,
                     Ordering::Equal => {}
                 }
-            }
-            for j in 1..i {
-                match self.values[i][j].cmp(&other.values[i][j]) {
-                    Ordering::Less => return Some(Ordering::Less),
-                    Ordering::Greater => return Some(Ordering::Greater),
-                    Ordering::Equal => {}
+                if i != j {
+                    match self.values[i][j].cmp(&other.values[i][j]) {
+                        Ordering::Less => return Ordering::Less,
+                        Ordering::Greater => return Ordering::Greater,
+                        Ordering::Equal => {}
+                    }
                 }
             }
         }
 
-        Some(Ordering::Equal)
+        Ordering::Equal
     }
 }
 

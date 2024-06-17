@@ -2,7 +2,6 @@ use crate::{constraints::Constraints, partial_latin_square::PartialLatinSquare};
 
 #[derive(Debug)]
 pub struct OrderlySqGenerator<const N: usize> {
-    diagonal_symmetry: bool,
     k: usize,
     prev_gen: Option<Box<OrderlySqGenerator<N>>>,
     current_sq: Option<PartialLatinSquare<N>>,
@@ -20,10 +19,6 @@ impl<const N: usize> OrderlySqGenerator<N> {
         Self::new_k(N, false)
     }
 
-    pub fn new_diagonal_symmetry() -> Self {
-        Self::new_k(N, true)
-    }
-
     fn new_k(k: usize, diagonal_symmetry: bool) -> Self {
         if k == 1 {
             let mut current_sq = PartialLatinSquare::new();
@@ -34,7 +29,6 @@ impl<const N: usize> OrderlySqGenerator<N> {
             current_sq.set(0, 0, Some(0));
             OrderlySqGenerator {
                 k,
-                diagonal_symmetry,
                 current_sq: Some(current_sq),
                 prev_gen: None,
                 stack: Vec::new(),
@@ -45,7 +39,6 @@ impl<const N: usize> OrderlySqGenerator<N> {
             OrderlySqGenerator {
                 k,
                 current_sq,
-                diagonal_symmetry,
                 prev_gen: Some(Box::new(prev_gen)),
                 stack: vec![StackEntry {
                     sq: current_sq.unwrap(),
@@ -65,24 +58,6 @@ impl<const N: usize> OrderlySqGenerator<N> {
             });
         }
     }
-
-    fn next_cell(k: usize, (row, col): (usize, usize)) -> Option<(usize, usize)> {
-        if row < k - 1 {
-            if row == k - 1 {
-                Some((row, 0))
-            } else {
-                Some((row + 1, col))
-            }
-        } else {
-            if col == k - 1 {
-                Some((row, 0))
-            } else if col != k - 2 {
-                Some((row, col + 1))
-            } else {
-                None
-            }
-        }
-    }
 }
 
 impl<const N: usize> Iterator for OrderlySqGenerator<N> {
@@ -94,36 +69,29 @@ impl<const N: usize> Iterator for OrderlySqGenerator<N> {
         }
 
         if self.k == N {
-            'l: while let Some(current_sq) = self.current_sq.take() {
+            while let Some(current_sq) = self.current_sq.take() {
                 let mut constraints = Constraints::new_partial(&current_sq);
                 if !constraints.is_solvable() {
                     self.next_sq();
-                    continue 'l;
+                    continue;
                 }
 
                 constraints.find_singles();
 
                 if constraints.is_solved() {
-                    let partial: PartialLatinSquare<N> =
-                        constraints.clone().to_latin_square().into();
-
-                    if self.diagonal_symmetry {
-                        if !partial.is_minimal_diagonal(self.k) {
-                            continue;
-                        }
-                    } else {
-                        if !partial.is_minimal_subsquare(self.k) {
-                            continue;
-                        }
-                    }
-
                     let sq = constraints.to_latin_square();
+                    let partial: PartialLatinSquare<N> = sq.into();
+
+                    if !partial.is_minimal_diagonal(self.k) {
+                        self.next_sq();
+                        continue;
+                    }
 
                     self.next_sq();
                     return Some(sq.into());
                 } else {
                     self.next_sq();
-                    continue 'l;
+                    continue;
                 }
             }
             return None;
@@ -140,7 +108,7 @@ impl<const N: usize> Iterator for OrderlySqGenerator<N> {
                     continue;
                 }
 
-                let cell = if self.diagonal_symmetry || stack_index < self.k - 1 {
+                let cell = if stack_index < self.k - 1 {
                     (stack_index, self.k - 1)
                 } else {
                     (self.k - 1, stack_index + 1 - self.k)
@@ -149,11 +117,7 @@ impl<const N: usize> Iterator for OrderlySqGenerator<N> {
                 let mut next_sq = sq.clone();
 
                 let values = constraints.get(cell.0, cell.1);
-                let value = if cell.0 == 0 || cell.1 == 0 {
-                    (*index == 0).then(|| if cell.0 == 0 { cell.1 } else { cell.0 })
-                } else {
-                    values.into_iter().nth(*index)
-                };
+                let value = values.into_iter().nth(*index);
                 *index += 1;
 
                 let Some(value) = value else {
@@ -163,18 +127,10 @@ impl<const N: usize> Iterator for OrderlySqGenerator<N> {
 
                 next_sq.set(cell.0, cell.1, Some(value));
 
-                if self.diagonal_symmetry {
-                    next_sq.set(cell.1, cell.0, Some(value));
-                }
-
-                let max_index = if self.diagonal_symmetry {
-                    self.k - 1
-                } else {
-                    self.k * 2 - 2
-                };
+                let max_index = self.k * 2 - 2;
 
                 if stack_index == max_index {
-                    if 2 * self.k >= N {
+                    if 2 * self.k >= N + 1 {
                         for i in 0..N {
                             if next_sq.count_val(i) < 2 * self.k - N {
                                 continue 'l;
@@ -182,9 +138,11 @@ impl<const N: usize> Iterator for OrderlySqGenerator<N> {
                         }
                     }
 
-                    if !next_sq.is_minimal_subsquare(self.k) {
+                    if !next_sq.is_minimal_diagonal(self.k) {
                         continue;
                     }
+
+                    // dbg!(next_sq);
 
                     return Some(next_sq);
                 };

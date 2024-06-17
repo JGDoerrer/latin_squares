@@ -3,6 +3,7 @@ use std::{
     fs::OpenOptions,
     io::{stdin, BufRead, BufReader, Read},
     path::Path,
+    vec,
 };
 
 use clap::{self, Parser, Subcommand};
@@ -10,6 +11,9 @@ use clap::{self, Parser, Subcommand};
 use latin_square::LatinSquare;
 use latin_square_oa_generator::LatinSquareOAGenerator;
 use orderly_sq_generator::OrderlySqGenerator;
+
+use partial_latin_square::PartialLatinSquare;
+use random_latin_square_generator::RandomLatinSquareGenerator;
 
 use crate::hitting_set_generator::HittingSetGenerator;
 
@@ -27,15 +31,19 @@ mod orthogonal_generator;
 mod partial_latin_square;
 mod partial_square_generator;
 mod permutation;
+mod random_latin_square_generator;
 
 #[derive(Subcommand, Clone)]
 enum Mode {
+    Analyse,
     PrettyPrint,
     NormalizeParatopy,
     GenerateParatopyClasses,
     FindSCS,
     Testing,
     GenerateLatinSquares,
+    RandomLatinSquares,
+    FindOrthogonal,
 }
 
 #[derive(Parser)]
@@ -44,29 +52,76 @@ struct Args {
     mode: Mode,
 }
 
-const N: usize = 9;
+const N: usize = 6;
 
 fn main() {
     let args = Args::parse();
 
     match args.mode {
+        Mode::Analyse => analyse(),
         Mode::GenerateLatinSquares => generate_latin_squares(),
         Mode::PrettyPrint => pretty_print(),
         Mode::NormalizeParatopy => normalize_paratopy(),
         Mode::GenerateParatopyClasses => generate_paratopy_classes(),
         Mode::FindSCS => find_scs(),
         Mode::Testing => testing(),
+        Mode::RandomLatinSquares => random_latin_squares(),
+        Mode::FindOrthogonal => find_orthogonal(),
+    }
+}
+
+fn find_orthogonal() {
+    for _sq in read_sqs_from_stdin() {
+        todo!()
+    }
+}
+
+fn random_latin_squares() {
+    for sq in RandomLatinSquareGenerator::<N>::new() {
+        println!("{}", sq.to_string());
+    }
+}
+
+fn analyse() {
+    for sq in read_partial_sqs_from_stdin() {
+        let sq = sq.sort_entries_top_left();
+        if !sq.has_entry_determined_by_row_col() {
+            for i in 0..N {
+                for j in 0..N {
+                    if let Some(value) = sq.get(i, j) {
+                        print!("{} ", value);
+                    } else {
+                        print!(". ");
+                    }
+                }
+                println!()
+            }
+            println!()
+        }
+    }
+}
+
+fn generate_latin_squares() {
+    for sq in OrderlySqGenerator::<N>::new() {
+        println!("{}", sq.to_string());
     }
 }
 
 fn pretty_print() {
-    for sq in read_sqs_from_stdin() {
+    for sq in read_partial_sqs_from_stdin() {
         for i in 0..N {
+            println!("+{}", "---+".repeat(N));
+            print!("|");
             for j in 0..N {
-                print!("{} ", sq.get(i, j))
+                if let Some(value) = sq.get(i, j) {
+                    print!(" {} |", value);
+                } else {
+                    print!("   |");
+                }
             }
             println!()
         }
+        println!("+{}", "---+".repeat(N));
         println!()
     }
 }
@@ -82,15 +137,17 @@ fn generate_paratopy_classes() {
 
     let mut sqs = HashSet::new();
 
-    for sq in OrderlySqGenerator::<N>::new_diagonal_symmetry() {
+    for sq in OrderlySqGenerator::<N>::new() {
         let sq: LatinSquare<N> = sq.into();
-        let sq = sq.reduced_paratopic();
+        let normalized = sq.reduced_paratopic();
 
-        if !sqs.contains(&sq) {
-            sqs.insert(sq);
+        if !sqs.contains(&normalized) {
+            sqs.insert(normalized);
 
-            println!("{}", sq.to_string());
+            println!("{}", normalized.to_string());
             dbg!(sqs.len());
+        } else {
+            dbg!(normalized);
         }
     }
 
@@ -107,12 +164,6 @@ fn generate_paratopy_classes() {
     // }
 }
 
-fn generate_latin_squares() {
-    for sq in OrderlySqGenerator::<N>::new_diagonal_symmetry() {
-        println!("{}", sq.to_string());
-    }
-}
-
 fn find_scs() {
     let mut min = N * N;
     let _con = N * N / 4;
@@ -125,11 +176,12 @@ fn find_scs() {
             dbg!(sets.len());
         });
 
-        'l: for i in 0..N * N {
-            // println!("{i}");
+        'l: for i in 0..=N * N {
+            dbg!(i);
             let partial_squares = HittingSetGenerator::new(sq, unavoidable_sets.clone(), i);
 
             let mut found = false;
+            let mut scs = HashSet::new();
             for partial_sq in partial_squares {
                 // dbg!(partial_sq);
                 let mut solutions = LatinSquareOAGenerator::from_partial(partial_sq);
@@ -139,15 +191,19 @@ fn find_scs() {
                 if second_solution.is_none()
                     && first_solution.is_some_and(|solution| solution[0] == sq)
                 {
-                    println!("{}", partial_sq.to_string());
+                    // println!("{}", partial_sq.to_string());
 
                     min = min.min(partial_sq.num_entries());
                     found = true;
-                    break;
+                    scs.insert(partial_sq);
+                    // break;
                 }
             }
 
             if found {
+                for scs in scs {
+                    println!("{}", scs.to_string());
+                }
                 break;
             }
         }
@@ -158,30 +214,10 @@ fn find_scs() {
 }
 
 fn testing() {
-    let sqs: Vec<_> = read_sqs_from_stdin().collect();
-    dbg!(&sqs);
-
-    let mut pairs: Vec<_> = sqs
-        .iter()
-        .map(|sq| {
-            let min_diff = sqs
-                .iter()
-                .filter(|other| *other != sq)
-                .min_by_key(|other| sq.difference_mask(&other).len())
-                .unwrap();
-
-            (sq, min_diff, sq.difference_mask(min_diff).len())
-        })
-        .collect();
-
-    pairs.sort_by_key(|(_, _, i)| *i);
-
-    pairs.into_iter().for_each(|(sq, other, _)| {
-        println!("{}", sq.to_string());
-        println!("{}", other.to_string());
-        println!("{:?}", sq.difference_mask(other).len());
-        println!();
-    })
+    for sq in read_partial_sqs_from_stdin() {
+        // println!("{}", sq.to_string());
+        println!("{}", sq.sort_entries_top_left().to_string());
+    }
 }
 
 fn read_sqs_from_file(path: &Path) -> Vec<LatinSquare<N>> {
@@ -207,6 +243,21 @@ fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquare<N>> {
         if stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
             line.pop(); // remove newline
             let sq = LatinSquare::try_from(line.as_str()).unwrap();
+            line.clear();
+            Some(sq)
+        } else {
+            None
+        }
+    })
+}
+
+fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquare<N>> {
+    let mut line = String::new();
+
+    (0..).map_while(move |_| {
+        if stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+            line.pop(); // remove newline
+            let sq = PartialLatinSquare::try_from(line.as_str()).unwrap();
             line.clear();
             Some(sq)
         } else {

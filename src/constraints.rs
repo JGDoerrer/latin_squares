@@ -42,7 +42,9 @@ impl<const N: usize> Constraints<N> {
 
         for i in 0..N {
             constraints.set(0, i, i);
-            constraints.set(i, 0, i);
+            if i != 0 {
+                constraints.set(i, 0, i);
+            }
         }
 
         constraints
@@ -75,6 +77,10 @@ impl<const N: usize> Constraints<N> {
 
     pub fn get(&self, i: usize, j: usize) -> BitSet16 {
         self.rows[i].intersect(self.cols[j])
+    }
+
+    pub fn is_set(&self, i: usize, j: usize) -> bool {
+        self.sq.get(i, j).is_some()
     }
 
     fn propagate_value(&mut self, _i: usize, _j: usize, _value: usize) {
@@ -251,5 +257,13 @@ impl<const N: usize> Constraints<N> {
         //         }
         //     }
         // }
+    }
+}
+
+impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
+    fn from(constraints: Constraints<N>) -> Self {
+        assert!(constraints.is_solved());
+
+        constraints.sq.into()
     }
 }

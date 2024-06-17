@@ -128,7 +128,6 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                     let Cell(i, j) = Cell::from_index::<N>(index);
                     sq.set(i, j, Some(self.sq.get(i, j)));
                 }
-
                 if next_hitting_set.len() < self.max_entries {
                     self.partial_gen = Some(PartialSquareGenerator::new_partial(
                         self.sq,
@@ -165,7 +164,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                 current_set_iter: next_set.into_iter(),
                 hitting_set: next_hitting_set,
                 sets_hit: next_sets_hit,
-            })
+            });
         }
 
         None

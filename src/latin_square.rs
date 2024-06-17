@@ -2,13 +2,12 @@ use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{
     bitset::{BitSet128, BitSet16},
-    constraints::Constraints,
     latin_square_oa_generator::LatinSquareOAGenerator,
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationIter},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd)]
 pub struct LatinSquare<const N: usize> {
     values: [[u8; N]; N],
 }
@@ -225,72 +224,7 @@ impl<const N: usize> LatinSquare<N> {
 
         for sq in self.paratopic() {
             for sq in sq.all_reduced() {
-                // let mut triples = vec![];
-
-                // for maps_to_zero in 0..N {
-                //     for maps_to_one in 0..N {
-                //         if maps_to_one == maps_to_zero {
-                //             continue;
-                //         }
-
-                //         for maps_to_two in 0..N {
-                //             if maps_to_two == maps_to_zero || maps_to_two == maps_to_one {
-                //                 continue;
-                //             }
-
-                //             let new_first_row = sq.get_row(maps_to_zero).map(|i| i as usize);
-                //             let new_second_col = new_first_row
-                //                 .into_iter()
-                //                 .position(|i| i == maps_to_one)
-                //                 .unwrap();
-                //             let new_1_1 = sq.get(maps_to_one, new_second_col);
-
-                //             if new_1_1 == maps_to_zero || new_1_1 == maps_to_two {
-                //                 triples.push([maps_to_zero, maps_to_one, maps_to_two]);
-                //             }
-                //         }
-                //     }
-                // }
-
-                // triples.sort();
-                // triples.dedup();
-                // dbg!(&triples.len());
-
                 for permutation in PermutationIter::new() {
-                    let _maps_to_zero =
-                        permutation.to_array().iter().position(|i| *i == 0).unwrap();
-                    let _maps_to_one = permutation.to_array().iter().position(|i| *i == 1).unwrap();
-                    let _maps_to_two = permutation.to_array().iter().position(|i| *i == 2).unwrap();
-                    let _maps_to_three =
-                        permutation.to_array().iter().position(|i| *i == 3).unwrap();
-
-                    // if !triples.contains(&[maps_to_zero, maps_to_one, maps_to_two]) {
-                    //     continue;
-                    // }
-
-                    // let new_first_row = sq.get_row(maps_to_zero).map(|i| i as usize);
-                    // let new_second_col = new_first_row
-                    //     .into_iter()
-                    //     .position(|i| i == maps_to_one)
-                    //     .unwrap();
-
-                    // let new_1_1 = sq.get(maps_to_one, new_second_col);
-
-                    // if new_1_1 != maps_to_zero && new_1_1 != maps_to_two {
-                    //     continue;
-                    // }
-
-                    // let new_third_col = new_first_row
-                    //     .into_iter()
-                    //     .position(|i| i == maps_to_two)
-                    //     .unwrap();
-
-                    // let new_1_2 = sq.get(maps_to_one, new_third_col);
-
-                    // if new_1_2 != maps_to_zero && new_1_2 != maps_to_three {
-                    //     continue;
-                    // }
-
                     let col_reduced = sq.permute_vals(permutation).permute_rows(permutation);
                     let reduced = col_reduced.permute_cols(Permutation::from_array(
                         col_reduced.get_row(0).map(|i| i as usize),
@@ -329,14 +263,20 @@ impl<const N: usize> LatinSquare<N> {
         order1.dedup();
 
         let mut order2 = vec![];
+        let mut max_size = 2 * N;
         for (i, set1) in order1.iter().enumerate() {
             for set2 in order1.iter().skip(i + 1) {
                 let new_set = set1.union(*set2);
                 if set1.is_disjoint(*set2)
+                    && new_set.len() <= max_size
                     && order2.iter().all(|set| !new_set.is_subset_of(*set))
-                    && new_set.len() <= 2 * N
                 {
                     order2.push(new_set);
+                    if order2.len() > 4000 {
+                        max_size -= 1;
+                        dbg!(max_size);
+                        order2.retain(|s| s.len() <= max_size);
+                    }
                 }
             }
         }
@@ -344,30 +284,35 @@ impl<const N: usize> LatinSquare<N> {
         order2.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         order2.dedup();
 
-        // let mut all_orders = vec![order1.clone(), order2];
+        let mut all_orders = vec![order1.clone(), order2];
 
-        // while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
-        //     let last_order = all_orders.last().unwrap();
-        //     let mut next_order = vec![];
+        while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
+            let last_order = all_orders.last().unwrap();
+            let mut next_order = vec![];
+            let mut max_size = all_orders.len() * N;
 
-        //     for set1 in &order1 {
-        //         for set2 in last_order {
-        //             let new_set = set1.union(*set2);
-        //             if set1.is_disjoint(*set2) && new_set.len() <= all_orders.len() * N * 2 / 4
-        //             // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
-        //             {
-        //                 next_order.push(new_set);
-        //             }
-        //         }
-        //     }
+            for set1 in &order1 {
+                for set2 in last_order {
+                    let new_set = set1.union(*set2);
+                    if set1.is_disjoint(*set2) && new_set.len() <= max_size
+                    // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
+                    {
+                        next_order.push(new_set);
+                        if next_order.len() > 1000 {
+                            max_size -= 1;
+                            next_order.retain(|s| s.len() <= max_size);
+                        }
+                    }
+                }
+            }
 
-        //     next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-        //     next_order.dedup();
+            next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+            next_order.dedup();
 
-        //     all_orders.push(next_order);
-        // }
+            all_orders.push(next_order);
+        }
 
-        let all_orders = vec![order1, order2];
+        // let all_orders = vec![order1, order2];
         all_orders
     }
 
@@ -375,6 +320,7 @@ impl<const N: usize> LatinSquare<N> {
         debug_assert!(self.is_reduced());
 
         let mut sets = Vec::new();
+        let mut max_size = 3 * N;
 
         let triple_iter = (0..N).flat_map(|first| {
             ((first + 1)..N)
@@ -392,8 +338,12 @@ impl<const N: usize> LatinSquare<N> {
                 for solution in solutions {
                     let difference = self.difference_mask(&solution);
 
-                    if !difference.is_empty() {
+                    if !difference.is_empty() && difference.len() <= max_size {
                         sets.push(difference);
+                        if sets.len() > 5000 {
+                            max_size -= 1;
+                            sets.retain(|s| s.len() <= max_size);
+                        }
                     }
                 }
             }
@@ -506,59 +456,24 @@ impl<const N: usize> LatinSquare<N> {
     }
 }
 
-impl<const N: usize> PartialOrd for LatinSquare<N> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl<const N: usize> Ord for LatinSquare<N> {
+    fn cmp(&self, other: &Self) -> Ordering {
         for i in 0..N {
-            match self.values[i][0].cmp(&other.values[i][0]) {
-                Ordering::Less => return Some(Ordering::Less),
-                Ordering::Greater => return Some(Ordering::Greater),
-                Ordering::Equal => {}
-            }
-            match self.values[0][i].cmp(&other.values[0][i]) {
-                Ordering::Less => return Some(Ordering::Less),
-                Ordering::Greater => return Some(Ordering::Greater),
-                Ordering::Equal => {}
-            }
-        }
-
-        for i in 0..N {
-            for j in 0..=i {
+            for j in (0..=i).rev() {
                 match self.values[j][i].cmp(&other.values[j][i]) {
-                    Ordering::Less => return Some(Ordering::Less),
-                    Ordering::Greater => return Some(Ordering::Greater),
+                    Ordering::Less => return Ordering::Less,
+                    Ordering::Greater => return Ordering::Greater,
                     Ordering::Equal => {}
                 }
-            }
-            for j in 0..i {
                 match self.values[i][j].cmp(&other.values[i][j]) {
-                    Ordering::Less => return Some(Ordering::Less),
-                    Ordering::Greater => return Some(Ordering::Greater),
+                    Ordering::Less => return Ordering::Less,
+                    Ordering::Greater => return Ordering::Greater,
                     Ordering::Equal => {}
                 }
             }
         }
 
-        Some(Ordering::Equal)
-    }
-}
-
-impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
-    fn from(constraints: Constraints<N>) -> Self {
-        assert!(constraints.is_solved());
-
-        let mut square = LatinSquare {
-            values: [[0; N]; N],
-        };
-
-        for i in 0..N {
-            for j in 0..N {
-                let value = constraints.get(i, j).into_iter().next().unwrap();
-
-                square.values[i][j] = value as u8;
-            }
-        }
-
-        square
+        Ordering::Equal
     }
 }
 
