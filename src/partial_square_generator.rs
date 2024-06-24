@@ -18,7 +18,7 @@ impl<const N: usize> PartialSquareGenerator<N> {
             (num_entries != 0).then(|| Box::new(PartialSquareGenerator::new(sq, num_entries - 1)));
 
         let partial_sq = if num_entries == 0 {
-            Some(PartialLatinSquare::new())
+            Some(PartialLatinSquare::empty())
         } else {
             gen.as_mut().unwrap().next()
         };
@@ -77,12 +77,7 @@ impl<const N: usize> Iterator for PartialSquareGenerator<N> {
             return value;
         }
 
-        while self.index >= N * N
-        // || self.partial_sq.is_none()
-        // || self
-        //     .partial_sq
-        //     .is_some_and(|sq| sq.num_next_empty_indices(self.index) < self.entries_left)
-        {
+        while self.index >= N * N {
             let gen = self.gen.as_mut().unwrap();
 
             let Some(sq) = gen.next() else {
@@ -109,23 +104,6 @@ impl<const N: usize> Iterator for PartialSquareGenerator<N> {
             .unwrap()
             .next_empty_index(self.index + 1)
             .unwrap_or(N * N);
-
-        // while sq.num_full_cols() > 0 || sq.num_full_rows() > 0 {
-        //     sq = self.partial_sq.unwrap();
-        //     let Cell(i, j) = Cell::from_index::<N>(self.index);
-        //     sq.set(i, j, Some(self.sq.get(i, j)));
-
-        //     self.index += 1;
-        //     if self.index >= N * N {
-        //         todo!()
-        //     }
-        // }
-
-        // assert!(
-        //     sq.num_entries() == self.num_entries,
-        //     "{sq:?}, {}",
-        //     self.num_entries
-        // );
 
         Some(sq)
     }

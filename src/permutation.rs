@@ -63,6 +63,26 @@ impl<const N: usize> Permutation<N> {
         order
     }
 
+    pub fn num_fixed_points(&self) -> usize {
+        self.fixed_points().count()
+    }
+
+    pub fn fixed_points(&self) -> impl Iterator<Item = usize> + '_ {
+        self.0
+            .iter()
+            .enumerate()
+            .filter(|(i, j)| i == *j)
+            .map(|(i, _)| i)
+    }
+
+    pub fn conjugate_by(&self, other: Permutation<N>) -> Self {
+        other
+            .0
+            .map(|i| self.apply(i))
+            .map(|i| other.inverse().apply(i))
+            .into()
+    }
+
     pub fn apply(self, num: usize) -> usize {
         self.0[num]
     }

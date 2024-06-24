@@ -20,7 +20,7 @@ impl<const N: usize> Default for Constraints<N> {
 impl<const N: usize> Constraints<N> {
     pub fn new() -> Self {
         Constraints {
-            sq: PartialLatinSquare::new(),
+            sq: PartialLatinSquare::empty(),
             rows: [BitSet16::all_less_than(N); N],
             cols: [BitSet16::all_less_than(N); N],
         }
@@ -62,6 +62,10 @@ impl<const N: usize> Constraints<N> {
         }
 
         constraints
+    }
+
+    pub fn partial_sq(&self) -> &PartialLatinSquare<N> {
+        &self.sq
     }
 
     pub fn set(&mut self, i: usize, j: usize, value: usize) {

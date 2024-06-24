@@ -218,11 +218,12 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn reduced_paratopic(&self) -> Self {
-        debug_assert!(self.is_reduced());
+        let sq = &self.reduced();
+        debug_assert!(sq.is_reduced());
 
-        let mut paratopic = *self;
+        let mut paratopic = *sq;
 
-        for sq in self.paratopic() {
+        for sq in sq.paratopic() {
             for sq in sq.all_reduced() {
                 for permutation in PermutationIter::new() {
                     let col_reduced = sq.permute_vals(permutation).permute_rows(permutation);
@@ -272,9 +273,8 @@ impl<const N: usize> LatinSquare<N> {
                     && order2.iter().all(|set| !new_set.is_subset_of(*set))
                 {
                     order2.push(new_set);
-                    if order2.len() > 4000 {
+                    if order2.len() > 10000 {
                         max_size -= 1;
-                        dbg!(max_size);
                         order2.retain(|s| s.len() <= max_size);
                     }
                 }
@@ -284,35 +284,35 @@ impl<const N: usize> LatinSquare<N> {
         order2.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         order2.dedup();
 
-        let mut all_orders = vec![order1.clone(), order2];
+        // let mut all_orders = vec![order1.clone(), order2];
 
-        while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
-            let last_order = all_orders.last().unwrap();
-            let mut next_order = vec![];
-            let mut max_size = all_orders.len() * N;
+        // while all_orders.last().is_some_and(|sets| !sets.is_empty()) {
+        //     let last_order = all_orders.last().unwrap();
+        //     let mut next_order = vec![];
+        //     let mut max_size = all_orders.len() * N;
 
-            for set1 in &order1 {
-                for set2 in last_order {
-                    let new_set = set1.union(*set2);
-                    if set1.is_disjoint(*set2) && new_set.len() <= max_size
-                    // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
-                    {
-                        next_order.push(new_set);
-                        if next_order.len() > 1000 {
-                            max_size -= 1;
-                            next_order.retain(|s| s.len() <= max_size);
-                        }
-                    }
-                }
-            }
+        //     for set1 in &order1 {
+        //         for set2 in last_order {
+        //             let new_set = set1.union(*set2);
+        //             if set1.is_disjoint(*set2) && new_set.len() <= max_size
+        //             // && last_order.iter().all(|set| !new_set.is_subset_of(*set))
+        //             {
+        //                 next_order.push(new_set);
+        //                 if next_order.len() > 5000 {
+        //                     max_size -= 1;
+        //                     next_order.retain(|s| s.len() <= max_size);
+        //                 }
+        //             }
+        //         }
+        //     }
 
-            next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-            next_order.dedup();
+        //     next_order.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        //     next_order.dedup();
 
-            all_orders.push(next_order);
-        }
+        //     all_orders.push(next_order);
+        // }
 
-        // let all_orders = vec![order1, order2];
+        let all_orders = vec![order1];
         all_orders
     }
 
@@ -320,7 +320,7 @@ impl<const N: usize> LatinSquare<N> {
         debug_assert!(self.is_reduced());
 
         let mut sets = Vec::new();
-        let mut max_size = 3 * N;
+        let mut max_size = N * 2;
 
         let triple_iter = (0..N).flat_map(|first| {
             ((first + 1)..N)
@@ -340,7 +340,7 @@ impl<const N: usize> LatinSquare<N> {
 
                     if !difference.is_empty() && difference.len() <= max_size {
                         sets.push(difference);
-                        if sets.len() > 5000 {
+                        if sets.len() > 10000 {
                             max_size -= 1;
                             sets.retain(|s| s.len() <= max_size);
                         }

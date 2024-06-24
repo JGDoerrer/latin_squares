@@ -58,7 +58,7 @@ impl<const N: usize> HittingSetGenerator<N> {
     }
 
     fn get_partial_sq(&self, hitting_set: BitSet128) -> PartialLatinSquare<N> {
-        let mut partial_sq = PartialLatinSquare::new();
+        let mut partial_sq = PartialLatinSquare::empty();
 
         for i in hitting_set {
             let Cell(i, j) = Cell::from_index::<N>(i);
@@ -122,7 +122,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                 || next_set_index.is_some_and(|index| index >= self.unavoidable_sets[0].len())
             {
                 // all sets are hit
-                let mut sq = PartialLatinSquare::new();
+                let mut sq = PartialLatinSquare::empty();
 
                 for index in next_hitting_set {
                     let Cell(i, j) = Cell::from_index::<N>(index);

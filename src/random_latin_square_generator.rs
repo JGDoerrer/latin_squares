@@ -5,9 +5,9 @@ pub struct RandomLatinSquareGenerator<const N: usize> {
 }
 
 impl<const N: usize> RandomLatinSquareGenerator<N> {
-    pub fn new() -> Self {
+    pub fn new(seed: u64) -> Self {
         RandomLatinSquareGenerator {
-            random_state: [1, 2, 3, 4],
+            random_state: [seed, 1, 2, 3],
         }
     }
 
@@ -36,7 +36,7 @@ impl<const N: usize> Iterator for RandomLatinSquareGenerator<N> {
     type Item = LatinSquare<N>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut stack = vec![(Constraints::new_reduced(), 1, 1)];
+        let mut stack = vec![(Constraints::new(), 1, 1)];
 
         while let Some((constraints, i, j)) = stack.last() {
             let (constraints, i, j) = (constraints.clone(), *i, *j);

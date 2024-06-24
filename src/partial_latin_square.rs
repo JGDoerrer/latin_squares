@@ -14,12 +14,12 @@ pub struct PartialLatinSquare<const N: usize> {
 
 impl<const N: usize> Default for PartialLatinSquare<N> {
     fn default() -> Self {
-        Self::new()
+        Self::empty()
     }
 }
 
 impl<const N: usize> PartialLatinSquare<N> {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         PartialLatinSquare {
             values: [[None; N]; N],
         }
@@ -49,6 +49,12 @@ impl<const N: usize> PartialLatinSquare<N> {
 
     pub fn set(&mut self, i: usize, j: usize, value: Option<usize>) {
         self.values[i][j] = value.map(|v| v as u8);
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.values
+            .iter()
+            .all(|row| row.iter().all(|val| val.is_some()))
     }
 
     pub fn is_reduced(&self) -> bool {
@@ -270,20 +276,19 @@ impl<const N: usize> PartialLatinSquare<N> {
                 subsquare.set(i, j, None);
             }
         }
+        let sq = subsquare;
 
-        let unique_entries = subsquare.unique_entries();
+        let unique_entries = sq.unique_entries();
 
         if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
             return false;
         }
 
         for i in 0..k {
-            if self.get(i, i) != Some(0) {
+            if sq.get(i, i) != Some(0) {
                 return false;
             }
         }
-
-        let sq = subsquare;
 
         for val_permutation in PermutationDynIter::new(unique_entries.len()) {
             let sq = sq.permute_vals(val_permutation.pad_with_id());
@@ -300,46 +305,6 @@ impl<const N: usize> PartialLatinSquare<N> {
                     return false;
                 }
                 // }
-            }
-        }
-
-        true
-    }
-
-    pub fn is_minimal_diagonal(&self, k: usize) -> bool {
-        let unique_entries = self.unique_entries();
-
-        if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
-            return false;
-        }
-
-        for i in 0..k - 1 {
-            if self.get(i, i).unwrap() > self.get(i + 1, i + 1).unwrap() {
-                return false;
-            }
-        }
-
-        for val_permutation in PermutationDynIter::new(unique_entries.len()) {
-            let sq = self.permute_vals(val_permutation.pad_with_id());
-
-            'r: for row_permutation in PermutationDynIter::new(k) {
-                if row_permutation.as_vec()[k - 1] == k - 1 {
-                    continue;
-                }
-
-                let sq = sq
-                    .permute_cols(row_permutation.pad_with_id())
-                    .permute_rows(row_permutation.pad_with_id());
-
-                for i in 0..N {
-                    for j in (0..=i).rev() {
-                        match self.values[i][j].cmp(&sq.values[i][j]) {
-                            Ordering::Greater => return false,
-                            Ordering::Less => continue 'r,
-                            Ordering::Equal => {}
-                        }
-                    }
-                }
             }
         }
 
