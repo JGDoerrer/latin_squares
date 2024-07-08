@@ -45,7 +45,7 @@ impl<const N: usize> LatinSquareOAGenerator<N> {
     pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
         let constraints = OAConstraints::from_partial(sq);
 
-        let cell = constraints.most_constrained_cell().unwrap();
+        let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {
             stack: vec![(constraints, cell, 0)],
         }

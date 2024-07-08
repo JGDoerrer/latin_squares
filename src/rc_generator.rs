@@ -10,11 +10,11 @@ use crate::{
 #[derive(Debug)]
 pub struct RCGenerator<const N: usize> {
     k: usize,
-
     prev_gen: Option<Box<RCGenerator<N>>>,
     current_sq: Option<PartialLatinSquare<N>>,
     stack: Vec<StackEntry<N>>,
     permutation: Permutation<N>,
+    last_deny_permutations: Vec<(Permutation<N>, Permutation<N>)>,
 }
 
 #[derive(Debug)]
@@ -42,12 +42,13 @@ impl<const N: usize> RCGenerator<N> {
                 current_sq: Some(current_sq),
                 prev_gen: None,
                 stack: Vec::new(),
+                last_deny_permutations: Vec::new(),
             }
         } else {
-            let mut prev_gen = Self::new_k(k - 1, permutation);
+            let mut prev_gen = Self::new_k(k - 1, permutation.clone());
             let current_sq = prev_gen.next();
             let stack = if let Some(sq) = current_sq {
-                vec![StackEntry { sq: sq, index: 0 }]
+                vec![StackEntry { sq, index: 0 }]
             } else {
                 Vec::new()
             };
@@ -57,12 +58,13 @@ impl<const N: usize> RCGenerator<N> {
                 current_sq,
                 prev_gen: Some(Box::new(prev_gen)),
                 stack,
+                last_deny_permutations: Vec::new(),
             }
         }
     }
 
     fn next_sq(&mut self) {
-        self.current_sq = self.prev_gen.as_mut().map(|g| g.next()).flatten();
+        self.current_sq = self.prev_gen.as_mut().and_then(|g| g.next());
         self.stack.clear();
         if let Some(current_sq) = self.current_sq {
             self.stack.push(StackEntry {
@@ -72,7 +74,7 @@ impl<const N: usize> RCGenerator<N> {
         }
     }
 
-    fn is_minimal_diagonal(&self, sq: PartialLatinSquare<N>) -> bool {
+    fn is_minimal_diagonal(&mut self, sq: PartialLatinSquare<N>) -> bool {
         let unique_entries = sq.unique_entries();
 
         if unique_entries.into_iter().last().unwrap() != unique_entries.len() - 1 {
@@ -80,7 +82,7 @@ impl<const N: usize> RCGenerator<N> {
         }
 
         let k = self.k;
-        let permutation = self.permutation;
+        let permutation = &self.permutation;
 
         for i in 0..k - 1 {
             if sq.get(i, i).unwrap() > sq.get(i + 1, i + 1).unwrap() {
@@ -88,27 +90,50 @@ impl<const N: usize> RCGenerator<N> {
             }
         }
 
+        if sq.cmp_diagonal(&sq.transposed()).is_gt() {
+            return false;
+        }
+
+        for (val_permutation, row_permutation) in &self.last_deny_permutations {
+            let permuted_sq = sq
+                .permute_vals(val_permutation)
+                .permute_rows_and_cols(row_permutation);
+
+            'l: for i in 0..N {
+                for j in (0..=i).rev() {
+                    match sq.get(i, j).cmp(&permuted_sq.get(i, j)) {
+                        Ordering::Greater => return false,
+                        Ordering::Less => break 'l,
+                        Ordering::Equal => {}
+                    }
+                }
+            }
+        }
+
         for val_permutation in PermutationDynIter::new(unique_entries.len()) {
             let val_permutation: Permutation<N> = val_permutation.pad_with_id();
-            if permutation.conjugate_by(val_permutation) != permutation {
+            if permutation.conjugate_by(&val_permutation) != *permutation {
                 continue;
             }
 
-            let permuted_sq = sq.permute_vals(val_permutation);
+            let permuted_sq = sq.permute_vals(&val_permutation);
 
             'r: for row_permutation in PermutationDynIter::new(k) {
-                // if row_permutation.as_vec()[k - 1] == k - 1 {
-                //     continue;
-                // }
+                if row_permutation.as_vec()[k - 1] == k - 1 {
+                    continue;
+                }
 
-                let permuted_sq = permuted_sq
-                    .permute_cols(row_permutation.pad_with_id())
-                    .permute_rows(row_permutation.pad_with_id());
+                let row_permutation = row_permutation.pad_with_id();
+                let permuted_sq = permuted_sq.permute_rows_and_cols(&row_permutation);
 
                 for i in 0..N {
                     for j in (0..=i).rev() {
                         match sq.get(i, j).cmp(&permuted_sq.get(i, j)) {
-                            Ordering::Greater => return false,
+                            Ordering::Greater => {
+                                self.last_deny_permutations
+                                    .push((val_permutation, row_permutation.clone()));
+                                return false;
+                            }
                             Ordering::Less => continue 'r,
                             Ordering::Equal => {}
                         }
@@ -178,7 +203,7 @@ impl<const N: usize> Iterator for RCGenerator<N> {
                     (self.k - 1, stack_index + 1 - self.k)
                 };
 
-                let mut next_sq = sq.clone();
+                let mut next_sq = *sq;
 
                 let values = if cell.0 == cell.1 {
                     fixed_points.intersect(constraints.get(cell.0, cell.1))
@@ -228,7 +253,7 @@ impl<const N: usize> Iterator for RCGenerator<N> {
                         continue;
                     }
 
-                    // dbg!(next_sq);
+                    dbg!(next_sq);
 
                     return Some(next_sq);
                 };

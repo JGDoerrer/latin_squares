@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
+nauty-Traces-sys = { version = "0.7.0", features = ["native"] }
 
 [profile.release]
 debug = true
+incremental = true
 # lto = true

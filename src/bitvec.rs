@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 #[derive(Debug, Clone)]
 pub struct BitVec {
     words: Vec<usize>,
@@ -80,6 +82,38 @@ impl BitVec {
         }
 
         BitVec { words }
+    }
+
+    #[inline]
+    pub fn union_into(&self, other: &Self, result: &mut Self) {
+        let words = &mut result.words;
+
+        match self.words.len().cmp(&other.words.len()) {
+            Ordering::Less => {
+                words.resize(other.words.len(), 0);
+                for i in 0..self.words.len() {
+                    words[i] = self.words[i] | other.words[i];
+                }
+                for i in self.words.len()..other.words.len() {
+                    words[i] = other.words[i];
+                }
+            }
+            Ordering::Equal => {
+                words.resize(self.words.len(), 0);
+                for i in 0..self.words.len() {
+                    words[i] = self.words[i] | other.words[i];
+                }
+            }
+            Ordering::Greater => {
+                words.resize(self.words.len(), 0);
+                for i in 0..other.words.len() {
+                    words[i] = self.words[i] | other.words[i];
+                }
+                for i in other.words.len()..self.words.len() {
+                    words[i] = self.words[i];
+                }
+            }
+        }
     }
 
     #[inline]

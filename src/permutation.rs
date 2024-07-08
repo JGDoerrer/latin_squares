@@ -4,7 +4,7 @@ pub fn factorial(n: usize) -> usize {
     (2..=n).product()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Permutation<const N: usize>([usize; N]);
 
 impl<const N: usize> Permutation<N> {
@@ -28,6 +28,10 @@ impl<const N: usize> Permutation<N> {
         self.0
     }
 
+    pub fn as_array(&self) -> &[usize; N] {
+        &self.0
+    }
+
     pub fn swap(&mut self, i: usize, j: usize) {
         self.0.swap(i, j);
     }
@@ -47,13 +51,11 @@ impl<const N: usize> Permutation<N> {
             permutation.swap(i, pos_i);
         }
 
-        let inverse = Self::from_array(identity);
-
-        inverse
+        Self::from_array(identity)
     }
 
     pub fn order(&self) -> usize {
-        let mut permutation = *self;
+        let mut permutation = self.clone();
 
         let mut order = 1;
         while permutation != Permutation::identity() {
@@ -75,23 +77,24 @@ impl<const N: usize> Permutation<N> {
             .map(|(i, _)| i)
     }
 
-    pub fn conjugate_by(&self, other: Permutation<N>) -> Self {
+    pub fn conjugate_by(&self, other: &Permutation<N>) -> Self {
         other
             .0
             .map(|i| self.apply(i))
-            .map(|i| other.inverse().apply(i))
+            .map(|i| other.clone().inverse().apply(i))
             .into()
     }
 
-    pub fn apply(self, num: usize) -> usize {
+    #[inline]
+    pub fn apply(&self, num: usize) -> usize {
         self.0[num]
     }
 
-    pub fn apply_array<T>(self, array: [T; N]) -> [T; N]
+    pub fn apply_array<T>(&self, array: [T; N]) -> [T; N]
     where
         T: Copy,
     {
-        let permutation = self.to_array();
+        let permutation = self.0;
 
         let mut new_array = [MaybeUninit::uninit(); N];
 
@@ -191,6 +194,14 @@ impl PermutationDyn {
         }
 
         PermutationDyn(elements.to_vec())
+    }
+
+    pub fn from_vec(elements: Vec<usize>) -> Self {
+        // for i in 0..elements.len() {
+        //     debug_assert!(elements.contains(&i));
+        // }
+
+        PermutationDyn(elements)
     }
 
     pub fn to_vec(self) -> Vec<usize> {

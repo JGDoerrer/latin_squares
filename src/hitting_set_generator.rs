@@ -16,6 +16,7 @@ pub struct HittingSetGenerator<const N: usize> {
     max_entries: usize,
     entry_to_set: Vec<BitVec>,
     partial_gen: Option<PartialSquareGenerator<N>>,
+    temp: Option<BitVec>,
 }
 
 #[derive(Debug)]
@@ -54,6 +55,7 @@ impl<const N: usize> HittingSetGenerator<N> {
             sq,
             max_entries,
             partial_gen: None,
+            temp: Some(BitVec::empty()),
         }
     }
 
@@ -97,7 +99,8 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
             } = entry;
 
             let Some(next_entry) = current_set.next() else {
-                self.stack.pop();
+                let entry = self.stack.pop().unwrap();
+                self.temp = Some(entry.sets_hit);
                 continue;
             };
             next_dead.insert(next_entry);
@@ -110,11 +113,14 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
             next_hitting_set.insert(next_entry);
 
             if next_hitting_set.len() > self.max_entries {
-                self.stack.pop();
+                let entry = self.stack.pop().unwrap();
+                self.temp = Some(entry.sets_hit);
                 continue;
             }
 
-            let next_sets_hit = sets_hit.union(&self.entry_to_set[next_entry]);
+            let next_sets_hit = self.temp.get_or_insert_with(|| BitVec::empty());
+
+            sets_hit.union_into(&self.entry_to_set[next_entry], next_sets_hit);
 
             let next_set_index = next_sets_hit.first_zero();
 
@@ -163,7 +169,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                 next_dead: BitSet128::empty(),
                 current_set_iter: next_set.into_iter(),
                 hitting_set: next_hitting_set,
-                sets_hit: next_sets_hit,
+                sets_hit: self.temp.take().unwrap(),
             });
         }
 

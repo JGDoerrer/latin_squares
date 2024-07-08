@@ -144,6 +144,23 @@ macro_rules! make_bitset {
                 self.bits != 0 && self.bits & (self.bits - 1) == 0
                 // self.bits.is_power_of_two()
             }
+
+            pub fn print_sq(&self, size: usize) {
+                for i in 0..size {
+                    println!("+{}", "---+".repeat(size));
+                    print!("|");
+                    for j in 0..size {
+                        if self.contains(i * size + j) {
+                            print!(" X |");
+                        } else {
+                            print!("   |");
+                        }
+                    }
+                    println!()
+                }
+                println!("+{}", "---+".repeat(size));
+                println!()
+            }
         }
 
         impl IntoIterator for $Name {
