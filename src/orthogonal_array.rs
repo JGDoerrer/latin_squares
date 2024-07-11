@@ -25,11 +25,11 @@ impl ValuePair {
 }
 
 #[derive(Clone)]
-pub struct PartialOrthogonalArray<const N: usize> {
+pub struct PartialOrthogonalArray<const N: usize, const MOLS: usize> {
     columns: [[[Option<u8>; N]; N]; MOLS],
 }
 
-impl<const N: usize> PartialOrthogonalArray<N> {
+impl<const N: usize, const MOLS: usize> PartialOrthogonalArray<N, MOLS> {
     pub fn new() -> Self {
         PartialOrthogonalArray {
             columns: [[[None; N]; N]; MOLS],
@@ -52,32 +52,29 @@ impl<const N: usize> PartialOrthogonalArray<N> {
 }
 
 #[derive(Clone, Debug)]
-pub struct OAConstraints<const N: usize> {
-    oa: PartialOrthogonalArray<N>,
-    column_pair_values: [BigBitSet; (MOLS * (MOLS - 1)) / 2],
+pub struct OAConstraints<const N: usize, const MOLS: usize> {
+    oa: PartialOrthogonalArray<N, MOLS>,
+    column_pair_values: [[BigBitSet; MOLS]; MOLS],
     cell_values: [[[SmallBitSet; N]; N]; MOLS],
     empty_cells: [BigBitSet; MOLS],
     rows: [[SmallBitSet; N]; MOLS],
     columns: [[SmallBitSet; N]; MOLS],
-    diagonal_symmetry: bool,
 }
 
-impl<const N: usize> OAConstraints<N> {
+impl<const N: usize, const MOLS: usize> OAConstraints<N, MOLS> {
     pub fn new() -> Self {
         OAConstraints {
             oa: PartialOrthogonalArray::new(),
-            column_pair_values: [BigBitSet::all_less_than(N * N); (MOLS * (MOLS - 1)) / 2],
+            column_pair_values: [[BigBitSet::all_less_than(N * N); MOLS]; MOLS],
             cell_values: [[[SmallBitSet::all_less_than(N); N]; N]; MOLS],
             empty_cells: [BigBitSet::all_less_than(N * N); MOLS],
             rows: [[SmallBitSet::all_less_than(N); N]; MOLS],
             columns: [[SmallBitSet::all_less_than(N); N]; MOLS],
-            diagonal_symmetry: false,
         }
     }
 
-    pub fn new_reduced(diagonal_symmetry: bool) -> Self {
+    pub fn new_reduced() -> Self {
         let mut constraints = Self::new();
-        constraints.diagonal_symmetry = diagonal_symmetry;
 
         for col in 1..(MOLS - 1) {
             let next_col = col + 1;
@@ -101,10 +98,8 @@ impl<const N: usize> OAConstraints<N> {
             }
         }
 
-        if !diagonal_symmetry {
-            for j in 1..N {
-                constraints.set_and_propagate(0, j * N, j);
-            }
+        for j in 1..N {
+            constraints.set_and_propagate(0, j * N, j);
         }
 
         // constraints.cell_values[0][1][1] = SmallBitSet::from_iter([0, 2]);
@@ -135,6 +130,27 @@ impl<const N: usize> OAConstraints<N> {
         constraints
     }
 
+    pub fn from_partial_reduced(sq: PartialLatinSquare<N>) -> Self {
+        let mut constraints = Self::new_reduced();
+
+        assert!(sq.is_reduced());
+
+        for i in 0..N {
+            for j in 0..N {
+                let Some(value) = sq.get(i, j) else {
+                    continue;
+                };
+
+                let index = Cell(i, j).to_index::<N>();
+                if constraints.oa.squares()[0].get(i, j).is_none() {
+                    constraints.set_and_propagate(0, index, value);
+                }
+            }
+        }
+
+        constraints
+    }
+
     pub fn squares(&self) -> [PartialLatinSquare<N>; MOLS] {
         self.oa.squares()
     }
@@ -150,7 +166,7 @@ impl<const N: usize> OAConstraints<N> {
             index += MOLS - i - 2;
         }
 
-        &mut self.column_pair_values[index]
+        &mut self.column_pair_values[min][max]
     }
 
     fn get_column_pair_values(&self, column1: usize, column2: usize) -> &BigBitSet {
@@ -164,7 +180,7 @@ impl<const N: usize> OAConstraints<N> {
             index += MOLS - i - 2;
         }
 
-        &self.column_pair_values[index]
+        &self.column_pair_values[min][max]
     }
 
     fn get_value_pair(
@@ -185,13 +201,7 @@ impl<const N: usize> OAConstraints<N> {
 
     pub fn set_and_propagate(&mut self, column: usize, index: usize, value: usize) {
         self.set(column, index, value);
-        if self.diagonal_symmetry {
-            let Cell(row, col) = Cell::from_index::<N>(index);
 
-            if row != col {
-                self.set(column, Cell::to_index::<N>(Cell(col, row)), value);
-            }
-        }
         self.propagate_constraints();
     }
 
@@ -690,7 +700,7 @@ impl<const N: usize> OAConstraints<N> {
     }
 }
 
-impl<const N: usize> Debug for PartialOrthogonalArray<N> {
+impl<const N: usize, const MOLS: usize> Debug for PartialOrthogonalArray<N, MOLS> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "[")?;
         for i in 0..N {

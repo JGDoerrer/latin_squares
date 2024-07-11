@@ -42,14 +42,25 @@ impl<const N: usize> HittingSetGenerator<N> {
             }
         }
 
-        HittingSetGenerator {
-            stack: vec![StackEntry {
+        let stack = if unavoidable_sets.len() > 0 && unavoidable_sets[0].len() > 0 {
+            vec![StackEntry {
                 current_set_iter: unavoidable_sets[0][0].into_iter(),
                 next_dead: BitSet128::empty(),
                 hitting_set: BitSet128::empty(),
                 dead: BitSet128::empty(),
                 sets_hit: BitVec::empty(),
-            }],
+            }]
+        } else {
+            vec![StackEntry {
+                current_set_iter: BitSet128::empty().into_iter(),
+                next_dead: BitSet128::empty(),
+                hitting_set: BitSet128::empty(),
+                dead: BitSet128::empty(),
+                sets_hit: BitVec::empty(),
+            }]
+        };
+        HittingSetGenerator {
+            stack,
             entry_to_set,
             unavoidable_sets,
             sq,
@@ -135,6 +146,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                     sq.set(i, j, Some(self.sq.get(i, j)));
                 }
                 if next_hitting_set.len() < self.max_entries {
+                    // dbg!(next_hitting_set.len());
                     self.partial_gen = Some(PartialSquareGenerator::new_partial(
                         self.sq,
                         sq,

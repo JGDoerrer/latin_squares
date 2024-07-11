@@ -286,8 +286,15 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
+        if N < 2 {
+            return vec![];
+        }
+        if N < 3 {
+            return vec![BitSet128::all_less_than(N * N)];
+        }
+
         let mut sets = Vec::new();
-        let mut max_size = N * 3;
+        let max_size = N * 3;
 
         let triple_iter = TupleIterator::<3>::new(N);
 
@@ -297,7 +304,7 @@ impl<const N: usize> LatinSquare<N> {
                 self.without_cols(triple),
                 self.without_vals(triple),
             ] {
-                let solutions = LatinSquareOAGenerator::from_partial(partial).map(|s| s[0]);
+                let solutions = LatinSquareOAGenerator::<N, 1>::from_partial(partial).map(|s| s[0]);
 
                 for solution in solutions {
                     let difference = self.difference_mask(&solution);
@@ -320,6 +327,10 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn unavoidable_sets_order_2(&self) -> Vec<BitSet128> {
+        if N < 3 {
+            return vec![];
+        }
+
         let mut sets = Vec::new();
 
         // these may not be all
@@ -430,6 +441,10 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn subsquares<const K: usize>(&self) -> Vec<([usize; K], [usize; K])> {
+        if K > N {
+            return vec![];
+        }
+
         let mut subsquares = Vec::new();
 
         for rows in TupleIterator::<K>::new(N) {

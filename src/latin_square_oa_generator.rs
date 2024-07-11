@@ -10,11 +10,11 @@ use crate::{
     partial_latin_square::PartialLatinSquare,
 };
 
-pub struct LatinSquareOAGenerator<const N: usize> {
-    stack: Vec<(OAConstraints<N>, (usize, usize), usize)>,
+pub struct LatinSquareOAGenerator<const N: usize, const MOLS: usize> {
+    stack: Vec<(OAConstraints<N, MOLS>, (usize, usize), usize)>,
 }
 
-impl<const N: usize> LatinSquareOAGenerator<N> {
+impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
     pub fn new() -> Self {
         let constraints = OAConstraints::new();
 
@@ -25,16 +25,7 @@ impl<const N: usize> LatinSquareOAGenerator<N> {
     }
 
     pub fn new_reduced() -> Self {
-        let constraints = OAConstraints::new_reduced(false);
-
-        let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
-        LatinSquareOAGenerator {
-            stack: vec![(constraints, cell, 0)],
-        }
-    }
-
-    pub fn new_reduced_diagonal() -> Self {
-        let constraints = OAConstraints::new_reduced(true);
+        let constraints = OAConstraints::new_reduced();
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {
@@ -44,6 +35,15 @@ impl<const N: usize> LatinSquareOAGenerator<N> {
 
     pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
         let constraints = OAConstraints::from_partial(sq);
+
+        let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
+        LatinSquareOAGenerator {
+            stack: vec![(constraints, cell, 0)],
+        }
+    }
+
+    pub fn from_partial_reduced(sq: PartialLatinSquare<N>) -> Self {
+        let constraints = OAConstraints::from_partial_reduced(sq);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {
@@ -69,17 +69,6 @@ impl<const N: usize> LatinSquareOAGenerator<N> {
 
         dbg!(self.progress());
         dbg!(string);
-        return;
-
-        let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("stack_oa.txt")
-        else {
-            return;
-        };
-
-        writeln!(file, "{string}").unwrap();
     }
 
     pub fn load(string: String) -> Option<Self> {
@@ -158,7 +147,7 @@ impl<const N: usize> LatinSquareOAGenerator<N> {
     }
 }
 
-impl<const N: usize> Iterator for LatinSquareOAGenerator<N> {
+impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, MOLS> {
     type Item = [LatinSquare<N>; MOLS];
 
     fn next(&mut self) -> Option<Self::Item> {
