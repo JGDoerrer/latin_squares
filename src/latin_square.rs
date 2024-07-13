@@ -23,8 +23,8 @@ pub struct Cell(pub usize, pub usize);
 impl<const N: usize> LatinSquare<N> {
     pub fn new(values: [[u8; N]; N]) -> Self {
         debug_assert!(Self::is_valid(&values));
-        let sq = LatinSquare { values };
-        sq
+
+        LatinSquare { values }
     }
 
     pub fn from_rcv(rows: [[usize; N]; N], cols: [[usize; N]; N], vals: [[usize; N]; N]) -> Self {
@@ -530,6 +530,18 @@ impl<const N: usize> LatinSquare<N> {
 
     pub fn intercalates(&self) -> usize {
         self.subsquares_order_2_iter().count()
+    }
+
+    pub fn mask(&self, mask: BitSet128) -> PartialLatinSquare<N> {
+        let mut partial_sq = PartialLatinSquare::empty();
+
+        for i in mask {
+            let Cell(i, j) = Cell::from_index::<N>(i);
+
+            partial_sq.set(i, j, Some(self.get(i, j)));
+        }
+
+        partial_sq
     }
 
     pub fn without_rows(&self, rows: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {

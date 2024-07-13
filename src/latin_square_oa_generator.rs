@@ -1,12 +1,7 @@
-use std::{
-    fs::OpenOptions,
-    io::{BufRead, Write},
-    time::Instant,
-};
+use std::{io::BufRead, time::Instant};
 
 use crate::{
-    latin_square::LatinSquare,
-    orthogonal_array::{OAConstraints, MOLS},
+    latin_square::LatinSquare, orthogonal_array::OAConstraints,
     partial_latin_square::PartialLatinSquare,
 };
 

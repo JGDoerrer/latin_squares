@@ -3,99 +3,75 @@ use std::vec;
 use crate::{
     bitset::{BitSet128, BitSet128Iter},
     bitvec::BitVec,
-    latin_square::{Cell, LatinSquare},
-    partial_latin_square::PartialLatinSquare,
-    partial_square_generator::PartialSquareGenerator,
 };
 
+type BitSet = BitSet128;
+type BitSetIter = BitSet128Iter;
+
 #[derive(Debug)]
-pub struct HittingSetGenerator<const N: usize> {
+pub struct HittingSetGenerator {
     stack: Vec<StackEntry>,
-    sq: LatinSquare<N>,
-    unavoidable_sets: Vec<Vec<BitSet128>>,
+    sets: Vec<Vec<BitSet>>,
     max_entries: usize,
     entry_to_set: Vec<BitVec>,
-    partial_gen: Option<PartialSquareGenerator<N>>,
     temp: Option<BitVec>,
 }
 
 #[derive(Debug)]
 struct StackEntry {
-    next_dead: BitSet128,
-    current_set_iter: BitSet128Iter,
-    hitting_set: BitSet128,
+    next_dead: BitSet,
+    current_set_iter: BitSetIter,
+    hitting_set: BitSet,
     sets_hit: BitVec,
-    dead: BitSet128,
+    dead: BitSet,
 }
 
-impl<const N: usize> HittingSetGenerator<N> {
-    pub fn new(
-        sq: LatinSquare<N>,
-        unavoidable_sets: Vec<Vec<BitSet128>>,
-        max_entries: usize,
-    ) -> Self {
-        let mut entry_to_set = vec![BitVec::empty(); N * N];
+impl HittingSetGenerator {
+    pub fn new(sets: Vec<Vec<BitSet>>, max_entries: usize) -> Self {
+        let largest_entry = sets[0]
+            .iter()
+            .map(|set| set.into_iter().last().unwrap())
+            .max()
+            .unwrap();
+        let mut entry_to_set = vec![BitVec::empty(); largest_entry + 1];
 
-        for (i, set) in unavoidable_sets[0].iter().enumerate() {
+        for (i, set) in sets[0].iter().enumerate() {
             for entry in *set {
                 entry_to_set[entry].insert(i);
             }
         }
 
-        let stack = if unavoidable_sets.len() > 0 && unavoidable_sets[0].len() > 0 {
+        let stack = if !sets.is_empty() && !sets[0].is_empty() {
             vec![StackEntry {
-                current_set_iter: unavoidable_sets[0][0].into_iter(),
-                next_dead: BitSet128::empty(),
-                hitting_set: BitSet128::empty(),
-                dead: BitSet128::empty(),
+                current_set_iter: sets[0][0].into_iter(),
+                next_dead: BitSet::empty(),
+                hitting_set: BitSet::empty(),
+                dead: BitSet::empty(),
                 sets_hit: BitVec::empty(),
             }]
         } else {
             vec![StackEntry {
-                current_set_iter: BitSet128::empty().into_iter(),
-                next_dead: BitSet128::empty(),
-                hitting_set: BitSet128::empty(),
-                dead: BitSet128::empty(),
+                current_set_iter: BitSet::empty().into_iter(),
+                next_dead: BitSet::empty(),
+                hitting_set: BitSet::empty(),
+                dead: BitSet::empty(),
                 sets_hit: BitVec::empty(),
             }]
         };
         HittingSetGenerator {
             stack,
             entry_to_set,
-            unavoidable_sets,
-            sq,
+            sets,
             max_entries,
-            partial_gen: None,
             temp: Some(BitVec::empty()),
         }
     }
-
-    fn get_partial_sq(&self, hitting_set: BitSet128) -> PartialLatinSquare<N> {
-        let mut partial_sq = PartialLatinSquare::empty();
-
-        for i in hitting_set {
-            let Cell(i, j) = Cell::from_index::<N>(i);
-
-            partial_sq.set(i, j, Some(self.sq.get(i, j)));
-        }
-
-        partial_sq
-    }
 }
 
-impl<const N: usize> Iterator for HittingSetGenerator<N> {
-    type Item = PartialLatinSquare<N>;
+impl Iterator for HittingSetGenerator {
+    type Item = BitSet;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(partial_gen) = &mut self.partial_gen {
-            let next = partial_gen.next();
-            if next.is_none() {
-                self.partial_gen = None;
-            } else {
-                return next;
-            }
-        }
-
         if self.stack.is_empty() {
             return None;
         }
@@ -129,33 +105,17 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
                 continue;
             }
 
-            let next_sets_hit = self.temp.get_or_insert_with(|| BitVec::empty());
+            let next_sets_hit = self.temp.get_or_insert_with(BitVec::empty);
 
             sets_hit.union_into(&self.entry_to_set[next_entry], next_sets_hit);
 
             let next_set_index = next_sets_hit.first_zero();
 
             if next_set_index.is_none()
-                || next_set_index.is_some_and(|index| index >= self.unavoidable_sets[0].len())
+                || next_set_index.is_some_and(|index| index >= self.sets[0].len())
             {
                 // all sets are hit
-                let mut sq = PartialLatinSquare::empty();
-
-                for index in next_hitting_set {
-                    let Cell(i, j) = Cell::from_index::<N>(index);
-                    sq.set(i, j, Some(self.sq.get(i, j)));
-                }
-                if next_hitting_set.len() < self.max_entries {
-                    // dbg!(next_hitting_set.len());
-                    self.partial_gen = Some(PartialSquareGenerator::new_partial(
-                        self.sq,
-                        sq,
-                        self.max_entries,
-                    ));
-                    return self.partial_gen.as_mut().unwrap().next();
-                } else {
-                    return Some(sq);
-                }
+                return Some(next_hitting_set);
             }
 
             let entries_left = self.max_entries - next_hitting_set.len();
@@ -165,7 +125,7 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
 
             if entries_left > 1
                 && self
-                    .unavoidable_sets
+                    .sets
                     .get(entries_left)
                     .is_some_and(|sets| sets.iter().any(|set| set.is_disjoint(*hitting_set)))
             {
@@ -173,12 +133,11 @@ impl<const N: usize> Iterator for HittingSetGenerator<N> {
             }
 
             let next_dead = dead.union(*next_dead);
-            let next_set =
-                self.unavoidable_sets[0][next_set_index.unwrap()].intersect(next_dead.complement());
+            let next_set = self.sets[0][next_set_index.unwrap()].intersect(next_dead.complement());
 
             self.stack.push(StackEntry {
                 dead: next_dead,
-                next_dead: BitSet128::empty(),
+                next_dead: BitSet::empty(),
                 current_set_iter: next_set.into_iter(),
                 hitting_set: next_hitting_set,
                 sets_hit: self.temp.take().unwrap(),

@@ -14,6 +14,7 @@ use latin_square_oa_generator::LatinSquareOAGenerator;
 
 use partial_latin_square::PartialLatinSquare;
 
+use partial_square_generator::PartialSquareGenerator;
 use random_latin_square_generator::RandomLatinSquareGenerator;
 
 use rcs_generator::RCSGenerator;
@@ -134,12 +135,10 @@ fn find_orthogonal<const N: usize>(all: bool) {
             for [_, sq] in LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()) {
                 println!("{}", sq.to_string());
             }
-        } else {
-            if let Some([_, sq]) =
-                LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()).next()
-            {
-                println!("{}", sq.to_string());
-            }
+        } else if let Some([_, sq]) =
+            LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()).next()
+        {
+            println!("{}", sq.to_string());
         }
         println!()
     }
@@ -261,27 +260,32 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
         if start <= end {
             for i in start..=end {
                 dbg!(i);
-                let partial_squares = HittingSetGenerator::new(sq, unavoidable_sets.clone(), i);
+                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
-                for partial_sq in partial_squares {
-                    // dbg!(partial_sq);
-                    let mut solutions = LatinSquareOAGenerator::<N, 1>::from_partial(partial_sq);
-                    let first_solution = solutions.next();
-                    let second_solution = solutions.next();
+                'h: for hitting_set in hitting_sets {
+                    let partial_sq = sq.mask(hitting_set);
 
-                    if second_solution.is_none()
-                        && first_solution.is_some_and(|solution| solution[0] == sq)
-                    {
-                        // println!("{}", partial_sq.to_string());
+                    for partial_sq in PartialSquareGenerator::new_partial(sq, partial_sq, i) {
+                        // dbg!(partial_sq);
+                        let mut solutions =
+                            LatinSquareOAGenerator::<N, 1>::from_partial(partial_sq);
+                        let first_solution = solutions.next();
+                        let second_solution = solutions.next();
 
-                        min = min.min(partial_sq.num_entries());
-                        found = true;
-                        if scs.insert(partial_sq) {
-                            println!("{}", partial_sq.to_string());
+                        if second_solution.is_none()
+                            && first_solution.is_some_and(|solution| solution[0] == sq)
+                        {
+                            // println!("{}", partial_sq.to_string());
+
+                            min = min.min(partial_sq.num_entries());
+                            found = true;
+                            if scs.insert(partial_sq) {
+                                println!("{}", partial_sq.to_string());
+                            }
+                            break 'h;
                         }
-                        break;
                     }
                 }
 
@@ -292,27 +296,32 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
         } else {
             for i in (end..=start).rev() {
                 dbg!(i);
-                let partial_squares = HittingSetGenerator::new(sq, unavoidable_sets.clone(), i);
+                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
-                for partial_sq in partial_squares {
-                    // dbg!(partial_sq);
-                    let mut solutions = LatinSquareOAGenerator::<N, 1>::from_partial(partial_sq);
-                    let first_solution = solutions.next();
-                    let second_solution = solutions.next();
+                'h: for hitting_set in hitting_sets {
+                    let partial_sq = sq.mask(hitting_set);
 
-                    if second_solution.is_none()
-                        && first_solution.is_some_and(|solution| solution[0] == sq)
-                    {
-                        // println!("{}", partial_sq.to_string());
+                    for partial_sq in PartialSquareGenerator::new_partial(sq, partial_sq, i) {
+                        // dbg!(partial_sq);
+                        let mut solutions =
+                            LatinSquareOAGenerator::<N, 1>::from_partial(partial_sq);
+                        let first_solution = solutions.next();
+                        let second_solution = solutions.next();
 
-                        min = min.min(partial_sq.num_entries());
-                        found = true;
-                        if scs.insert(partial_sq) {
-                            println!("{}", partial_sq.to_string());
+                        if second_solution.is_none()
+                            && first_solution.is_some_and(|solution| solution[0] == sq)
+                        {
+                            // println!("{}", partial_sq.to_string());
+
+                            min = min.min(partial_sq.num_entries());
+                            found = true;
+                            if scs.insert(partial_sq) {
+                                println!("{}", partial_sq.to_string());
+                            }
+                            break 'h;
                         }
-                        break;
                     }
                 }
 
