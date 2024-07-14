@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use std::{
     cmp::{Ordering, Reverse},
-    fmt::Display,
+    fmt::{Display, Write},
 };
 
 use crate::{bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation};
@@ -39,8 +39,8 @@ impl<const N: usize> PartialLatinSquare<N> {
     pub fn get_col(&self, i: usize) -> [Option<u8>; N] {
         let mut col = [None; N];
 
-        for j in 0..N {
-            col[j] = self.values[j][i];
+        for (j, val) in col.iter_mut().enumerate() {
+            *val = self.values[j][i];
         }
 
         col
@@ -85,9 +85,9 @@ impl<const N: usize> PartialLatinSquare<N> {
     pub fn transposed(&self) -> Self {
         let mut values = [[None; N]; N];
 
-        for i in 0..N {
-            for j in 0..N {
-                values[i][j] = self.values[j][i];
+        for (i, row) in values.iter_mut().enumerate() {
+            for (j, val) in row.iter_mut().enumerate() {
+                *val = self.values[j][i];
             }
         }
 
@@ -196,7 +196,7 @@ impl<const N: usize> PartialLatinSquare<N> {
             new.values.swap(N - 1, bottom_row_index);
         }
 
-        let mut top_cols = Permutation::<N>::identity().to_array().map(|j| {
+        let mut top_cols = Permutation::<N>::identity().into_array().map(|j| {
             (
                 j,
                 new.get(0, j)
@@ -210,7 +210,7 @@ impl<const N: usize> PartialLatinSquare<N> {
         let permutation: Permutation<N> = top_cols.map(|(i, _)| i).into();
         new = new.permute_cols(&permutation.inverse());
 
-        let mut bottom_cols = Permutation::<N>::identity().to_array().map(|j| {
+        let mut bottom_cols = Permutation::<N>::identity().into_array().map(|j| {
             (
                 j,
                 new.get(N - 1, j)
@@ -295,8 +295,8 @@ impl<const N: usize> PartialLatinSquare<N> {
 
         let cols = {
             let mut cols = [0; N];
-            for i in 0..N {
-                cols[i] = i;
+            for (i, col) in cols.iter_mut().enumerate() {
+                *col = i;
             }
 
             cols.map(|i| {
@@ -308,9 +308,9 @@ impl<const N: usize> PartialLatinSquare<N> {
             })
         };
 
-        for i in 0..N {
-            for j in 0..N {
-                if self.get(i, j).is_none() && rows[i].union(cols[j]).len() == N - 1 {
+        for (i, row) in rows.iter().enumerate() {
+            for (j, col) in cols.iter().enumerate() {
+                if self.get(i, j).is_none() && row.union(*col).len() == N - 1 {
                     return true;
                 }
             }
@@ -386,19 +386,18 @@ impl<const N: usize> From<LatinSquare<N>> for PartialLatinSquare<N> {
     }
 }
 
-impl<const N: usize> ToString for PartialLatinSquare<N> {
-    fn to_string(&self) -> String {
-        let mut string = String::with_capacity(N * N);
+impl<const N: usize> Display for PartialLatinSquare<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..N {
             for j in 0..N {
                 if let Some(entry) = self.get(i, j) {
-                    string.push(char::from_digit(entry as u32, 10).unwrap());
+                    f.write_char(char::from_digit(entry as u32, 10).unwrap())?;
                 } else {
-                    string.push('.');
+                    f.write_char('.')?;
                 }
             }
         }
-        string
+        Ok(())
     }
 }
 

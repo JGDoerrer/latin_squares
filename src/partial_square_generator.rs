@@ -80,9 +80,7 @@ impl<const N: usize> Iterator for PartialSquareGenerator<N> {
         while self.index >= N * N {
             let gen = self.gen.as_mut().unwrap();
 
-            let Some(sq) = gen.next() else {
-                return None;
-            };
+            let sq = gen.next()?;
             self.partial_sq = Some(sq);
 
             self.index = self

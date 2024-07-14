@@ -8,8 +8,8 @@ impl<const K: usize> TupleIterator<K> {
         assert!(n >= K);
         let mut first = [0; K];
 
-        for i in 0..K {
-            first[i] = i;
+        for (i, element) in first.iter_mut().enumerate() {
+            *element = i;
         }
 
         TupleIterator {
@@ -23,9 +23,7 @@ impl<const K: usize> Iterator for TupleIterator<K> {
     type Item = [usize; K];
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Some(current) = self.current.as_mut() else {
-            return None;
-        };
+        let current = self.current.as_mut()?;
 
         let prev = *current;
 
@@ -75,9 +73,7 @@ impl Iterator for TupleIteratorDyn {
     type Item = Box<[usize]>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Some(current) = self.current.as_mut() else {
-            return None;
-        };
+        let current = self.current.as_mut()?;
 
         let prev = current.clone();
 

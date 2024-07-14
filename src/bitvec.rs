@@ -5,6 +5,7 @@ pub struct BitVec {
     words: Vec<usize>,
 }
 
+#[allow(dead_code)]
 impl BitVec {
     #[inline]
     pub fn empty() -> Self {
@@ -71,14 +72,13 @@ impl BitVec {
     pub fn union(&self, other: &Self) -> Self {
         let new_len = self.words.len().max(other.words.len());
         let min = self.words.len().min(other.words.len());
-        let mut words = Vec::with_capacity(new_len);
-        words.resize(new_len, 0);
+        let mut words = vec![0; new_len];
 
-        for i in 0..min {
-            words[i] = self.words[i] | other.words[i];
+        for (i, word) in words.iter_mut().enumerate().take(min) {
+            *word = self.words[i] | other.words[i];
         }
-        for i in min..new_len {
-            words[i] = self.words.get(i).unwrap_or(&0) | other.words.get(i).unwrap_or(&0);
+        for (i, word) in words.iter_mut().enumerate().take(new_len).skip(min) {
+            *word = self.words.get(i).unwrap_or(&0) | other.words.get(i).unwrap_or(&0);
         }
 
         BitVec { words }
@@ -94,9 +94,8 @@ impl BitVec {
                 for i in 0..self.words.len() {
                     words[i] = self.words[i] | other.words[i];
                 }
-                for i in self.words.len()..other.words.len() {
-                    words[i] = other.words[i];
-                }
+                words[self.words.len()..other.words.len()]
+                    .copy_from_slice(&other.words[self.words.len()..]);
             }
             Ordering::Equal => {
                 words.resize(self.words.len(), 0);
@@ -109,9 +108,8 @@ impl BitVec {
                 for i in 0..other.words.len() {
                     words[i] = self.words[i] | other.words[i];
                 }
-                for i in other.words.len()..self.words.len() {
-                    words[i] = self.words[i];
-                }
+                words[other.words.len()..self.words.len()]
+                    .copy_from_slice(&self.words[other.words.len()..]);
             }
         }
     }

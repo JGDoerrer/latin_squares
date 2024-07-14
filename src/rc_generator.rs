@@ -168,7 +168,7 @@ impl<const N: usize> Iterator for RCGenerator<N> {
                 constraints.find_singles();
 
                 if constraints.is_solved() {
-                    let sq = constraints.to_latin_square();
+                    let sq = constraints.into_latin_square();
                     let partial: PartialLatinSquare<N> = sq.into();
 
                     if !self.is_minimal_diagonal(partial) {

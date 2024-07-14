@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     mem::MaybeUninit,
 };
 
@@ -54,8 +54,8 @@ impl<const N: usize> LatinSquare<N> {
     pub fn get_col(&self, i: usize) -> [u8; N] {
         let mut col = [0; N];
 
-        for j in 0..N {
-            col[j] = self.values[j][i];
+        for (j, val) in col.iter_mut().enumerate() {
+            *val = self.values[j][i];
         }
 
         col
@@ -153,14 +153,14 @@ impl<const N: usize> LatinSquare<N> {
 
     pub fn paratopic(&self) -> impl Iterator<Item = Self> + '_ {
         let mut rows = [[0; N]; N];
-        for i in 0..N {
-            rows[i] = [i; N];
+        for (i, row) in rows.iter_mut().enumerate() {
+            *row = [i; N];
         }
 
         let mut col = [0; N];
 
-        for i in 0..N {
-            col[i] = i;
+        for (i, val) in col.iter_mut().enumerate() {
+            *val = i;
         }
 
         let cols = [col; N];
@@ -352,8 +352,8 @@ impl<const N: usize> LatinSquare<N> {
 
                 let mut permutation = [None; N];
 
-                for i in 0..3 {
-                    permutation[i] = Some(subsquare[0][i] as usize);
+                for (i, element) in permutation.iter_mut().enumerate().take(3) {
+                    *element = Some(subsquare[0][i] as usize);
                 }
 
                 for i in 3..N {
@@ -369,9 +369,9 @@ impl<const N: usize> LatinSquare<N> {
                         .pad_with_id()
                         .inverse();
 
-                for i in 0..3 {
-                    for j in 0..3 {
-                        subsquare[i][j] = permutation.apply(subsquare[i][j] as usize) as u8;
+                for row in &mut subsquare {
+                    for val in row.iter_mut() {
+                        *val = permutation.apply(*val as usize) as u8;
                     }
                 }
 
@@ -416,8 +416,8 @@ impl<const N: usize> LatinSquare<N> {
         let mut values = [[0; K]; K];
 
         for i in 0..K {
-            for j in 0..K {
-                values[i][j] = self.values[rows[i]][cols[j]];
+            for (j, col) in cols.iter().enumerate() {
+                values[i][j] = self.values[rows[i]][*col];
             }
         }
 
@@ -432,8 +432,8 @@ impl<const N: usize> LatinSquare<N> {
         let mut values = vec![vec![0; k]; k];
 
         for i in 0..k {
-            for j in 0..k {
-                values[i][j] = self.values[rows[i]][cols[j]];
+            for (j, col) in cols.iter().enumerate() {
+                values[i][j] = self.values[rows[i]][*col];
             }
         }
 
@@ -453,8 +453,8 @@ impl<const N: usize> LatinSquare<N> {
 
                 let mut permutation = [None; N];
 
-                for i in 0..K {
-                    permutation[i] = Some(subsquare[0][i] as usize);
+                for (i, element) in permutation.iter_mut().enumerate().take(K) {
+                    *element = Some(subsquare[0][i] as usize);
                 }
 
                 for i in K..N {
@@ -470,9 +470,9 @@ impl<const N: usize> LatinSquare<N> {
                         .pad_with_id()
                         .inverse();
 
-                for i in 0..K {
-                    for j in 0..K {
-                        subsquare[i][j] = permutation.apply(subsquare[i][j] as usize) as u8;
+                for row in subsquare.iter_mut() {
+                    for val in row.iter_mut() {
+                        *val = permutation.apply(*val as usize) as u8;
                     }
                 }
 
@@ -504,9 +504,9 @@ impl<const N: usize> LatinSquare<N> {
                     .pad_with_id()
                     .inverse();
 
-                for i in 0..k {
-                    for j in 0..k {
-                        subsquare[i][j] = permutation.apply(subsquare[i][j] as usize) as u8;
+                for row in subsquare.iter_mut() {
+                    for val in row.iter_mut() {
+                        *val = permutation.apply(*val as usize) as u8;
                     }
                 }
                 let is_subsquare = (0..k).all(|i| {
@@ -611,9 +611,8 @@ impl<const N: usize> LatinSquare<N> {
     pub fn permute_rows_and_cols(&self, permutation: &Permutation<N>) -> Self {
         let mut values = [[MaybeUninit::uninit(); N]; N];
 
-        for i in 0..N {
+        for (i, new_row) in values.iter_mut().enumerate() {
             let row = self.values[permutation.apply(i)];
-            let new_row = &mut values[i];
             for j in 0..N {
                 new_row[j].write(row[permutation.apply(j)]);
             }
@@ -690,15 +689,14 @@ impl<const N: usize> Debug for LatinSquare<N> {
     }
 }
 
-impl<const N: usize> ToString for LatinSquare<N> {
-    fn to_string(&self) -> String {
-        let mut string = String::with_capacity(N * N);
+impl<const N: usize> Display for LatinSquare<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..N {
             for j in 0..N {
-                string.push(char::from_digit(self.get(i, j) as u32, 10).unwrap());
+                f.write_char(char::from_digit(self.get(i, j) as u32, 10).unwrap())?;
             }
         }
-        string
+        Ok(())
     }
 }
 
@@ -747,8 +745,10 @@ impl<const N: usize> TryFrom<&str> for LatinSquare<N> {
     }
 }
 
-impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
-    fn from(value: PartialLatinSquare<N>) -> Self {
+impl<const N: usize> TryFrom<PartialLatinSquare<N>> for LatinSquare<N> {
+    type Error = ();
+
+    fn try_from(value: PartialLatinSquare<N>) -> Result<Self, ()> {
         let mut sq = LatinSquare {
             values: [[0; N]; N],
         };
@@ -759,7 +759,13 @@ impl<const N: usize> From<PartialLatinSquare<N>> for LatinSquare<N> {
             }
         }
 
-        sq
+        Ok(sq)
+    }
+}
+
+impl<const N: usize> From<LatinSquare<N>> for [[u8; N]; N] {
+    fn from(value: LatinSquare<N>) -> Self {
+        value.values
     }
 }
 

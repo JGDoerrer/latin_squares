@@ -90,7 +90,7 @@ impl<const N: usize> Iterator for RCSGenerator<N> {
             }
 
             if new_sq.is_complete() {
-                let sq = new_sq.into();
+                let sq = new_sq.try_into().unwrap();
                 if Self::is_minimal(&sq) {
                     return Some(sq);
                 } else {

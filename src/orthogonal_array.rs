@@ -2,11 +2,9 @@ use std::fmt::Debug;
 
 use crate::{
     bitset::{BitSet128, BitSet16},
-    latin_square::Cell,
+    latin_square::{Cell, LatinSquare},
     partial_latin_square::PartialLatinSquare,
 };
-
-pub const MOLS: usize = 1;
 
 type BigBitSet = BitSet128;
 type SmallBitSet = BitSet16;
@@ -47,6 +45,33 @@ impl<const N: usize, const MOLS: usize> PartialOrthogonalArray<N, MOLS> {
             }
 
             PartialLatinSquare::from_array(new_col)
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct OrthogonalArray<const N: usize, const MOLS: usize> {
+    columns: [[[u8; N]; N]; MOLS],
+}
+
+impl<const N: usize, const MOLS: usize> OrthogonalArray<N, MOLS> {
+    pub fn new(sqs: [LatinSquare<N>; MOLS]) -> Self {
+        OrthogonalArray {
+            columns: sqs.map(|sq| sq.into()),
+        }
+    }
+
+    pub fn squares(&self) -> [LatinSquare<N>; MOLS] {
+        self.columns.map(|col| {
+            let mut new_col = [[0; N]; N];
+
+            for i in 0..N {
+                for j in 0..N {
+                    new_col[i][j] = col[i][j];
+                }
+            }
+
+            LatinSquare::new(new_col)
         })
     }
 }

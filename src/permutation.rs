@@ -10,8 +10,8 @@ pub struct Permutation<const N: usize>([usize; N]);
 impl<const N: usize> Permutation<N> {
     pub fn identity() -> Self {
         let mut elements = [0; N];
-        for i in 0..N {
-            elements[i] = i;
+        for (i, element) in elements.iter_mut().enumerate() {
+            *element = i;
         }
         Permutation(elements)
     }
@@ -24,7 +24,7 @@ impl<const N: usize> Permutation<N> {
         Permutation(elements)
     }
 
-    pub fn to_array(self) -> [usize; N] {
+    pub fn into_array(self) -> [usize; N] {
         self.0
     }
 
@@ -37,8 +37,8 @@ impl<const N: usize> Permutation<N> {
     }
 
     pub fn inverse(self) -> Self {
-        let mut identity = Self::identity().to_array();
-        let mut permutation = self.to_array();
+        let mut identity = Self::identity().into_array();
+        let mut permutation = self.into_array();
 
         for i in 0..N {
             if permutation[i] == i {
@@ -121,8 +121,8 @@ impl<const N: usize> PermutationIter<N> {
     pub fn new() -> Self {
         let mut indices = [0; N];
 
-        for i in 0..N {
-            indices[i] = N - i - 1;
+        for (i, index) in indices.iter_mut().enumerate() {
+            *index = N - i - 1;
         }
 
         PermutationIter {
@@ -182,8 +182,8 @@ pub struct PermutationDyn(Vec<usize>);
 impl PermutationDyn {
     pub fn identity(n: usize) -> Self {
         let mut elements = vec![0; n];
-        for i in 0..n {
-            elements[i] = i;
+        for (i, element) in elements.iter_mut().enumerate() {
+            *element = i;
         }
         PermutationDyn(elements)
     }
@@ -204,7 +204,7 @@ impl PermutationDyn {
         PermutationDyn(elements)
     }
 
-    pub fn to_vec(self) -> Vec<usize> {
+    pub fn into_vec(self) -> Vec<usize> {
         self.0
     }
 
@@ -268,9 +268,7 @@ impl<const N: usize> From<&PermutationDyn> for Permutation<N> {
     fn from(value: &PermutationDyn) -> Self {
         assert!(value.0.len() == N);
         let mut vals = [0; N];
-        for i in 0..N {
-            vals[i] = value.0[i];
-        }
+        vals.copy_from_slice(&value.0);
         Permutation(vals)
     }
 }
@@ -285,8 +283,8 @@ impl PermutationDynIter {
     pub fn new(n: usize) -> Self {
         let mut indices = vec![0; n];
 
-        for i in 0..n {
-            indices[i] = n - i - 1;
+        for (i, index) in indices.iter_mut().enumerate() {
+            *index = n - i - 1;
         }
 
         PermutationDynIter {
@@ -350,7 +348,7 @@ mod test {
     fn inverse_test() {
         let permutation = Permutation::from_array([3, 1, 4, 2, 0]);
         let inverse = permutation.inverse();
-        assert_eq!(inverse.to_array(), [4, 1, 3, 0, 2]);
+        assert_eq!(inverse.into_array(), [4, 1, 3, 0, 2]);
     }
 
     #[test]

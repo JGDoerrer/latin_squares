@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     fs::OpenOptions,
-    io::{stdin, stdout, BufRead, BufReader, Read, Write},
+    io::{stdin, stdout, BufRead, BufReader, Write},
     path::Path,
     vec,
 };
@@ -23,7 +23,6 @@ use crate::hitting_set_generator::HittingSetGenerator;
 
 mod bitset;
 mod bitvec;
-mod compressed_latin_square;
 mod constants;
 mod constraints;
 mod hitting_set_generator;
@@ -96,7 +95,6 @@ fn main() {
     }
 
     match args.n {
-        0 => match_mode!(0),
         1 => match_mode!(1),
         2 => match_mode!(2),
         3 => match_mode!(3),
@@ -107,7 +105,6 @@ fn main() {
         8 => match_mode!(8),
         9 => match_mode!(9),
         10 => match_mode!(10),
-        11 => match_mode!(11),
         _ => todo!(),
     }
 }
@@ -122,7 +119,7 @@ fn sort_by_intercalates<const N: usize>() {
     let mut sqs: Vec<_> = read_sqs_from_stdin::<N>().collect();
     sqs.sort_by_key(|a| a.intercalates());
     for sq in sqs {
-        if writeln!(stdout(), "{}", sq.to_string()).is_err() {
+        if writeln!(stdout(), "{}", sq).is_err() {
             return;
         }
     }
@@ -130,15 +127,15 @@ fn sort_by_intercalates<const N: usize>() {
 
 fn find_orthogonal<const N: usize>(all: bool) {
     for sq in read_sqs_from_stdin::<N>() {
-        println!("{}", sq.to_string());
+        println!("{}", sq);
         if all {
             for [_, sq] in LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()) {
-                println!("{}", sq.to_string());
+                println!("{}", sq);
             }
         } else if let Some([_, sq]) =
             LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()).next()
         {
-            println!("{}", sq.to_string());
+            println!("{}", sq);
         }
         println!()
     }
@@ -146,7 +143,7 @@ fn find_orthogonal<const N: usize>(all: bool) {
 
 fn random_latin_squares<const N: usize>(seed: u64) {
     for sq in RandomLatinSquareGenerator::<N>::new(seed) {
-        println!("{}", sq.to_string());
+        println!("{}", sq);
     }
 }
 
@@ -180,7 +177,7 @@ fn generate_latin_squares<const N: usize>() {
     // }
 
     for sq in RCSGenerator::<N>::new() {
-        println!("{}", sq.to_string());
+        println!("{}", sq);
     }
 }
 
@@ -210,7 +207,7 @@ fn pretty_print_sq<const N: usize>(sq: impl Into<PartialLatinSquare<N>>) {
 
 fn normalize_paratopy<const N: usize>() {
     for sq in read_sqs_from_stdin::<N>() {
-        println!("{}", sq.reduced_paratopic().to_string());
+        println!("{}", sq.reduced_paratopic());
     }
 }
 
@@ -226,7 +223,7 @@ fn generate_paratopy_classes<const N: usize>() {
         if !sqs.contains(&normalized) {
             sqs.insert(normalized);
 
-            println!("{}", normalized.to_string());
+            println!("{}", normalized);
             dbg!(sqs.len());
         }
     }
@@ -248,7 +245,7 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
     let mut min = N * N;
 
     for sq in read_sqs_from_stdin::<N>() {
-        println!("{}", sq.to_string());
+        println!("{}", sq);
 
         let unavoidable_sets = sq.unavoidable_sets();
         unavoidable_sets.iter().for_each(|sets| {
@@ -282,7 +279,7 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
                             min = min.min(partial_sq.num_entries());
                             found = true;
                             if scs.insert(partial_sq) {
-                                println!("{}", partial_sq.to_string());
+                                println!("{}", partial_sq);
                             }
                             break 'h;
                         }
@@ -318,7 +315,7 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
                             min = min.min(partial_sq.num_entries());
                             found = true;
                             if scs.insert(partial_sq) {
-                                println!("{}", partial_sq.to_string());
+                                println!("{}", partial_sq);
                             }
                             break 'h;
                         }
@@ -341,7 +338,7 @@ fn solve<const N: usize>() {
         let solutions = LatinSquareOAGenerator::<N, 1>::from_partial(sq).map(|sq| sq[0]);
 
         for solution in solutions {
-            println!("{}", solution.to_string());
+            println!("{}", solution);
         }
     }
 }

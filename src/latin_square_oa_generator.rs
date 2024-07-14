@@ -1,4 +1,4 @@
-use std::{io::BufRead, time::Instant};
+use std::time::Instant;
 
 use crate::{
     latin_square::LatinSquare, orthogonal_array::OAConstraints,
@@ -80,12 +80,8 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
 
         let mut new = Self::new_reduced();
         for val in vals {
-            let Some((constraints, cell, start_value)) = new.stack.last_mut() else {
-                return None;
-            };
-            let Some(val) = val else {
-                return None;
-            };
+            let (constraints, cell, start_value) = new.stack.last_mut()?;
+            let val = val?;
 
             let values = constraints.values_for_cell(cell.0, cell.1);
 
@@ -156,7 +152,7 @@ impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, M
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {
             if constraints.is_solved() {
-                let map = constraints.squares().map(|sq| sq.into());
+                let map = constraints.squares().map(|sq| sq.try_into().unwrap());
                 self.stack.pop();
                 return Some(map);
             }
@@ -209,7 +205,7 @@ impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, M
 
                     None => {
                         if new.is_solved() {
-                            return Some(new.squares().map(|sq| sq.into()));
+                            return Some(new.squares().map(|sq| sq.try_into().unwrap()));
                         }
                     }
                 }

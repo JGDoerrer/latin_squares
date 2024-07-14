@@ -87,36 +87,6 @@ impl<const N: usize> Constraints<N> {
         self.sq.get(i, j).is_some()
     }
 
-    fn propagate_value(&mut self, _i: usize, _j: usize, _value: usize) {
-        // let value_index = value;
-
-        // if !self.constraints[i][j].contains(value_index) {
-        //     return;
-        // }
-        // self.constraints[i][j] = BitSet16::single(value_index);
-
-        // let mask = BitSet16::single(value)
-        //     .complement()
-        //     .intersect(BitSet16::all_less_than(N));
-
-        // for k in 0..N {
-        //     if k != j && self.constraints[i][k].intersect(mask) != self.constraints[i][k] {
-        //         self.constraints[i][k] = self.constraints[i][k].intersect(mask);
-        //         if self.constraints[i][k].is_single() {
-        //             let value = self.constraints[i][k].into_iter().next().unwrap();
-        //             self.propagate_value(i, k, value);
-        //         }
-        //     }
-        //     if k != i && self.constraints[k][j].intersect(mask) != self.constraints[k][j] {
-        //         self.constraints[k][j] = self.constraints[k][j].intersect(mask);
-        //         if self.constraints[k][j].is_single() {
-        //             let value = self.constraints[k][j].into_iter().next().unwrap();
-        //             self.propagate_value(k, j, value);
-        //         }
-        //     }
-        // }
-    }
-
     pub fn get_next(&self) -> Option<(usize, usize)> {
         for i in 0..N {
             if !self.get(0, i).is_single() {
@@ -155,8 +125,8 @@ impl<const N: usize> Constraints<N> {
             .min_by_key(|cell| self.get(cell.0, cell.1).len() >= 2)
     }
 
-    pub fn to_latin_square(self) -> LatinSquare<N> {
-        self.sq.into()
+    pub fn into_latin_square(self) -> LatinSquare<N> {
+        self.sq.try_into().unwrap()
     }
 
     pub fn is_solved(&self) -> bool {
@@ -268,6 +238,6 @@ impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
     fn from(constraints: Constraints<N>) -> Self {
         assert!(constraints.is_solved());
 
-        constraints.sq.into()
+        constraints.sq.try_into().unwrap()
     }
 }
