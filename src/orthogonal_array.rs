@@ -1,9 +1,16 @@
-use std::fmt::Debug;
+use std::{
+    ffi::c_ushort,
+    fmt::{Debug, Display},
+    mem::MaybeUninit,
+};
 
 use crate::{
     bitset::{BitSet128, BitSet16},
-    latin_square::{Cell, LatinSquare},
+    latin_square::{self, Cell, LatinSquare},
+    latin_square_oa_generator::LatinSquareOAGenerator,
     partial_latin_square::PartialLatinSquare,
+    permutation::Permutation,
+    tuple_iterator::TupleIterator,
 };
 
 type BigBitSet = BitSet128;
@@ -22,13 +29,13 @@ impl ValuePair {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PartialOrthogonalArray<const N: usize, const MOLS: usize> {
     columns: [[[Option<u8>; N]; N]; MOLS],
 }
 
 impl<const N: usize, const MOLS: usize> PartialOrthogonalArray<N, MOLS> {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         PartialOrthogonalArray {
             columns: [[[None; N]; N]; MOLS],
         }
@@ -47,9 +54,58 @@ impl<const N: usize, const MOLS: usize> PartialOrthogonalArray<N, MOLS> {
             PartialLatinSquare::from_array(new_col)
         })
     }
+
+    pub fn get(&self, column: usize, i: usize, j: usize) -> Option<u8> {
+        self.columns[column][i][j]
+    }
+
+    pub fn num_entries(&self) -> usize {
+        self.columns
+            .iter()
+            .map(|col| {
+                col.iter()
+                    .map(|row| row.iter().flatten().count())
+                    .sum::<usize>()
+            })
+            .sum()
+    }
+
+    pub fn next_empty_index(&self, start: usize) -> Option<usize> {
+        self.columns
+            .iter()
+            .flat_map(|col| col.iter().flat_map(|row| row.iter()))
+            .skip(start)
+            .position(|i| i.is_none())
+            .map(|i| i + start)
+    }
+
+    pub fn first_empty_index(&self) -> Option<usize> {
+        self.next_empty_index(0)
+    }
+
+    pub fn set(&mut self, column: usize, i: usize, j: usize, value: Option<u8>) {
+        self.columns[column][i][j] = value
+    }
 }
 
-#[derive(Clone)]
+impl<const N: usize, const MOLS: usize> From<OrthogonalArray<N, MOLS>>
+    for PartialOrthogonalArray<N, MOLS>
+{
+    fn from(value: OrthogonalArray<N, MOLS>) -> Self {
+        let columns = value
+            .columns
+            .map(|col| col.map(|row| row.map(|col| Some(col))));
+        PartialOrthogonalArray { columns }
+    }
+}
+
+impl<const N: usize, const MOLS: usize> Display for PartialOrthogonalArray<N, MOLS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.squares().map(|sq| sq.to_string()).join("-"))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrthogonalArray<const N: usize, const MOLS: usize> {
     columns: [[[u8; N]; N]; MOLS],
 }
@@ -74,6 +130,212 @@ impl<const N: usize, const MOLS: usize> OrthogonalArray<N, MOLS> {
             LatinSquare::new(new_col)
         })
     }
+
+    pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
+        vec![self.unavoidable_sets_order_1()]
+    }
+
+    pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
+        let mut sets = Vec::new();
+        let max_size = N * 4 * MOLS;
+
+        let triple_iter = TupleIterator::<4>::new(N);
+
+        for triple in triple_iter {
+            for partial in [self.without_rows(&triple), self.without_cols(&triple)]
+                .into_iter()
+                .chain((0..MOLS).map(|i| self.without_vals(i, &triple)))
+            {
+                let solutions = LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&partial);
+
+                for solution in solutions {
+                    let difference = self.difference_mask(&solution);
+
+                    if !difference.is_empty()
+                        && difference.len() <= max_size
+                        && !sets.contains(&difference)
+                    {
+                        sets.push(difference);
+                        // if sets.len() > 10000 {
+                        //     max_size -= 1;
+                        //     sets.retain(|s| s.len() <= max_size);
+                        // }
+                    }
+                }
+            }
+        }
+
+        sets
+    }
+
+    pub fn mask(&self, mask: BitSet128) -> PartialOrthogonalArray<N, MOLS> {
+        let mut partial_oa = PartialOrthogonalArray::empty();
+
+        for i in mask {
+            let col = i / (N * N);
+            let Cell(i, j) = Cell::from_index::<N>(i % (N * N));
+
+            partial_oa.set(col, i, j, Some(self.get(col, i, j)));
+        }
+
+        partial_oa
+    }
+
+    pub fn get(&self, column: usize, i: usize, j: usize) -> u8 {
+        self.columns[column][i][j]
+    }
+
+    fn without_rows(&self, rows: &[usize]) -> PartialOrthogonalArray<N, MOLS> {
+        let mut partial = PartialOrthogonalArray::from(self.clone());
+
+        for column in 0..MOLS {
+            for i in rows {
+                for j in 0..N {
+                    partial.set(column, *i, j, None);
+                }
+            }
+        }
+
+        partial
+    }
+
+    fn without_cols(&self, cols: &[usize]) -> PartialOrthogonalArray<N, MOLS> {
+        let mut partial = PartialOrthogonalArray::from(self.clone());
+
+        for column in 0..MOLS {
+            for i in 0..N {
+                for j in cols {
+                    partial.set(column, i, *j, None);
+                }
+            }
+        }
+
+        partial
+    }
+
+    fn without_vals(&self, index: usize, values: &[usize]) -> PartialOrthogonalArray<N, MOLS> {
+        let mut partial = PartialOrthogonalArray::from(self.clone());
+
+        for i in 0..N {
+            for j in 0..N {
+                if values.contains(&(self.get(index, i, j) as usize)) {
+                    for column in 0..MOLS {
+                        partial.set(column, i, j, None);
+                    }
+                }
+            }
+        }
+
+        partial
+    }
+
+    fn difference_mask(&self, other: &OrthogonalArray<N, MOLS>) -> BitSet128 {
+        let mut mask = BitSet128::empty();
+
+        for col in 0..MOLS {
+            for i in 0..N {
+                for j in 0..N {
+                    if self.get(col, i, j) != other.get(col, i, j) {
+                        let index = col * N * N + Cell(i, j).to_index::<N>();
+                        assert!(index < 128);
+                        mask.insert(index);
+                    }
+                }
+            }
+        }
+
+        mask
+    }
+
+    pub fn permute_rows(&self, permutation: &Permutation<N>) -> Self {
+        let mut new = self.clone();
+
+        for i in 0..MOLS {
+            new.columns[i] = permutation.apply_array(new.columns[i]);
+        }
+
+        new
+    }
+}
+
+impl<const N: usize, const MOLS: usize> Display for OrthogonalArray<N, MOLS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.squares().map(|sq| sq.to_string()).join("-"))
+    }
+}
+
+const SEPARATOR: char = '-';
+
+#[derive(Debug)]
+pub enum Error {
+    InvalidLength {
+        len: usize,
+        expected: usize,
+    },
+    InvalidSeparators {
+        count: usize,
+        expected: usize,
+    },
+    InvalidLatinSquare {
+        index: usize,
+        error: latin_square::Error,
+    },
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::InvalidLength { len, expected } => {
+                write!(f, "Invalid len: {len}, expected {expected}")
+            }
+            Error::InvalidSeparators { count, expected } => write!(
+                f,
+                "Invalid number of separators ({SEPARATOR}): {count}, expected {expected}"
+            ),
+            Error::InvalidLatinSquare { index, error } => {
+                write!(f, "Error in latin square {}: {error}", index + 1)
+            }
+        }
+    }
+}
+
+impl<const N: usize, const MOLS: usize> TryFrom<&str> for OrthogonalArray<N, MOLS> {
+    type Error = Error;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.len() != N * N * MOLS + MOLS - 1 {
+            return Err(Error::InvalidLength {
+                len: value.len(),
+                expected: N * N * MOLS + MOLS - 1,
+            });
+        }
+
+        let separator_count = value.chars().filter(|c| *c == SEPARATOR).count();
+        if separator_count != MOLS - 1 {
+            return Err(Error::InvalidSeparators {
+                count: separator_count,
+                expected: MOLS - 1,
+            });
+        }
+
+        let sqs: Vec<Result<LatinSquare<N>, Error>> = value
+            .split(SEPARATOR)
+            .enumerate()
+            .map(|(i, split)| {
+                LatinSquare::try_from(split)
+                    .map_err(|error| Error::InvalidLatinSquare { index: i, error })
+            })
+            .collect();
+
+        let mut sqs_array = [MaybeUninit::uninit(); MOLS];
+        for (i, sq) in sqs.into_iter().enumerate() {
+            sqs_array[i].write(sq?);
+        }
+
+        let sqs = sqs_array.map(|sq| unsafe { sq.assume_init() });
+
+        let oa = OrthogonalArray::new(sqs);
+        Ok(oa)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +351,7 @@ pub struct OAConstraints<const N: usize, const MOLS: usize> {
 impl<const N: usize, const MOLS: usize> OAConstraints<N, MOLS> {
     pub fn new() -> Self {
         OAConstraints {
-            oa: PartialOrthogonalArray::new(),
+            oa: PartialOrthogonalArray::empty(),
             column_pair_values: [[BigBitSet::all_less_than(N * N); MOLS]; MOLS],
             cell_values: [[[SmallBitSet::all_less_than(N); N]; N]; MOLS],
             empty_cells: [BigBitSet::all_less_than(N * N); MOLS],
@@ -138,7 +400,7 @@ impl<const N: usize, const MOLS: usize> OAConstraints<N, MOLS> {
         constraints
     }
 
-    pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
+    pub fn from_partial_sq(sq: PartialLatinSquare<N>) -> Self {
         let mut constraints = Self::new();
 
         for i in 0..N {
@@ -155,7 +417,26 @@ impl<const N: usize, const MOLS: usize> OAConstraints<N, MOLS> {
         constraints
     }
 
-    pub fn from_partial_reduced(sq: PartialLatinSquare<N>) -> Self {
+    pub fn from_partial_oa(oa: &PartialOrthogonalArray<N, MOLS>) -> Self {
+        let mut constraints = Self::new();
+
+        for column in 0..MOLS {
+            for i in 0..N {
+                for j in 0..N {
+                    let Some(value) = oa.get(column, i, j) else {
+                        continue;
+                    };
+
+                    let index = Cell(i, j).to_index::<N>();
+                    constraints.set_and_propagate(column, index, value as usize);
+                }
+            }
+        }
+
+        constraints
+    }
+
+    pub fn from_partial_sq_reduced(sq: PartialLatinSquare<N>) -> Self {
         let mut constraints = Self::new_reduced();
 
         assert!(sq.is_reduced());

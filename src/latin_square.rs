@@ -27,6 +27,18 @@ impl<const N: usize> LatinSquare<N> {
         LatinSquare { values }
     }
 
+    pub fn z() -> Self {
+        let mut values = [[0; N]; N];
+
+        for (i, row) in values.iter_mut().enumerate() {
+            for (j, val) in row.iter_mut().enumerate() {
+                *val = ((i + j) % N) as u8;
+            }
+        }
+
+        LatinSquare::new(values)
+    }
+
     pub fn from_rcv(rows: [[usize; N]; N], cols: [[usize; N]; N], vals: [[usize; N]; N]) -> Self {
         let mut new_values = [[0; N]; N];
 
@@ -304,7 +316,8 @@ impl<const N: usize> LatinSquare<N> {
                 self.without_cols(triple),
                 self.without_vals(triple),
             ] {
-                let solutions = LatinSquareOAGenerator::<N, 1>::from_partial(partial).map(|s| s[0]);
+                let solutions = LatinSquareOAGenerator::<N, 1>::from_partial_sq(partial)
+                    .map(|s| s.squares()[0]);
 
                 for solution in solutions {
                     let difference = self.difference_mask(&solution);
@@ -704,6 +717,7 @@ impl<const N: usize> Display for LatinSquare<N> {
 pub enum Error {
     InvalidLength { len: usize, expected: usize },
     InvalidChar { index: usize, char: char },
+    InvalidLatinSquare,
 }
 
 impl Display for Error {
@@ -715,6 +729,7 @@ impl Display for Error {
             Error::InvalidChar { index, char } => {
                 write!(f, "Invalid char at index {index}: {char}")
             }
+            Error::InvalidLatinSquare => write!(f, "The latin square property is not met"),
         }
     }
 }
@@ -741,7 +756,18 @@ impl<const N: usize> TryFrom<&str> for LatinSquare<N> {
             values[i / N][i % N] = entry as u8;
         }
 
-        Ok(LatinSquare::new(values))
+        values.try_into()
+    }
+}
+
+impl<const N: usize> TryFrom<[[u8; N]; N]> for LatinSquare<N> {
+    type Error = Error;
+    fn try_from(value: [[u8; N]; N]) -> Result<Self, Self::Error> {
+        if Self::is_valid(&value) {
+            Ok(LatinSquare::new(value))
+        } else {
+            Err(Error::InvalidLatinSquare)
+        }
     }
 }
 

@@ -12,9 +12,12 @@ use latin_square::LatinSquare;
 
 use latin_square_oa_generator::LatinSquareOAGenerator;
 
+use orthogonal_array::OrthogonalArray;
 use partial_latin_square::PartialLatinSquare;
 
+use partial_oa_generator::PartialOAGenerator;
 use partial_square_generator::PartialSquareGenerator;
+use permutation::{factorial, PermutationIter};
 use random_latin_square_generator::RandomLatinSquareGenerator;
 
 use rcs_generator::RCSGenerator;
@@ -32,6 +35,7 @@ mod latin_square_oa_generator;
 mod orthogonal_array;
 mod orthogonal_generator;
 mod partial_latin_square;
+mod partial_oa_generator;
 mod partial_square_generator;
 mod permutation;
 mod random_latin_square_generator;
@@ -51,6 +55,15 @@ enum Mode {
         #[arg(short, long, default_value_t = usize::MAX)]
         end: usize,
     },
+    FindMOLSSCS {
+        mols: usize,
+        #[arg(short, long, default_value_t = 0)]
+        start: usize,
+        #[arg(short, long, default_value_t = usize::MAX)]
+        end: usize,
+        #[arg(short, long)]
+        all: bool,
+    },
     GenerateLatinSquares,
     RandomLatinSquares {
         seed: u64,
@@ -63,6 +76,13 @@ enum Mode {
     SortByIntercalates,
     NumSubsquares {
         k: usize,
+    },
+    GenerateMOLS {
+        mols: usize,
+    },
+    ShuffleMOLS {
+        mols: usize,
+        seed: u64,
     },
 }
 
@@ -85,11 +105,19 @@ fn main() {
                 Mode::NormalizeParatopy => normalize_paratopy::<$N>(),
                 Mode::GenerateParatopyClasses => generate_paratopy_classes::<$N>(),
                 Mode::FindSCS { start, end } => find_scs::<$N>(start, end),
+                Mode::FindMOLSSCS {
+                    mols,
+                    start,
+                    end,
+                    all,
+                } => find_mols_scs_n::<$N>(mols, start, end, all),
                 Mode::RandomLatinSquares { seed } => random_latin_squares::<$N>(seed),
                 Mode::FindOrthogonal { all } => find_orthogonal::<$N>(all),
                 Mode::Solve => solve::<$N>(),
                 Mode::SortByIntercalates => sort_by_intercalates::<$N>(),
                 Mode::NumSubsquares { k } => num_subsquares::<$N>(k),
+                Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
+                Mode::ShuffleMOLS { mols, seed } => shuffle_mols_n::<$N>(mols, seed),
             }
         };
     }
@@ -129,11 +157,15 @@ fn find_orthogonal<const N: usize>(all: bool) {
     for sq in read_sqs_from_stdin::<N>() {
         println!("{}", sq);
         if all {
-            for [_, sq] in LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()) {
+            for [_, sq] in LatinSquareOAGenerator::<N, 2>::from_partial_sq_reduced(sq.into())
+                .map(|oa| oa.squares())
+            {
                 println!("{}", sq);
             }
         } else if let Some([_, sq]) =
-            LatinSquareOAGenerator::<N, 2>::from_partial_reduced(sq.into()).next()
+            LatinSquareOAGenerator::<N, 2>::from_partial_sq_reduced(sq.into())
+                .map(|oa| oa.squares())
+                .next()
         {
             println!("{}", sq);
         }
@@ -217,7 +249,7 @@ fn generate_paratopy_classes<const N: usize>() {
     let mut sqs = HashSet::new();
 
     for sq in LatinSquareOAGenerator::<N, 1>::new_reduced() {
-        let sq: LatinSquare<N> = sq[0];
+        let sq: LatinSquare<N> = sq.squares()[0];
         let normalized = sq.reduced_paratopic();
 
         if !sqs.contains(&normalized) {
@@ -267,12 +299,12 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
                     for partial_sq in PartialSquareGenerator::new_partial(sq, partial_sq, i) {
                         // dbg!(partial_sq);
                         let mut solutions =
-                            LatinSquareOAGenerator::<N, 1>::from_partial(partial_sq);
+                            LatinSquareOAGenerator::<N, 1>::from_partial_sq(partial_sq);
                         let first_solution = solutions.next();
                         let second_solution = solutions.next();
 
                         if second_solution.is_none()
-                            && first_solution.is_some_and(|solution| solution[0] == sq)
+                            && first_solution.is_some_and(|solution| solution.squares()[0] == sq)
                         {
                             // println!("{}", partial_sq.to_string());
 
@@ -303,12 +335,12 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
                     for partial_sq in PartialSquareGenerator::new_partial(sq, partial_sq, i) {
                         // dbg!(partial_sq);
                         let mut solutions =
-                            LatinSquareOAGenerator::<N, 1>::from_partial(partial_sq);
+                            LatinSquareOAGenerator::<N, 1>::from_partial_sq(partial_sq);
                         let first_solution = solutions.next();
                         let second_solution = solutions.next();
 
                         if second_solution.is_none()
-                            && first_solution.is_some_and(|solution| solution[0] == sq)
+                            && first_solution.is_some_and(|solution| solution.squares()[0] == sq)
                         {
                             // println!("{}", partial_sq.to_string());
 
@@ -333,14 +365,187 @@ fn find_scs<const N: usize>(start: usize, end: usize) {
     // println!("min: {min}");
 }
 
+fn generate_mols_n<const N: usize>(mols: usize) {
+    assert!(mols > 0);
+    assert!(mols < N);
+
+    macro_rules! match_mols {
+        ($( $i : literal),+) => {
+            match mols {
+                $(
+                    $i => generate_mols::<N, $i>(),
+                )*
+                _ => unreachable!(),
+            }
+        };
+    }
+
+    match N {
+        3 => match_mols!(1, 2),
+        4 => match_mols!(1, 2, 3),
+        5 => match_mols!(1, 2, 3, 4),
+        6 => match_mols!(1, 2, 3, 4, 5),
+        7 => match_mols!(1, 2, 3, 4, 5, 6),
+        8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
+        _ => todo!(),
+    }
+}
+
+fn generate_mols<const N: usize, const MOLS: usize>() {
+    for mols in LatinSquareOAGenerator::<N, MOLS>::new_reduced() {
+        for (i, sq) in mols.squares().into_iter().enumerate() {
+            print!("{sq}");
+            if i != MOLS - 1 {
+                print!("-");
+            }
+        }
+        println!()
+    }
+}
+
+fn find_mols_scs_n<const N: usize>(mols: usize, start: usize, end: usize, all: bool) {
+    assert!(mols > 0);
+    assert!(mols < N);
+
+    macro_rules! match_mols {
+        ($( $i : literal),+) => {
+            match mols {
+                $(
+                    $i => find_mols_scs::<N, $i>(start,end, all),
+                )*
+                _ => unreachable!(),
+            }
+        };
+    }
+
+    match N {
+        3 => match_mols!(1, 2),
+        4 => match_mols!(1, 2, 3),
+        5 => match_mols!(1, 2, 3, 4),
+        6 => match_mols!(1, 2, 3, 4, 5),
+        7 => match_mols!(1, 2, 3, 4, 5, 6),
+        8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
+        _ => todo!(),
+    }
+}
+
+fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, all: bool) {
+    for oa in read_mols_from_stdin::<N, MOLS>() {
+        dbg!(&oa);
+
+        let unavoidable_sets = oa.unavoidable_sets();
+        unavoidable_sets.iter().for_each(|sets| {
+            dbg!(sets.len());
+        });
+
+        let end = end.min(MOLS * N * N);
+
+        if start <= end {
+            for i in start..=end {
+                dbg!(i);
+                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
+
+                let mut found = false;
+                let mut scs = HashSet::new();
+                'h: for hitting_set in hitting_sets {
+                    let partial_sq = oa.mask(hitting_set);
+
+                    for partial_oa in PartialOAGenerator::new_partial(oa.clone(), partial_sq, i) {
+                        let mut solutions =
+                            LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
+                        let first_solution = solutions.next();
+                        let second_solution = solutions.next();
+
+                        if second_solution.is_none()
+                            && first_solution.is_some_and(|solution| solution == oa)
+                        {
+                            found = true;
+                            if scs.insert(partial_oa.clone()) {
+                                println!("{}", partial_oa);
+                            }
+                            if !all {
+                                break 'h;
+                            }
+                        }
+                    }
+                }
+
+                if found {
+                    break;
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+}
+
 fn solve<const N: usize>() {
     for sq in read_partial_sqs_from_stdin::<N>() {
-        let solutions = LatinSquareOAGenerator::<N, 1>::from_partial(sq).map(|sq| sq[0]);
+        let solutions =
+            LatinSquareOAGenerator::<N, 1>::from_partial_sq(sq).map(|sq| sq.squares()[0]);
 
         for solution in solutions {
             println!("{}", solution);
         }
     }
+}
+
+fn shuffle_mols_n<const N: usize>(mols: usize, seed: u64) {
+    assert!(mols > 0);
+    assert!(mols < N);
+
+    macro_rules! match_mols {
+        ($( $i : literal),+) => {
+            match mols {
+                $(
+                    $i => shuffle_mols::<N, $i>(seed),
+                )*
+                _ => unreachable!(),
+            }
+        };
+    }
+
+    match N {
+        3 => match_mols!(1, 2),
+        4 => match_mols!(1, 2, 3),
+        5 => match_mols!(1, 2, 3, 4),
+        6 => match_mols!(1, 2, 3, 4, 5),
+        7 => match_mols!(1, 2, 3, 4, 5, 6),
+        8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
+        _ => todo!(),
+    }
+}
+
+fn shuffle_mols<const N: usize, const MOLS: usize>(seed: u64) {
+    let mut state = [seed, 1, 2, 3];
+
+    fn xoshiro(state: &mut [u64; 4]) -> u64 {
+        let result = state[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
+
+        let new_state = [
+            state[0] ^ state[1] ^ state[3],
+            state[0] ^ state[1] ^ state[2],
+            state[2] ^ state[0] ^ (state[1] << 17),
+            (state[3] ^ state[1]).rotate_left(45),
+        ];
+
+        *state = new_state;
+
+        result
+    }
+
+    for mut mols in read_mols_from_stdin::<N, MOLS>() {
+        let row_perm = xoshiro(&mut state) as usize % factorial(N);
+        let col_perm = xoshiro(&mut state) as usize % factorial(N);
+        let val_perms = [0; MOLS].map(|_| xoshiro(&mut state) as usize % factorial(N));
+
+        mols = mols.permute_rows(&PermutationIter::new().nth(row_perm).unwrap());
+
+        println!("{}", mols);
+    }
+
+    todo!()
 }
 
 fn read_sqs_from_file<const N: usize>(path: &Path) -> Vec<LatinSquare<N>> {
@@ -392,6 +597,30 @@ fn read_partial_sqs_from_stdin<const N: usize>() -> impl Iterator<Item = Partial
                     line.clear();
 
                     return Some(sq);
+                }
+                Err(err) => {
+                    line.clear();
+                    eprintln!("{}", err);
+                    continue;
+                }
+            }
+        }
+        None
+    })
+}
+
+fn read_mols_from_stdin<const N: usize, const MOLS: usize>(
+) -> impl Iterator<Item = OrthogonalArray<N, MOLS>> {
+    let mut line = String::new();
+
+    (0..).map_while(move |_| {
+        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+            line = line.trim().into(); // remove newline
+            match OrthogonalArray::try_from(line.as_str()) {
+                Ok(oa) => {
+                    line.clear();
+
+                    return Some(oa);
                 }
                 Err(err) => {
                     line.clear();

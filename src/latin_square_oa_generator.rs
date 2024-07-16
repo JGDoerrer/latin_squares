@@ -1,7 +1,8 @@
 use std::time::Instant;
 
 use crate::{
-    latin_square::LatinSquare, orthogonal_array::OAConstraints,
+    latin_square::LatinSquare,
+    orthogonal_array::{OAConstraints, OrthogonalArray, PartialOrthogonalArray},
     partial_latin_square::PartialLatinSquare,
 };
 
@@ -28,8 +29,8 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
         }
     }
 
-    pub fn from_partial(sq: PartialLatinSquare<N>) -> Self {
-        let constraints = OAConstraints::from_partial(sq);
+    pub fn from_partial_sq(sq: PartialLatinSquare<N>) -> Self {
+        let constraints = OAConstraints::from_partial_sq(sq);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {
@@ -37,8 +38,17 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
         }
     }
 
-    pub fn from_partial_reduced(sq: PartialLatinSquare<N>) -> Self {
-        let constraints = OAConstraints::from_partial_reduced(sq);
+    pub fn from_partial_sq_reduced(sq: PartialLatinSquare<N>) -> Self {
+        let constraints = OAConstraints::from_partial_sq_reduced(sq);
+
+        let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
+        LatinSquareOAGenerator {
+            stack: vec![(constraints, cell, 0)],
+        }
+    }
+
+    pub fn from_partial_oa(oa: &PartialOrthogonalArray<N, MOLS>) -> Self {
+        let constraints = OAConstraints::from_partial_oa(&oa);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {
@@ -139,7 +149,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
 }
 
 impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, MOLS> {
-    type Item = [LatinSquare<N>; MOLS];
+    type Item = OrthogonalArray<N, MOLS>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.stack.is_empty() {
@@ -152,9 +162,9 @@ impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, M
 
         'w: while let Some((constraints, cell, start_value)) = self.stack.last_mut() {
             if constraints.is_solved() {
-                let map = constraints.squares().map(|sq| sq.try_into().unwrap());
+                let sqs = constraints.squares().map(|sq| sq.try_into().unwrap());
                 self.stack.pop();
-                return Some(map);
+                return Some(OrthogonalArray::new(sqs));
             }
 
             let cell = *cell;
@@ -205,7 +215,9 @@ impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, M
 
                     None => {
                         if new.is_solved() {
-                            return Some(new.squares().map(|sq| sq.try_into().unwrap()));
+                            return Some(OrthogonalArray::new(
+                                new.squares().map(|sq| sq.try_into().unwrap()),
+                            ));
                         }
                     }
                 }
