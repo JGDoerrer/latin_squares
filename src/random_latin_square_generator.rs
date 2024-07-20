@@ -41,7 +41,7 @@ impl<const N: usize> Iterator for RandomLatinSquareGenerator<N> {
         while let Some((constraints, i, j)) = stack.last() {
             let (constraints, i, j) = (constraints.clone(), *i, *j);
 
-            let values = constraints.get(i, j);
+            let values = constraints.get_possibilities(i, j);
 
             if values.is_empty() {
                 dbg!(constraints, i, j);

@@ -1,5 +1,4 @@
 use std::{
-    ffi::c_ushort,
     fmt::{Debug, Display},
     mem::MaybeUninit,
 };
@@ -92,9 +91,7 @@ impl<const N: usize, const MOLS: usize> From<OrthogonalArray<N, MOLS>>
     for PartialOrthogonalArray<N, MOLS>
 {
     fn from(value: OrthogonalArray<N, MOLS>) -> Self {
-        let columns = value
-            .columns
-            .map(|col| col.map(|row| row.map(|col| Some(col))));
+        let columns = value.columns.map(|col| col.map(|row| row.map(Some)));
         PartialOrthogonalArray { columns }
     }
 }

@@ -1,7 +1,6 @@
 use crate::{
-    latin_square::{Cell, LatinSquare},
+    latin_square::Cell,
     orthogonal_array::{OrthogonalArray, PartialOrthogonalArray},
-    partial_latin_square::PartialLatinSquare,
 };
 
 #[derive(Debug)]

@@ -7,6 +7,7 @@ use std::{
 use crate::{
     bitset::{BitSet128, BitSet16},
     latin_square_oa_generator::LatinSquareOAGenerator,
+    latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationDyn, PermutationIter},
     tuple_iterator::{TupleIterator, TupleIteratorDyn},
@@ -19,6 +20,22 @@ pub struct LatinSquare<const N: usize> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Cell(pub usize, pub usize);
+
+impl<const N: usize> PartialLatinSquareTrait for LatinSquare<N> {
+    fn n(&self) -> usize {
+        N
+    }
+
+    fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
+        Some(self.values[row][col].into())
+    }
+}
+
+impl<const N: usize> LatinSquareTrait for LatinSquare<N> {
+    fn get(&self, row: usize, col: usize) -> usize {
+        self.values[row][col].into()
+    }
+}
 
 impl<const N: usize> LatinSquare<N> {
     pub fn new(values: [[u8; N]; N]) -> Self {
@@ -55,10 +72,6 @@ impl<const N: usize> LatinSquare<N> {
         Self::new(new_values)
     }
 
-    pub fn get(&self, i: usize, j: usize) -> usize {
-        self.values[i][j] as usize
-    }
-
     pub fn get_row(&self, i: usize) -> &[u8; N] {
         &self.values[i]
     }
@@ -71,6 +84,10 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         col
+    }
+
+    pub fn values(self) -> [[u8; N]; N] {
+        self.values
     }
 
     pub fn is_valid(values: &[[u8; N]; N]) -> bool {
@@ -781,7 +798,7 @@ impl<const N: usize> TryFrom<PartialLatinSquare<N>> for LatinSquare<N> {
 
         for i in 0..N {
             for j in 0..N {
-                sq.values[i][j] = value.get(i, j).unwrap() as u8;
+                sq.values[i][j] = value.get_partial(i, j).unwrap() as u8;
             }
         }
 

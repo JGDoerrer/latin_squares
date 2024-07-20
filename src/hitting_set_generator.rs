@@ -20,7 +20,8 @@ pub struct HittingSetGenerator {
 #[derive(Debug)]
 struct StackEntry {
     next_dead: BitSet,
-    current_set_iter: BitSetIter,
+    current_set: BitSet,
+    current_set_index: usize,
     hitting_set: BitSet,
     sets_hit: BitVec,
     dead: BitSet,
@@ -41,23 +42,15 @@ impl HittingSetGenerator {
             }
         }
 
-        let stack = if !sets.is_empty() && !sets[0].is_empty() {
-            vec![StackEntry {
-                current_set_iter: sets[0][0].into_iter(),
-                next_dead: BitSet::empty(),
-                hitting_set: BitSet::empty(),
-                dead: BitSet::empty(),
-                sets_hit: BitVec::empty(),
-            }]
-        } else {
-            vec![StackEntry {
-                current_set_iter: BitSet::empty().into_iter(),
-                next_dead: BitSet::empty(),
-                hitting_set: BitSet::empty(),
-                dead: BitSet::empty(),
-                sets_hit: BitVec::empty(),
-            }]
-        };
+        let stack = vec![StackEntry {
+            current_set: sets[0][0],
+            current_set_index: 0,
+            next_dead: BitSet::empty(),
+            hitting_set: BitSet::empty(),
+            dead: BitSet::empty(),
+            sets_hit: BitVec::empty(),
+        }];
+
         HittingSetGenerator {
             stack,
             entry_to_set,
@@ -78,19 +71,26 @@ impl Iterator for HittingSetGenerator {
 
         while let Some(entry) = self.stack.last_mut() {
             let StackEntry {
-                current_set_iter: current_set,
+                current_set,
+                current_set_index,
                 hitting_set,
                 dead,
                 sets_hit,
                 next_dead,
             } = entry;
 
-            let Some(next_entry) = current_set.next() else {
+            let mut entries: Vec<_> = current_set.into_iter().collect();
+            entries.sort_by_key(|s| self.entry_to_set[*s].count_ones());
+            entries.reverse();
+
+            let Some(next_entry) = entries.get(*current_set_index).map(|i| *i) else {
+                *current_set_index += 1;
                 let entry = self.stack.pop().unwrap();
                 self.temp = Some(entry.sets_hit);
                 continue;
             };
             next_dead.insert(next_entry);
+            *current_set_index += 1;
 
             // if dead.contains(next_entry) {
             //     continue;
@@ -138,7 +138,8 @@ impl Iterator for HittingSetGenerator {
             self.stack.push(StackEntry {
                 dead: next_dead,
                 next_dead: BitSet::empty(),
-                current_set_iter: next_set.into_iter(),
+                current_set_index: 0,
+                current_set: next_set,
                 hitting_set: next_hitting_set,
                 sets_hit: self.temp.take().unwrap(),
             });

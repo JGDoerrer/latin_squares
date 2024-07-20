@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::{
     bitset::BitSet16,
     constraints::Constraints,
+    latin_square_trait::PartialLatinSquareTrait,
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationDynIter},
 };
@@ -85,7 +86,7 @@ impl<const N: usize> RCGenerator<N> {
         let permutation = &self.permutation;
 
         for i in 0..k - 1 {
-            if sq.get(i, i).unwrap() > sq.get(i + 1, i + 1).unwrap() {
+            if sq.get_partial(i, i).unwrap() > sq.get_partial(i + 1, i + 1).unwrap() {
                 return false;
             }
         }
@@ -206,15 +207,15 @@ impl<const N: usize> Iterator for RCGenerator<N> {
                 let mut next_sq = *sq;
 
                 let values = if cell.0 == cell.1 {
-                    fixed_points.intersect(constraints.get(cell.0, cell.1))
+                    fixed_points.intersect(constraints.get_possibilities(cell.0, cell.1))
                 } else if constraints.is_set(cell.1, cell.0) {
                     let value = constraints.partial_sq().get(cell.1, cell.0).unwrap();
                     [value, self.permutation.apply(value)]
                         .into_iter()
                         .collect::<BitSet16>()
-                        .intersect(constraints.get(cell.0, cell.1))
+                        .intersect(constraints.get_possibilities(cell.0, cell.1))
                 } else {
-                    constraints.get(cell.0, cell.1)
+                    constraints.get_possibilities(cell.0, cell.1)
                 };
 
                 let value = values.into_iter().nth(*index);

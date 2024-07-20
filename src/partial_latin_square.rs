@@ -4,7 +4,12 @@ use std::{
     fmt::{Display, Write},
 };
 
-use crate::{bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation};
+use crate::{
+    bitset::BitSet16,
+    latin_square::LatinSquare,
+    latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
+    permutation::Permutation,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PartialLatinSquare<const N: usize> {
@@ -14,6 +19,16 @@ pub struct PartialLatinSquare<const N: usize> {
 impl<const N: usize> Default for PartialLatinSquare<N> {
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+impl<const N: usize> PartialLatinSquareTrait for PartialLatinSquare<N> {
+    fn n(&self) -> usize {
+        N
+    }
+
+    fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
+        self.values[row][col].map(|val| val.into())
     }
 }
 
@@ -28,8 +43,8 @@ impl<const N: usize> PartialLatinSquare<N> {
         PartialLatinSquare { values }
     }
 
-    pub fn get(&self, i: usize, j: usize) -> Option<usize> {
-        self.values[i][j].map(|val| val.into())
+    pub fn get(&self, row: usize, col: usize) -> Option<usize> {
+        self.values[row][col].map(|val| val.into())
     }
 
     pub fn get_row(&self, i: usize) -> &[Option<u8>; N] {
@@ -70,15 +85,15 @@ impl<const N: usize> PartialLatinSquare<N> {
     pub fn is_valid(&self) -> bool {
         (0..N).all(|i| {
             (0..N)
-                .filter_map(|j| self.get(i, j))
+                .filter_map(|j| self.get_partial(i, j))
                 .collect::<BitSet16>()
                 .len()
-                == (0..N).filter_map(|j| self.get(i, j)).count()
+                == (0..N).filter_map(|j| self.get_partial(i, j)).count()
                 && (0..N)
-                    .filter_map(|j| self.get(j, i))
+                    .filter_map(|j| self.get_partial(j, i))
                     .collect::<BitSet16>()
                     .len()
-                    == (0..N).filter_map(|j| self.get(j, i)).count()
+                    == (0..N).filter_map(|j| self.get_partial(j, i)).count()
         })
     }
 
@@ -96,34 +111,38 @@ impl<const N: usize> PartialLatinSquare<N> {
 
     pub fn num_entries(&self) -> usize {
         (0..N)
-            .map(|row| (0..N).filter(|col| self.get(row, *col).is_some()).count())
+            .map(|row| {
+                (0..N)
+                    .filter(|col| self.get_partial(row, *col).is_some())
+                    .count()
+            })
             .sum()
     }
 
     pub fn count_val(&self, value: usize) -> usize {
         (0..N)
             .flat_map(|col| {
-                (0..N).filter(move |row| self.get(*row, col).is_some_and(|i| i == value))
+                (0..N).filter(move |row| self.get_partial(*row, col).is_some_and(|i| i == value))
             })
             .count()
     }
 
     pub fn unique_entries(&self) -> BitSet16 {
         (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(row, col)))
+            .flat_map(|row| (0..N).map(move |col| self.get_partial(row, col)))
             .flatten()
             .collect::<BitSet16>()
     }
 
     pub fn first_empty_index(&self) -> Option<usize> {
         (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(row, col)))
+            .flat_map(|row| (0..N).map(move |col| self.get_partial(row, col)))
             .position(|entry| entry.is_none())
     }
 
     pub fn next_empty_index(&self, start: usize) -> Option<usize> {
         (0..N)
-            .flat_map(|row| (0..N).map(move |col| self.get(row, col)))
+            .flat_map(|row| (0..N).map(move |col| self.get_partial(row, col)))
             .skip(start)
             .position(|entry| entry.is_none())
             .map(|index| index + start)
@@ -199,7 +218,7 @@ impl<const N: usize> PartialLatinSquare<N> {
         let mut top_cols = Permutation::<N>::identity().into_array().map(|j| {
             (
                 j,
-                new.get(0, j)
+                new.get_partial(0, j)
                     .is_some()
                     .then(|| new.get_col(j).iter().flatten().count()),
             )
@@ -213,7 +232,7 @@ impl<const N: usize> PartialLatinSquare<N> {
         let mut bottom_cols = Permutation::<N>::identity().into_array().map(|j| {
             (
                 j,
-                new.get(N - 1, j)
+                new.get_partial(N - 1, j)
                     .is_some()
                     .then(|| new.get_col(j).iter().flatten().count()),
             )
@@ -310,7 +329,7 @@ impl<const N: usize> PartialLatinSquare<N> {
 
         for (i, row) in rows.iter().enumerate() {
             for (j, col) in cols.iter().enumerate() {
-                if self.get(i, j).is_none() && row.union(*col).len() == N - 1 {
+                if self.get_partial(i, j).is_none() && row.union(*col).len() == N - 1 {
                     return true;
                 }
             }
@@ -390,7 +409,7 @@ impl<const N: usize> Display for PartialLatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..N {
             for j in 0..N {
-                if let Some(entry) = self.get(i, j) {
+                if let Some(entry) = self.get_partial(i, j) {
                     f.write_char(char::from_digit(entry as u32, 10).unwrap())?;
                 } else {
                     f.write_char('.')?;
@@ -419,6 +438,7 @@ impl Display for Error {
         }
     }
 }
+
 impl<const N: usize> TryFrom<&str> for PartialLatinSquare<N> {
     type Error = Error;
 
@@ -453,7 +473,7 @@ impl<const N: usize> Debug for PartialLatinSquare<N> {
         for i in 0..N {
             write!(f, "    [")?;
             for j in 0..N {
-                if let Some(value) = self.get(i, j) {
+                if let Some(value) = self.get_partial(i, j) {
                     write!(f, "{:2}, ", value)?;
                 } else {
                     write!(f, "??, ")?;

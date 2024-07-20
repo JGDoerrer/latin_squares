@@ -60,7 +60,11 @@ impl<const N: usize> Iterator for RCSGenerator<N> {
 
             let mut constraints = Constraints::new_partial(sq);
 
-            let Some(val) = constraints.get(row, col).into_iter().nth(*value_index) else {
+            let Some(val) = constraints
+                .get_possibilities(row, col)
+                .into_iter()
+                .nth(*value_index)
+            else {
                 self.stack.pop();
                 continue;
             };
@@ -68,21 +72,21 @@ impl<const N: usize> Iterator for RCSGenerator<N> {
 
             let mut new_sq = *sq;
 
-            if constraints.get(row, col).contains(val) {
+            if constraints.get_possibilities(row, col).contains(val) {
                 new_sq.set(row, col, Some(val));
                 constraints.set(row, col, val);
             } else {
                 continue;
             }
 
-            if constraints.get(val, row).contains(col) {
+            if constraints.get_possibilities(val, row).contains(col) {
                 new_sq.set(val, row, Some(col));
                 constraints.set(val, row, col);
             } else if new_sq.get(val, row) != Some(col) {
                 continue;
             }
 
-            if constraints.get(col, val).contains(row) {
+            if constraints.get_possibilities(col, val).contains(row) {
                 new_sq.set(col, val, Some(row));
                 constraints.set(col, val, row);
             } else if new_sq.get(col, val) != Some(row) {

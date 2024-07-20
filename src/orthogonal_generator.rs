@@ -33,7 +33,7 @@ impl<const N: usize> Iterator for OrthogonalLatinSquareGenerator<N> {
         'w: while let Some((constraints, i, j, start_value)) = self.stack.last_mut() {
             let (constraints, i, j) = (constraints.clone(), *i, *j);
 
-            let values = constraints.get(i, j);
+            let values = constraints.get_possibilities(i, j);
 
             for value in values {
                 if value < (*start_value) {

@@ -1,7 +1,9 @@
 use crate::{
     bitset::BitSet16,
     latin_square::{Cell, LatinSquare},
+    latin_square_trait::PartialLatinSquareTrait,
     partial_latin_square::PartialLatinSquare,
+    partial_latin_square_dyn::PartialLatinSquareDyn,
 };
 
 #[derive(Debug, Clone)]
@@ -30,7 +32,11 @@ impl<const N: usize> Constraints<N> {
         let mut constraints = Self::new();
 
         for i in 0..N {
-            let value = constraints.get(0, i).into_iter().next().unwrap();
+            let value = constraints
+                .get_possibilities(0, i)
+                .into_iter()
+                .next()
+                .unwrap();
             constraints.set(0, i, value);
         }
 
@@ -55,7 +61,7 @@ impl<const N: usize> Constraints<N> {
 
         for i in 0..N {
             for j in 0..N {
-                if let Some(value) = sq.get(i, j) {
+                if let Some(value) = sq.get_partial(i, j) {
                     constraints.set(i, j, value);
                 }
             }
@@ -69,7 +75,7 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn set(&mut self, i: usize, j: usize, value: usize) {
-        debug_assert!(self.sq.get(i, j).is_none());
+        debug_assert!(self.sq.get_partial(i, j).is_none());
         debug_assert!(self.rows[i].contains(value));
         debug_assert!(self.cols[j].contains(value));
 
@@ -79,22 +85,22 @@ impl<const N: usize> Constraints<N> {
         // self.propagate_value(i, j, value);
     }
 
-    pub fn get(&self, i: usize, j: usize) -> BitSet16 {
+    pub fn get_possibilities(&self, i: usize, j: usize) -> BitSet16 {
         self.rows[i].intersect(self.cols[j])
     }
 
     pub fn is_set(&self, i: usize, j: usize) -> bool {
-        self.sq.get(i, j).is_some()
+        self.sq.get_partial(i, j).is_some()
     }
 
-    pub fn get_next(&self) -> Option<(usize, usize)> {
+    pub fn first_empty(&self) -> Option<(usize, usize)> {
         for i in 0..N {
-            if !self.get(0, i).is_single() {
+            if !self.is_set(0, i) {
                 return Some((0, i));
             }
         }
         for i in 0..N {
-            if !self.get(i, 0).is_single() {
+            if !self.is_set(i, 0) {
                 return Some((i, 0));
             }
         }
@@ -104,8 +110,8 @@ impl<const N: usize> Constraints<N> {
 
         for i in 0..N {
             for j in 0..N {
-                if !self.get(i, j).is_single() {
-                    let len = self.get(i, j).len();
+                if !self.is_set(i, j) {
+                    let len = self.get_possibilities(i, j).len();
 
                     if len < min_values {
                         min_values = len;
@@ -121,8 +127,8 @@ impl<const N: usize> Constraints<N> {
     pub fn most_constrained_cell(&self) -> Option<Cell> {
         (0..N * N)
             .map(|index| Cell(index / N, index % N))
-            .filter(|cell| self.get(cell.0, cell.1).len() >= 2)
-            .min_by_key(|cell| self.get(cell.0, cell.1).len() >= 2)
+            .filter(|cell| self.get_possibilities(cell.0, cell.1).len() >= 2)
+            .min_by_key(|cell| self.get_possibilities(cell.0, cell.1).len() >= 2)
     }
 
     pub fn into_latin_square(self) -> LatinSquare<N> {
@@ -136,7 +142,7 @@ impl<const N: usize> Constraints<N> {
     pub fn is_solvable(&self) -> bool {
         for i in 0..N {
             for j in 0..N {
-                if self.sq.get(i, j).is_none() && self.get(i, j).is_empty() {
+                if self.sq.get_partial(i, j).is_none() && self.get_possibilities(i, j).is_empty() {
                     return false;
                 }
             }
@@ -145,60 +151,20 @@ impl<const N: usize> Constraints<N> {
     }
 
     pub fn find_singles(&mut self) {
-        // for i in 0..N {
-        //     let mut counts = [0; N];
-        //     for j in 0..N {
-        //         if !self.get(i, j).is_single() {
-        //             for value in self.get(i, j) {
-        //                 counts[value] += 1;
-        //             }
-        //         }
-        //     }
-
-        //     for value in counts
-        //         .into_iter()
-        //         .enumerate()
-        //         .filter(|(_, c)| *c == 1)
-        //         .map(|(i, _)| i)
-        //     {
-        //         for j in 0..N {
-        //             if !self.get(i, j).is_single() && self.get(i, j).contains(value) {
-        //                 self.propagate_value(i, j, value);
-        //             }
-        //         }
-        //     }
-
-        //     let mut counts = [0; N];
-        //     for j in 0..N {
-        //         if !self.get(j, i).is_single() {
-        //             for value in self.get(j, i) {
-        //                 counts[value] += 1;
-        //             }
-        //         }
-        //     }
-
-        //     for value in counts
-        //         .into_iter()
-        //         .enumerate()
-        //         .filter(|(_, c)| *c == 1)
-        //         .map(|(i, _)| i)
-        //     {
-        //         for j in 0..N {
-        //             if !self.get(j, i).is_single() && self.get(j, i).contains(value) {
-        //                 self.propagate_value(j, i, value);
-        //             }
-        //         }
-        //     }
-        // }
-
         let mut changed = true;
         while changed {
             changed = false;
 
             for i in 0..N {
                 for j in 0..N {
-                    if self.sq.get(i, j).is_none() && self.get(i, j).is_single() {
-                        self.set(i, j, self.get(i, j).into_iter().next().unwrap());
+                    if self.sq.get_partial(i, j).is_none()
+                        && self.get_possibilities(i, j).is_single()
+                    {
+                        self.set(
+                            i,
+                            j,
+                            self.get_possibilities(i, j).into_iter().next().unwrap(),
+                        );
                         changed = true;
                     }
                 }
@@ -239,5 +205,152 @@ impl<const N: usize> From<Constraints<N>> for LatinSquare<N> {
         assert!(constraints.is_solved());
 
         constraints.sq.try_into().unwrap()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstraintsDyn {
+    sq: PartialLatinSquareDyn,
+    rows: Box<[BitSet16]>,
+    cols: Box<[BitSet16]>,
+}
+
+impl ConstraintsDyn {
+    pub fn new(n: usize) -> Self {
+        ConstraintsDyn {
+            sq: PartialLatinSquareDyn::empty(n),
+            rows: vec![BitSet16::all_less_than(n); n].into_boxed_slice(),
+            cols: vec![BitSet16::all_less_than(n); n].into_boxed_slice(),
+        }
+    }
+
+    pub fn new_reduced(n: usize) -> Self {
+        let mut constraints = Self::new(n);
+
+        for i in 0..n {
+            constraints.set(0, i, i);
+            if i != 0 {
+                constraints.set(i, 0, i);
+            }
+        }
+
+        constraints
+    }
+
+    pub fn new_partial(sq: &PartialLatinSquareDyn) -> Self {
+        let n = sq.n();
+        let mut constraints = Self::new(n);
+
+        for i in 0..n {
+            for j in 0..n {
+                if let Some(value) = sq.get_partial(i, j) {
+                    constraints.set(i, j, value);
+                }
+            }
+        }
+
+        constraints
+    }
+
+    pub fn partial_sq(&self) -> &PartialLatinSquareDyn {
+        &self.sq
+    }
+
+    pub fn set(&mut self, i: usize, j: usize, value: usize) {
+        debug_assert!(self.sq.get_partial(i, j).is_none());
+        debug_assert!(self.rows[i].contains(value));
+        debug_assert!(self.cols[j].contains(value));
+
+        self.sq.set(i, j, Some(value));
+        self.rows[i].remove(value);
+        self.cols[j].remove(value);
+        // self.propagate_value(i, j, value);
+    }
+
+    pub fn get_possibilities(&self, i: usize, j: usize) -> BitSet16 {
+        self.rows[i].intersect(self.cols[j])
+    }
+
+    pub fn is_set(&self, i: usize, j: usize) -> bool {
+        self.sq.get_partial(i, j).is_some()
+    }
+
+    pub fn is_solved(&self) -> bool {
+        self.sq.num_entries() == self.sq.n() * self.sq.n()
+    }
+
+    pub fn is_solvable(&self) -> bool {
+        let n = self.sq.n();
+        for i in 0..n {
+            for j in 0..n {
+                if self.sq.get_partial(i, j).is_none() && self.get_possibilities(i, j).is_empty() {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    pub fn find_singles(&mut self) {
+        let mut changed = true;
+        while changed {
+            changed = false;
+
+            let n = self.sq.n();
+            for i in 0..n {
+                for j in 0..n {
+                    if self.sq.get_partial(i, j).is_none()
+                        && self.get_possibilities(i, j).is_single()
+                    {
+                        self.set(
+                            i,
+                            j,
+                            self.get_possibilities(i, j).into_iter().next().unwrap(),
+                        );
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn first_empty(&self) -> Option<(usize, usize)> {
+        let n = self.sq.n();
+        for i in 0..n {
+            if !self.is_set(0, i) {
+                return Some((0, i));
+            }
+        }
+        for i in 0..n {
+            if !self.is_set(i, 0) {
+                return Some((i, 0));
+            }
+        }
+
+        let mut min_values = n * n + 1;
+        let mut index = (0, 0);
+
+        for i in 0..n {
+            for j in 0..n {
+                if !self.is_set(i, j) {
+                    let len = self.get_possibilities(i, j).len();
+
+                    if len < min_values {
+                        min_values = len;
+                        index = (i, j);
+                    }
+                }
+            }
+        }
+
+        (min_values < n * n + 1).then_some(index)
+    }
+
+    pub fn most_constrained_cell(&self) -> Option<Cell> {
+        let n = self.sq.n();
+        (0..n * n)
+            .map(|index| Cell(index / n, index % n))
+            .filter(|cell| self.get_possibilities(cell.0, cell.1).len() >= 2)
+            .min_by_key(|cell| self.get_possibilities(cell.0, cell.1).len() >= 2)
     }
 }

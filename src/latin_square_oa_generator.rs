@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use crate::{
-    latin_square::LatinSquare,
     orthogonal_array::{OAConstraints, OrthogonalArray, PartialOrthogonalArray},
     partial_latin_square::PartialLatinSquare,
 };
@@ -48,7 +47,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
     }
 
     pub fn from_partial_oa(oa: &PartialOrthogonalArray<N, MOLS>) -> Self {
-        let constraints = OAConstraints::from_partial_oa(&oa);
+        let constraints = OAConstraints::from_partial_oa(oa);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
         LatinSquareOAGenerator {
