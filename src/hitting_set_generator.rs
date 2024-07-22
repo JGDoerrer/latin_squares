@@ -1,12 +1,8 @@
-use std::vec;
+use std::{time::Instant, vec};
 
-use crate::{
-    bitset::{BitSet128, BitSet128Iter},
-    bitvec::BitVec,
-};
+use crate::{bitset::BitSet128, bitvec::BitVec};
 
 type BitSet = BitSet128;
-type BitSetIter = BitSet128Iter;
 
 #[derive(Debug)]
 pub struct HittingSetGenerator {
@@ -59,6 +55,28 @@ impl HittingSetGenerator {
             temp: Some(BitVec::empty()),
         }
     }
+
+    fn progress(&self) -> f64 {
+        let totals: Vec<_> = self
+            .stack
+            .iter()
+            .map(|entry| entry.current_set.len() as f64)
+            .collect();
+
+        self.stack
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| {
+                entry.current_set_index.saturating_sub(1) as f64
+                    / totals[0..=i]
+                        .iter()
+                        .copied()
+                        .reduce(|a, b| a * b)
+                        .unwrap_or(1.0)
+            })
+            .reduce(|a, b| a + b)
+            .unwrap()
+    }
 }
 
 impl Iterator for HittingSetGenerator {
@@ -68,6 +86,8 @@ impl Iterator for HittingSetGenerator {
         if self.stack.is_empty() {
             return None;
         }
+
+        let mut last_progress = Instant::now();
 
         while let Some(entry) = self.stack.last_mut() {
             let StackEntry {
@@ -84,9 +104,15 @@ impl Iterator for HittingSetGenerator {
             entries.reverse();
 
             let Some(next_entry) = entries.get(*current_set_index).map(|i| *i) else {
-                *current_set_index += 1;
                 let entry = self.stack.pop().unwrap();
                 self.temp = Some(entry.sets_hit);
+
+                let time_passed = (Instant::now() - last_progress).as_secs_f64();
+                if time_passed >= 1.0 {
+                    dbg!(self.progress());
+
+                    last_progress = Instant::now();
+                }
                 continue;
             };
             next_dead.insert(next_entry);
