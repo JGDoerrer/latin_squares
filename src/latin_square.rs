@@ -251,9 +251,8 @@ impl<const N: usize> LatinSquare<N> {
         isotopic
     }
 
-    pub fn reduced_paratopic(&self) -> Self {
+    pub fn reduced_paratopic_old(&self) -> Self {
         let sq = &self.reduced();
-        debug_assert!(sq.is_reduced());
 
         let mut paratopic = *sq;
 
@@ -271,6 +270,38 @@ impl<const N: usize> LatinSquare<N> {
                 }
             }
         }
+
+        paratopic
+    }
+
+    pub fn reduced_paratopic(&self) -> Self {
+        let sq = &self.reduced();
+
+        let mut paratopic = *sq;
+
+        for sq in sq.paratopic() {
+            for s in PermutationIter::new() {
+                let sq = sq.permute_vals(&s);
+
+                for row0 in 0..N {
+                    let mut new_sq = sq;
+
+                    new_sq.values.swap(0, row0);
+
+                    let col_permutation =
+                        Permutation::from_array(new_sq.get_row(0).map(|i| i.into()));
+
+                    new_sq = new_sq.permute_cols(&col_permutation);
+                    new_sq.values[1..].sort();
+
+                    if new_sq.cmp_rows(&paratopic).is_lt() {
+                        paratopic = new_sq;
+                    }
+                }
+            }
+        }
+
+        debug_assert_eq!(self.reduced_paratopic_old(), paratopic);
 
         paratopic
     }
