@@ -20,11 +20,10 @@ use partial_latin_square::PartialLatinSquare;
 
 use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_oa_generator::PartialOAGenerator;
+use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, PermutationIter};
 use random_latin_square_generator::RandomLatinSquareGenerator;
-
-use rcs_generator::RCSGenerator;
 
 use crate::hitting_set_generator::HittingSetGenerator;
 
@@ -38,11 +37,13 @@ mod latin_square_dyn;
 mod latin_square_generator;
 mod latin_square_oa_generator;
 mod latin_square_trait;
+mod oa_constraints;
 mod orthogonal_array;
 mod orthogonal_generator;
 mod partial_latin_square;
 mod partial_latin_square_dyn;
 mod partial_oa_generator;
+mod partial_orthogonal_array;
 mod partial_square_generator;
 mod permutation;
 mod random_latin_square_generator;
@@ -91,6 +92,9 @@ enum Mode {
         mols: usize,
         seed: u64,
     },
+    SolveMOLS {
+        mols: usize,
+    },
 }
 
 #[derive(Parser)]
@@ -125,6 +129,7 @@ fn main() {
                 Mode::NumSubsquares { k } => num_subsquares::<$N>(k),
                 Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
                 Mode::ShuffleMOLS { mols, seed } => shuffle_mols_n::<$N>(mols, seed),
+                Mode::SolveMOLS { mols } => solve_mols_n::<$N>(mols),
             }
         };
     }
@@ -395,8 +400,7 @@ fn generate_mols_n<const N: usize>(mols: usize) {
         4 => match_mols!(1, 2, 3),
         5 => match_mols!(1, 2, 3, 4),
         6 => match_mols!(1, 2, 3, 4, 5),
-        7 => match_mols!(1, 2, 3, 4, 5, 6),
-        8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
+        10 => match_mols!(2, 3),
         _ => todo!(),
     }
 }
@@ -429,12 +433,9 @@ fn find_mols_scs_n<const N: usize>(mols: usize, start: usize, end: usize, all: b
     }
 
     match N {
-        3 => match_mols!(1, 2),
-        4 => match_mols!(1, 2, 3),
-        5 => match_mols!(1, 2, 3, 4),
-        6 => match_mols!(1, 2, 3, 4, 5),
-        7 => match_mols!(1, 2, 3, 4, 5, 6),
-        8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
+        3 => match_mols!(2),
+        4 => match_mols!(2, 3),
+        5 => match_mols!(2, 3, 4),
         _ => todo!(),
     }
 }
@@ -485,7 +486,39 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
                 }
             }
         } else {
-            todo!()
+            for i in (end..=start).rev() {
+                dbg!(i);
+                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
+
+                let mut found = false;
+                let mut scs = HashSet::new();
+                'h: for hitting_set in hitting_sets {
+                    let partial_sq = oa.mask(hitting_set);
+
+                    for partial_oa in PartialOAGenerator::new_partial(oa.clone(), partial_sq, i) {
+                        let mut solutions =
+                            LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
+                        let first_solution = solutions.next();
+                        let second_solution = solutions.next();
+
+                        if second_solution.is_none()
+                            && first_solution.is_some_and(|solution| solution == oa)
+                        {
+                            found = true;
+                            if scs.insert(partial_oa.clone()) {
+                                println!("{}", partial_oa);
+                            }
+                            if !all {
+                                break 'h;
+                            }
+                        }
+                    }
+                }
+
+                if !found {
+                    break;
+                }
+            }
         }
     }
 }
@@ -516,12 +549,12 @@ fn shuffle_mols_n<const N: usize>(mols: usize, seed: u64) {
     }
 
     match N {
-        3 => match_mols!(1, 2),
-        4 => match_mols!(1, 2, 3),
-        5 => match_mols!(1, 2, 3, 4),
-        6 => match_mols!(1, 2, 3, 4, 5),
-        7 => match_mols!(1, 2, 3, 4, 5, 6),
-        8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
+        // 3 => match_mols!(1, 2),
+        // 4 => match_mols!(1, 2, 3),
+        // 5 => match_mols!(1, 2, 3, 4),
+        // 6 => match_mols!(1, 2, 3, 4, 5),
+        // 7 => match_mols!(1, 2, 3, 4, 5, 6),
+        // 8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
         _ => todo!(),
     }
 }
@@ -555,6 +588,42 @@ fn shuffle_mols<const N: usize, const MOLS: usize>(seed: u64) {
     }
 
     todo!()
+}
+
+fn solve_mols_n<const N: usize>(mols: usize) {
+    assert!(mols > 0);
+    assert!(mols < N);
+
+    macro_rules! match_mols {
+        ($( $i : literal),+) => {
+            match mols {
+                $(
+                    $i => solve_mols::<N, $i>(),
+                )*
+                _ => unreachable!(),
+            }
+        };
+    }
+
+    match N {
+        3 => match_mols!(2),
+        4 => match_mols!(2, 3),
+        5 => match_mols!(2, 3, 4),
+        10 => match_mols!(2, 3),
+        _ => todo!(),
+    }
+}
+
+fn solve_mols<const N: usize, const MOLS: usize>() {
+    for oa in read_partial_mols_from_stdin() {
+        let solutions = LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&oa);
+
+        for solution in solutions {
+            if writeln!(stdout(), "{}", solution).is_err() {
+                return;
+            }
+        }
+    }
 }
 
 fn read_sqs_from_file<const N: usize>(path: &Path) -> Vec<LatinSquare<N>> {
@@ -596,9 +665,8 @@ fn read_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = LatinSquare<N
 }
 
 fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
-    let mut line = String::new();
-
-    (0..).map_while(move |_| {
+    (0..).map_while(|_| {
+        let mut line = String::new();
         while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
             line = line.trim().into(); // remove newline
             match LatinSquareDyn::try_from(line.as_str()) {
@@ -618,9 +686,8 @@ fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
 }
 
 fn read_partial_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = PartialLatinSquare<N>> {
-    let mut line = String::new();
-
-    (0..).map_while(move |_| {
+    (0..).map_while(|_| {
+        let mut line = String::new();
         while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
             line = line.trim().into(); // remove newline
             match PartialLatinSquare::try_from(line.as_str()) {
@@ -641,9 +708,8 @@ fn read_partial_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = Parti
 }
 
 fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> {
-    let mut line = String::new();
-
-    (0..).map_while(move |_| {
+    (0..).map_while(|_| {
+        let mut line = String::new();
         while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
             line = line.trim().into(); // remove newline
             match PartialLatinSquareDyn::try_from(line.as_str()) {
@@ -665,12 +731,34 @@ fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> 
 
 fn read_mols_from_stdin<const N: usize, const MOLS: usize>(
 ) -> impl Iterator<Item = OrthogonalArray<N, MOLS>> {
-    let mut line = String::new();
-
-    (0..).map_while(move |_| {
+    (0..).map_while(|_| {
+        let mut line: String = String::new();
         while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
             line = line.trim().into(); // remove newline
             match OrthogonalArray::try_from(line.as_str()) {
+                Ok(oa) => {
+                    line.clear();
+
+                    return Some(oa);
+                }
+                Err(err) => {
+                    line.clear();
+                    eprintln!("{}", err);
+                    continue;
+                }
+            }
+        }
+        None
+    })
+}
+
+fn read_partial_mols_from_stdin<const N: usize, const MOLS: usize>(
+) -> impl Iterator<Item = PartialOrthogonalArray<N, MOLS>> {
+    (0..).map_while(|_| {
+        let mut line = String::new();
+        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+            line = line.trim().into(); // remove newline
+            match PartialOrthogonalArray::try_from(line.as_str()) {
                 Ok(oa) => {
                     line.clear();
 

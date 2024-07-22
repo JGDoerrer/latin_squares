@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use crate::{
-    orthogonal_array::{OAConstraints, OrthogonalArray, PartialOrthogonalArray},
-    partial_latin_square::PartialLatinSquare,
+    oa_constraints::OAConstraints, orthogonal_array::OrthogonalArray,
+    partial_latin_square::PartialLatinSquare, partial_orthogonal_array::PartialOrthogonalArray,
 };
 
 pub struct LatinSquareOAGenerator<const N: usize, const MOLS: usize> {

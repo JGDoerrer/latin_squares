@@ -1,6 +1,6 @@
 use crate::{
-    latin_square::Cell,
-    orthogonal_array::{OrthogonalArray, PartialOrthogonalArray},
+    latin_square::Cell, orthogonal_array::OrthogonalArray,
+    partial_orthogonal_array::PartialOrthogonalArray,
 };
 
 #[derive(Debug)]
@@ -93,7 +93,7 @@ impl<const N: usize, const MOLS: usize> Iterator for PartialOAGenerator<N, MOLS>
 
         let mut oa = self.partial_oa.clone().unwrap();
 
-        let column = self.index / N * N;
+        let column = self.index / (N * N);
         let Cell(i, j) = Cell::from_index::<N>(self.index % (N * N));
         oa.set(column, i, j, Some(self.oa.get(column, i, j)));
 

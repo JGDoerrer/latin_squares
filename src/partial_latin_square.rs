@@ -43,6 +43,10 @@ impl<const N: usize> PartialLatinSquare<N> {
         PartialLatinSquare { values }
     }
 
+    pub fn values(self) -> [[Option<u8>; N]; N] {
+        self.values
+    }
+
     pub fn get(&self, row: usize, col: usize) -> Option<usize> {
         self.values[row][col].map(|val| val.into())
     }
