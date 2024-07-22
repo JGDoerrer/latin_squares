@@ -299,15 +299,62 @@ impl ConstraintsDyn {
             let n = self.sq.n();
             for i in 0..n {
                 for j in 0..n {
-                    if self.sq.get_partial(i, j).is_none()
-                        && self.get_possibilities(i, j).is_single()
-                    {
+                    if !self.is_set(i, j) && self.get_possibilities(i, j).is_single() {
                         self.set(
                             i,
                             j,
                             self.get_possibilities(i, j).into_iter().next().unwrap(),
                         );
                         changed = true;
+                    }
+                }
+            }
+
+            // find values with ouly one valid place
+            for i in 0..n {
+                let mut candidates = self.rows[i];
+                let mut found = BitSet16::empty();
+
+                if candidates.is_empty() {
+                    continue;
+                }
+
+                for j in 0..n {
+                    let col = self.cols[j];
+
+                    candidates = candidates.intersect(found.intersect(col).complement());
+                    found = found.union(col);
+                }
+
+                for value in candidates {
+                    for j in 0..n {
+                        if self.cols[j].intersect(found).contains(value) {
+                            self.set(i, j, value);
+                            break;
+                        }
+                    }
+                }
+
+                let mut candidates = self.cols[i];
+                let mut found = BitSet16::empty();
+
+                if candidates.is_empty() {
+                    continue;
+                }
+
+                for j in 0..n {
+                    let row = self.rows[j];
+
+                    candidates = candidates.intersect(found.intersect(row).complement());
+                    found = found.union(row);
+                }
+
+                for value in candidates {
+                    for j in 0..n {
+                        if self.rows[j].intersect(found).contains(value) {
+                            self.set(j, i, value);
+                            break;
+                        }
                     }
                 }
             }
