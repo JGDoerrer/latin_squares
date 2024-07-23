@@ -54,7 +54,7 @@ impl<const N: usize, const MOLS: usize> MOLSTrait for OrthogonalArray<N, MOLS> {
 impl<const N: usize, const MOLS: usize> OrthogonalArray<N, MOLS> {
     pub fn new(sqs: [LatinSquare<N>; MOLS]) -> Self {
         OrthogonalArray {
-            sqs: sqs.map(|sq| sq.into()),
+            sqs: sqs.map(|sq| sq),
         }
     }
 

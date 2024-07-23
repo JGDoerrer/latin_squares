@@ -10,7 +10,7 @@ use crate::{
     latin_square_oa_generator::LatinSquareOAGenerator,
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     partial_latin_square::PartialLatinSquare,
-    permutation::{factorial, Permutation, PermutationDyn, PermutationDynIter, PermutationIter},
+    permutation::{Permutation, PermutationDyn, PermutationDynIter, PermutationIter},
     tuple_iterator::{TupleIterator, TupleIteratorDyn},
 };
 
@@ -252,7 +252,7 @@ impl<const N: usize> LatinSquare<N> {
         isotopic
     }
 
-    pub fn reduced_paratopic_old(&self) -> Self {
+    pub fn main_class_reduced_old(&self) -> Self {
         let sq = &self.reduced();
 
         let mut paratopic = *sq;
@@ -434,7 +434,7 @@ impl<const N: usize> LatinSquare<N> {
         permutations
     }
 
-    pub fn reduced_paratopic(&self) -> Self {
+    pub fn main_class_reduced(&self) -> Self {
         let sq = &self.reduced();
 
         let mut paratopic = *sq;

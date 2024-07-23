@@ -279,7 +279,7 @@ impl PermutationDyn {
 
         let mut new_array = vec![MaybeUninit::uninit(); self.0.len()];
 
-        for (i, p) in permutation.into_iter().enumerate() {
+        for (i, p) in permutation.iter().enumerate() {
             new_array[*p].write(array[i]);
         }
 

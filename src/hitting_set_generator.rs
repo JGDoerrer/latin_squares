@@ -103,7 +103,7 @@ impl Iterator for HittingSetGenerator {
             entries.sort_by_key(|s| self.entry_to_set[*s].count_ones());
             entries.reverse();
 
-            let Some(next_entry) = entries.get(*current_set_index).map(|i| *i) else {
+            let Some(next_entry) = entries.get(*current_set_index).copied() else {
                 let entry = self.stack.pop().unwrap();
                 self.temp = Some(entry.sets_hit);
 

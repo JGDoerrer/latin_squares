@@ -199,7 +199,7 @@ fn analyse<const N: usize>() {
             println!("Subsquares order {i}: {}", sq.num_subsquares_dyn(i));
         }
 
-        let main_class = sq.reduced_paratopic();
+        let main_class = sq.main_class_reduced();
         if main_class != sq {
             println!("Main class: ");
             pretty_print_sq(main_class);
@@ -256,7 +256,7 @@ fn pretty_print_sq(sq: impl PartialLatinSquareTrait) {
 
 fn normalize_paratopy<const N: usize>() {
     for sq in read_sqs_from_stdin_n::<N>() {
-        println!("{}", sq.reduced_paratopic());
+        println!("{}", sq.main_class_reduced());
     }
 }
 
@@ -267,7 +267,7 @@ fn generate_paratopy_classes<const N: usize>() {
 
     for sq in LatinSquareOAGenerator::<N, 1>::new_reduced() {
         let sq: LatinSquare<N> = sq.squares()[0];
-        let normalized = sq.reduced_paratopic();
+        let normalized = sq.main_class_reduced();
 
         if !sqs.contains(&normalized) {
             sqs.insert(normalized);
@@ -548,15 +548,7 @@ fn shuffle_mols_n<const N: usize>(mols: usize, seed: u64) {
         };
     }
 
-    match N {
-        // 3 => match_mols!(1, 2),
-        // 4 => match_mols!(1, 2, 3),
-        // 5 => match_mols!(1, 2, 3, 4),
-        // 6 => match_mols!(1, 2, 3, 4, 5),
-        // 7 => match_mols!(1, 2, 3, 4, 5, 6),
-        // 8 => match_mols!(1, 2, 3, 4, 5, 6, 7),
-        _ => todo!(),
-    }
+    todo!()
 }
 
 fn shuffle_mols<const N: usize, const MOLS: usize>(seed: u64) {
