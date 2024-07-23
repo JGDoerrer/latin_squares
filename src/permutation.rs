@@ -85,6 +85,29 @@ impl<const N: usize> Permutation<N> {
             .into()
     }
 
+    pub fn cycles(&self) -> Vec<Vec<usize>> {
+        let mut cycles = Vec::new();
+
+        for start in self.0 {
+            if cycles.iter().any(|c: &Vec<usize>| c.contains(&start)) {
+                continue;
+            }
+
+            let mut cycle = vec![start];
+            let mut current = self.apply(start);
+
+            while current != start {
+                cycle.push(current);
+                current = self.apply(current);
+            }
+
+            cycle.rotate_right(1);
+            cycles.push(cycle);
+        }
+
+        cycles
+    }
+
     #[inline]
     pub fn apply(&self, num: usize) -> usize {
         self.0[num]
@@ -244,24 +267,27 @@ impl PermutationDyn {
     //     inverse
     // }
 
-    pub fn apply(self, num: usize) -> usize {
+    pub fn apply(&self, num: usize) -> usize {
         self.0[num]
     }
 
-    // pub fn apply_array<T>(self, array: [T; N]) -> [T; N]
-    // where
-    //     T: Copy,
-    // {
-    //     let permutation = self.to_array();
+    pub fn apply_array<T>(&self, array: Vec<T>) -> Vec<T>
+    where
+        T: Copy,
+    {
+        let permutation = self.as_vec();
 
-    //     let mut new_array = [MaybeUninit::uninit(); N];
+        let mut new_array = vec![MaybeUninit::uninit(); self.0.len()];
 
-    //     for (i, p) in permutation.into_iter().enumerate() {
-    //         new_array[p].write(array[i]);
-    //     }
+        for (i, p) in permutation.into_iter().enumerate() {
+            new_array[*p].write(array[i]);
+        }
 
-    //     new_array.map(|i| unsafe { i.assume_init() })
-    // }
+        new_array
+            .into_iter()
+            .map(|i| unsafe { i.assume_init() })
+            .collect()
+    }
 }
 
 impl<const N: usize> From<&PermutationDyn> for Permutation<N> {
@@ -272,6 +298,8 @@ impl<const N: usize> From<&PermutationDyn> for Permutation<N> {
         Permutation(vals)
     }
 }
+
+#[derive(Debug, Clone)]
 
 pub struct PermutationDynIter {
     indices: Vec<usize>,
@@ -301,7 +329,7 @@ impl Iterator for PermutationDynIter {
     fn next(&mut self) -> Option<Self::Item> {
         let mut sorted = 1;
 
-        for i in (0..self.n - 1).rev() {
+        for i in (0..self.n.saturating_sub(1)).rev() {
             if self.indices[i] > self.indices[i + 1] {
                 sorted += 1;
             } else {
@@ -369,5 +397,28 @@ mod test {
         assert_eq!(Permutation::from_array([1, 0, 3, 2]).order(), 2);
         assert_eq!(Permutation::from_array([1, 2, 0, 3]).order(), 3);
         assert_eq!(Permutation::from_array([1, 2, 3, 0]).order(), 4);
+    }
+
+    #[test]
+    fn cycle_test() {
+        assert_eq!(
+            Permutation::from_array([1, 2, 3, 0]).cycles(),
+            vec![vec![0, 1, 2, 3]]
+        );
+        assert_eq!(
+            Permutation::from_array([1, 0, 3, 2, 4]).cycles(),
+            vec![vec![0, 1], vec![2, 3], vec![4]]
+        );
+        assert_eq!(
+            Permutation::from_array([3, 0, 1, 2]).cycles(),
+            vec![vec![0, 3, 2, 1]]
+        );
+    }
+
+    #[test]
+    fn single_iter() {
+        let mut iter = PermutationDynIter::new(1);
+        assert_eq!(iter.next(), Some(PermutationDyn::from_array([0])));
+        assert_eq!(iter.next(), None);
     }
 }

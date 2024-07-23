@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     fmt::{Debug, Display, Write},
     mem::MaybeUninit,
+    vec,
 };
 
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
     latin_square_oa_generator::LatinSquareOAGenerator,
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     partial_latin_square::PartialLatinSquare,
-    permutation::{Permutation, PermutationDyn, PermutationIter},
+    permutation::{factorial, Permutation, PermutationDyn, PermutationDynIter, PermutationIter},
     tuple_iterator::{TupleIterator, TupleIteratorDyn},
 };
 
@@ -274,34 +275,242 @@ impl<const N: usize> LatinSquare<N> {
         paratopic
     }
 
+    fn minimize_rows(rows: [[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
+        let row_permutation = {
+            let mut permutation = [0; N];
+
+            for i in 0..N {
+                let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                permutation[i] = rows[1][position].into();
+            }
+
+            Permutation::from_array(permutation)
+        };
+
+        let mut cycles = row_permutation.cycles();
+        cycles.sort_by_key(|c| c.len());
+
+        let cycles_by_len = {
+            const EMPTY_VEC: Vec<Vec<usize>> = Vec::new();
+            let mut array = [EMPTY_VEC; N];
+
+            for cycle in cycles.iter() {
+                array[cycle.len() - 1].push(cycle.clone());
+            }
+
+            for i in 0..N {
+                array[i].sort();
+            }
+
+            array
+        };
+
+        const NONE: Option<(PermutationDyn, PermutationDynIter)> = None;
+        // permutes the cycles of the same length
+        let mut cycle_permutations = [NONE; N];
+
+        for i in 0..N {
+            if cycles_by_len[i].is_empty() {
+                continue;
+            }
+            let mut iter = PermutationDynIter::new(cycles_by_len[i].len());
+            cycle_permutations[i] = Some((iter.next().unwrap(), iter));
+        }
+
+        const EMPTY_VEC: Vec<usize> = Vec::new();
+        // permutes the elements of a cycle
+        let mut per_cycle_permutation = [EMPTY_VEC; N];
+
+        for i in 0..N {
+            per_cycle_permutation[i] = vec![0; cycles_by_len[i].len()];
+        }
+
+        let mut permutations = Vec::new();
+
+        loop {
+            let cycles = {
+                let mut new_cycles = vec![];
+
+                for i in 0..N {
+                    let Some((permutation, _)) = &cycle_permutations[i] else {
+                        continue;
+                    };
+
+                    for j in permutation.as_vec() {
+                        let mut cycle = cycles_by_len[i][*j].clone();
+                        cycle.rotate_right(per_cycle_permutation[i][*j]);
+
+                        new_cycles.push(cycle);
+                    }
+                }
+
+                new_cycles
+            };
+
+            let mut last_done = true;
+            'i: for i in 0..N {
+                let Some((permutation, iter)) = &mut cycle_permutations[i] else {
+                    continue;
+                };
+
+                for j in &mut per_cycle_permutation[i] {
+                    if *j == i + 1 {
+                        *j = 0;
+                    } else {
+                        *j += 1;
+                        last_done = false;
+                        break 'i;
+                    }
+                }
+
+                let next = iter.next();
+                if next.is_none() {
+                    *iter = PermutationDynIter::new(cycles_by_len[i].len());
+
+                    *permutation = iter.next().unwrap();
+                } else {
+                    *permutation = next.unwrap();
+                    last_done = false;
+                    break;
+                }
+            }
+
+            if last_done {
+                break;
+            }
+
+            let symbol_permutation = {
+                let mut permutation = [0; N];
+
+                let mut index = 0;
+                for cycle in cycles {
+                    let start_index = index;
+                    let len = cycle.len();
+                    index += len;
+
+                    for (i, v) in cycle.into_iter().enumerate() {
+                        permutation[v] = start_index + i;
+                    }
+                }
+
+                Permutation::from_array(permutation)
+            };
+
+            let column_permutation =
+                Permutation::from_array(rows[0].map(|i| symbol_permutation.apply(i.into())));
+
+            // let new_rows = rows.map(|row| {
+            //     column_permutation
+            //         .apply_array(row.map(|v| symbol_permutation.apply(v.into()) as u8))
+            // });
+
+            // dbg!(
+            //     &row_permutation,
+            //     row_permutation.cycles(),
+            //     symbol_permutation,
+            //     column_permutation
+            // );
+
+            // if new_rows[1][0] == 1 && (new_rows[1][1] == 0 || new_rows[1][1] == 2) {
+            permutations.push((symbol_permutation, column_permutation));
+            // }
+        }
+
+        // for s in PermutationIter::<N>::new() {
+        //     let rows = rows.map(|row| row.map(|v| s.apply(v.into()) as u8));
+
+        //     let c = Permutation::from_array(rows[0].map(|i| i.into()));
+
+        //     let rows = rows.map(|row| c.apply_array(row));
+
+        //     if rows < min_rows {
+        //         min_rows = rows;
+        //         permutations = (s, c);
+        //     }
+        // }
+
+        // dbg!(&permutations, min_rows);
+
+        permutations
+    }
+
     pub fn reduced_paratopic(&self) -> Self {
         let sq = &self.reduced();
 
         let mut paratopic = *sq;
 
         for sq in sq.paratopic() {
-            for s in PermutationIter::new() {
-                let sq = sq.permute_vals(&s);
+            let mut candidates = Vec::new();
+            let mut min_cycles = vec![N];
 
-                for row0 in 0..N {
-                    let mut new_sq = sq;
+            for [row0, row1] in
+                TupleIterator::<2>::new(N).flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
+            {
+                let rows = [*sq.get_row(row0), *sq.get_row(row1)];
+                let row_permutation = {
+                    let mut permutation = [0; N];
 
-                    new_sq.values.swap(0, row0);
+                    for i in 0..N {
+                        let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                        permutation[i] = rows[1][position].into();
+                    }
 
-                    let col_permutation =
-                        Permutation::from_array(new_sq.get_row(0).map(|i| i.into()));
+                    Permutation::from_array(permutation)
+                };
 
-                    new_sq = new_sq.permute_cols(&col_permutation);
-                    new_sq.values[1..].sort();
+                let mut cycles: Vec<_> = row_permutation
+                    .cycles()
+                    .into_iter()
+                    .map(|c| c.len())
+                    .collect();
+                cycles.sort();
+
+                if cycles < min_cycles {
+                    min_cycles = cycles.clone();
+                    candidates.clear();
+                }
+
+                if cycles == min_cycles {
+                    candidates.push((rows, cycles));
+                }
+            }
+
+            for (rows, _) in candidates {
+                let permutations = Self::minimize_rows(rows);
+
+                for (s, c) in permutations {
+                    let mut new_sq = sq.permute_vals(&s).permute_cols(&c);
+                    new_sq.values.sort(); // sort rows
 
                     if new_sq.cmp_rows(&paratopic).is_lt() {
                         paratopic = new_sq;
                     }
                 }
             }
+
+            // for s in PermutationIter::new() {
+            //     let sq = sq.permute_vals(&s);
+
+            //     for row0 in 0..N {
+            //         let mut new_sq = sq;
+
+            //         new_sq.values.swap(0, row0);
+
+            //         let col_permutation =
+            //             Permutation::from_array(new_sq.get_row(0).map(|i| i.into()));
+
+            //         new_sq = new_sq.permute_cols(&col_permutation);
+            //         new_sq.values[1..].sort();
+
+            //         if new_sq.cmp_rows(&paratopic).is_lt() {
+            //             paratopic = new_sq;
+            //         }
+            //     }
+            // }
         }
 
-        debug_assert_eq!(self.reduced_paratopic_old(), paratopic);
+        // dbg!(self.to_string());
+        // assert_eq!(self.reduced_paratopic_old(), paratopic);
 
         paratopic
     }
