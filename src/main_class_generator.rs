@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     constraints::Constraints, latin_square::LatinSquare,
     latin_square_generator::LatinSquareGenerator, partial_latin_square::PartialLatinSquare,
-    permutation::Permutation, tuple_iterator::TupleIterator,
+    permutation::Permutation,
 };
 
 pub struct MainClassGenerator<const N: usize> {
@@ -26,7 +26,7 @@ impl<const N: usize> MainClassGenerator<N> {
 
     fn get_next_sq(&mut self) -> Option<LatinSquare<N>> {
         if let Some(generator) = &mut self.generator {
-            while let Some(sq) = generator.next() {
+            for sq in generator.by_ref() {
                 let main_class = sq.main_class_reduced();
 
                 if self.sqs.insert(main_class) {
@@ -115,7 +115,7 @@ impl<const N: usize> Iterator for RowGenerator<N> {
         }
         self.indices[N - 1] += 1;
 
-        Some(constraints.partial_sq().clone())
+        Some(*constraints.partial_sq())
     }
 }
 

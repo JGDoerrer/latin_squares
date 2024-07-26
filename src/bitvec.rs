@@ -209,19 +209,19 @@ impl<'a> Iterator for BitVecIter<'a> {
             return None;
         }
 
-        let mask = !((1usize << bit_index) - 1) as usize;
+        let mask = !((1usize << bit_index) - 1);
 
         let word = self.bitvec.words[word_index] & mask;
         let next_one = word.trailing_zeros() as usize;
 
         if next_one == BITS {
             self.index = (word_index + 1) * BITS;
-            return self.next();
+            self.next()
         } else {
             let index = word_index * BITS + next_one;
             self.index = index + 1;
 
-            return Some(index);
+            Some(index)
         }
     }
 }

@@ -6,7 +6,7 @@ use std::{
     vec,
 };
 
-use clap::{self, builder::Str, Parser, Subcommand};
+use clap::{self, Parser, Subcommand};
 
 use latin_square::LatinSquare;
 
@@ -26,7 +26,6 @@ use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, PermutationIter};
 use random_latin_square_generator::RandomLatinSquareGenerator;
-use tuple_iterator::TupleIterator;
 
 use crate::hitting_set_generator::HittingSetGenerator;
 
@@ -240,7 +239,7 @@ fn analyse<const N: usize>() {
         let isotopy_class = sq.reduced_isotopic();
         if isotopy_class != sq {
             println!("Isotopy class: ");
-            println!("{}", isotopy_class.to_string());
+            println!("{}", isotopy_class);
             pretty_print_sq(isotopy_class);
         } else {
             println!("Is isotopy class reduced");
@@ -249,7 +248,7 @@ fn analyse<const N: usize>() {
         let main_class = sq.main_class_reduced();
         if main_class != sq {
             println!("Main class: ");
-            println!("{}", main_class.to_string());
+            println!("{}", main_class);
             pretty_print_sq(main_class);
         } else {
             println!("Is main class reduced");
