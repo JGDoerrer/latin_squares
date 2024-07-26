@@ -271,7 +271,7 @@ impl PermutationDyn {
         self.0[num]
     }
 
-    pub fn apply_array<T>(&self, array: Vec<T>) -> Vec<T>
+    pub fn apply_vec<T>(&self, array: Vec<T>) -> Vec<T>
     where
         T: Copy,
     {

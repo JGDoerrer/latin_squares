@@ -173,6 +173,10 @@ impl BitVec {
 
         Some(self.words[index].trailing_ones() as usize + index * usize::BITS as usize)
     }
+
+    pub fn iter(&self) -> BitVecIter {
+        self.into_iter()
+    }
 }
 
 impl FromIterator<usize> for BitVec {
@@ -182,5 +186,54 @@ impl FromIterator<usize> for BitVec {
             new.insert(item);
         }
         new
+    }
+}
+
+#[derive(Debug)]
+pub struct BitVecIter<'a> {
+    bitvec: &'a BitVec,
+    index: usize,
+}
+
+impl<'a> Iterator for BitVecIter<'a> {
+    type Item = usize;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        const BITS: usize = usize::BITS as usize;
+
+        let word_index = self.index / BITS;
+        let bit_index = self.index % BITS;
+
+        if word_index >= self.bitvec.words.len() {
+            return None;
+        }
+
+        let mask = !((1usize << bit_index) - 1) as usize;
+
+        let word = self.bitvec.words[word_index] & mask;
+        let next_one = word.trailing_zeros() as usize;
+
+        if next_one == BITS {
+            self.index = (word_index + 1) * BITS;
+            return self.next();
+        } else {
+            let index = word_index * BITS + next_one;
+            self.index = index + 1;
+
+            return Some(index);
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a BitVec {
+    type Item = usize;
+    type IntoIter = BitVecIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        BitVecIter {
+            bitvec: self,
+            index: 0,
+        }
     }
 }

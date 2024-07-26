@@ -1,12 +1,12 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::OpenOptions,
     io::{stdin, stdout, BufRead, BufReader, Write},
     path::Path,
     vec,
 };
 
-use clap::{self, Parser, Subcommand};
+use clap::{self, builder::Str, Parser, Subcommand};
 
 use latin_square::LatinSquare;
 
@@ -15,6 +15,8 @@ use latin_square_generator::{LatinSquareGenerator, LatinSquareGeneratorDyn};
 use latin_square_oa_generator::LatinSquareOAGenerator;
 
 use latin_square_trait::PartialLatinSquareTrait;
+use main_class_generator::MainClassGenerator;
+use new_hitting_set_generator::NewHittingSetGenerator;
 use orthogonal_array::OrthogonalArray;
 use partial_latin_square::PartialLatinSquare;
 
@@ -24,6 +26,7 @@ use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, PermutationIter};
 use random_latin_square_generator::RandomLatinSquareGenerator;
+use tuple_iterator::TupleIterator;
 
 use crate::hitting_set_generator::HittingSetGenerator;
 
@@ -37,6 +40,8 @@ mod latin_square_dyn;
 mod latin_square_generator;
 mod latin_square_oa_generator;
 mod latin_square_trait;
+mod main_class_generator;
+mod new_hitting_set_generator;
 mod oa_constraints;
 mod orthogonal_array;
 mod orthogonal_generator;
@@ -45,6 +50,7 @@ mod partial_latin_square_dyn;
 mod partial_oa_generator;
 mod partial_orthogonal_array;
 mod partial_square_generator;
+mod permutable;
 mod permutation;
 mod random_latin_square_generator;
 mod rc_generator;
@@ -55,8 +61,8 @@ mod tuple_iterator;
 enum Mode {
     Analyse,
     PrettyPrint,
-    NormalizeParatopy,
-    GenerateParatopyClasses,
+    NormalizeMainClass,
+    GenerateMainClasses,
     FindSCS {
         #[arg(short, long, default_value_t = 0)]
         start: usize,
@@ -113,23 +119,24 @@ fn main() {
                 Mode::Analyse => analyse::<$N>(),
                 Mode::GenerateLatinSquares => generate_latin_squares::<$N>(),
                 Mode::PrettyPrint => pretty_print::<$N>(),
-                Mode::NormalizeParatopy => normalize_paratopy::<$N>(),
-                Mode::GenerateParatopyClasses => generate_paratopy_classes::<$N>(),
+                Mode::NormalizeMainClass => normalize_main_class::<$N>(),
+                Mode::GenerateMainClasses => generate_main_classes::<$N>(),
                 Mode::FindSCS { start, end } => find_scs(start, end),
-                Mode::FindMOLSSCS {
-                    mols,
-                    start,
-                    end,
-                    all,
-                } => find_mols_scs_n::<$N>(mols, start, end, all),
+                // Mode::FindMOLSSCS {
+                //     mols,
+                //     start,
+                //     end,
+                //     all,
+                // } => find_mols_scs_n::<$N>(mols, start, end, all),
                 Mode::RandomLatinSquares { seed } => random_latin_squares::<$N>(seed),
                 Mode::FindOrthogonal { all } => find_orthogonal::<$N>(all),
                 Mode::Solve => solve(),
                 Mode::SortByIntercalates => sort_by_intercalates::<$N>(),
                 Mode::NumSubsquares { k } => num_subsquares::<$N>(k),
-                Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
-                Mode::ShuffleMOLS { mols, seed } => shuffle_mols_n::<$N>(mols, seed),
-                Mode::SolveMOLS { mols } => solve_mols_n::<$N>(mols),
+                // Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
+                // Mode::ShuffleMOLS { mols, seed } => shuffle_mols_n::<$N>(mols, seed),
+                // Mode::SolveMOLS { mols } => solve_mols_n::<$N>(mols),
+                _ => todo!(),
             }
         };
     }
@@ -198,10 +205,51 @@ fn analyse<const N: usize>() {
         for i in 2..N {
             println!("Subsquares order {i}: {}", sq.num_subsquares_dyn(i));
         }
+        println!();
+
+        println!("Symmetries: ");
+        let symmetries = sq.symmetries();
+        for symmetry in symmetries {
+            let rcv: String = symmetry.apply_array(['R', 'C', 'V']).into_iter().collect();
+            println!("{rcv}");
+        }
+        println!();
+
+        for cycles in [sq.row_cycles(), sq.col_cycles(), sq.val_cycles()] {
+            let mut counts: Vec<_> = {
+                let mut map = HashMap::new();
+
+                for cycle in cycles {
+                    if let Some(count) = map.get_mut(&cycle) {
+                        *count += 1;
+                    } else {
+                        map.insert(cycle, 1usize);
+                    }
+                }
+
+                map.into_iter().collect()
+            };
+            counts.sort();
+
+            for (cycle, count) in counts {
+                println!("{cycle:?}: {count}");
+            }
+            println!();
+        }
+
+        let isotopy_class = sq.reduced_isotopic();
+        if isotopy_class != sq {
+            println!("Isotopy class: ");
+            println!("{}", isotopy_class.to_string());
+            pretty_print_sq(isotopy_class);
+        } else {
+            println!("Is isotopy class reduced");
+        }
 
         let main_class = sq.main_class_reduced();
         if main_class != sq {
             println!("Main class: ");
+            println!("{}", main_class.to_string());
             pretty_print_sq(main_class);
         } else {
             println!("Is main class reduced");
@@ -210,20 +258,6 @@ fn analyse<const N: usize>() {
 }
 
 fn generate_latin_squares<const N: usize>() {
-    // for permutation in PermutationIter::new() {
-    //     if permutation.num_fixed_points() < 1 || permutation.order() > 2 {
-    //         continue;
-    //     }
-    //     dbg!(&permutation);
-    //     for sq in RCGenerator::<N>::new(permutation) {
-    //         println!("{}", sq.to_string());
-    //     }
-    // }
-
-    // for sq in RCSGenerator::<N>::new() {
-    //     println!("{}", sq);
-    // }
-
     for sq in LatinSquareGenerator::<N>::new() {
         println!("{sq}");
     }
@@ -254,40 +288,20 @@ fn pretty_print_sq(sq: impl PartialLatinSquareTrait) {
     println!()
 }
 
-fn normalize_paratopy<const N: usize>() {
+fn normalize_main_class<const N: usize>() {
     for sq in read_sqs_from_stdin_n::<N>() {
         println!("{}", sq.main_class_reduced());
     }
 }
 
-fn generate_paratopy_classes<const N: usize>() {
-    // dbg!(LatinSquareOAGenerator::<N>::new_reduced().count(), return);
+fn generate_main_classes<const N: usize>() {
+    for (i, sq) in MainClassGenerator::<N>::new().enumerate() {
+        dbg!(i + 1);
 
-    let mut sqs = HashSet::new();
-
-    for sq in LatinSquareOAGenerator::<N, 1>::new_reduced() {
-        let sq: LatinSquare<N> = sq.squares()[0];
-        let normalized = sq.main_class_reduced();
-
-        if !sqs.contains(&normalized) {
-            sqs.insert(normalized);
-
-            println!("{}", normalized);
-            dbg!(sqs.len());
+        if writeln!(stdout(), "{sq}").is_err() {
+            return;
         }
     }
-
-    // let file = OpenOptions::new()
-    //     .write(true)
-    //     .truncate(true)
-    //     .create(true)
-    //     .open(format!("latin_mc{N}.txt"))
-    //     .unwrap();
-    // let mut writer = BufWriter::new(file);
-
-    // for sq in sqs {
-    //     println!("{}", sq.to_string());
-    // }
 }
 
 fn find_scs(start: usize, end: usize) {
@@ -304,15 +318,19 @@ fn find_scs(start: usize, end: usize) {
         if start <= end {
             for i in start..=end {
                 dbg!(i);
-                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
                 'h: for hitting_set in hitting_sets {
+                    if hitting_set.len() > i {
+                        continue;
+                    }
+
                     let partial_sq = sq.mask(hitting_set);
 
                     for partial_sq in
-                        PartialSquareGeneratorDyn::new_partial(sq.clone(), partial_sq, i)
+                        PartialSquareGeneratorDyn::new_partial(sq.clone(), partial_sq.clone(), i)
                     {
                         // dbg!(partial_sq);
                         let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
@@ -340,7 +358,7 @@ fn find_scs(start: usize, end: usize) {
         } else {
             for i in (end..=start).rev() {
                 dbg!(i);
-                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();

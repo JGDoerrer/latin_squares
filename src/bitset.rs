@@ -161,6 +161,10 @@ macro_rules! make_bitset {
                 println!("+{}", "---+".repeat(size));
                 println!()
             }
+
+            pub fn iter(&self) -> $IterName {
+                self.into_iter()
+            }
         }
 
         impl IntoIterator for $Name {

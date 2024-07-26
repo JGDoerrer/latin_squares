@@ -2,6 +2,7 @@ use crate::{
     constraints::{Constraints, ConstraintsDyn},
     latin_square::LatinSquare,
     latin_square_dyn::LatinSquareDyn,
+    partial_latin_square::PartialLatinSquare,
     partial_latin_square_dyn::PartialLatinSquareDyn,
 };
 
@@ -13,6 +14,14 @@ impl<const N: usize> LatinSquareGenerator<N> {
     pub fn new() -> Self {
         LatinSquareGenerator {
             stack: vec![(Constraints::new_reduced(), 1, 1, 0)],
+        }
+    }
+
+    pub fn from_partial_sq(sq: &PartialLatinSquare<N>) -> Self {
+        let constraints = Constraints::<N>::new_partial(sq);
+        let index = constraints.first_empty().unwrap_or((0, 0));
+        LatinSquareGenerator {
+            stack: vec![(constraints, index.0, index.1, 0)],
         }
     }
 }
