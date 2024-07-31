@@ -184,7 +184,7 @@ macro_rules! make_bitset {
             }
         }
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct $IterName {
             bitset: $Name,
         }

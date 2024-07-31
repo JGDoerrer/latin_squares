@@ -26,8 +26,8 @@ impl<const N: usize> RCSGenerator<N> {
     fn is_minimal(sq: &LatinSquare<N>) -> bool {
         for permutation in PermutationIter::new() {
             let new_sq = sq
-                .permute_rows_and_cols(&permutation)
-                .permute_vals(&permutation);
+                .permuted_rows_and_cols(&permutation)
+                .permuted_vals(&permutation);
 
             if new_sq < *sq {
                 return false;

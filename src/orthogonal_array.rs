@@ -182,7 +182,7 @@ impl<const N: usize, const MOLS: usize> OrthogonalArray<N, MOLS> {
         let mut new = self.clone();
 
         for i in 0..MOLS {
-            new.sqs[i] = new.sqs[i].permute_rows(permutation);
+            new.sqs[i] = new.sqs[i].permuted_rows(permutation);
         }
 
         new

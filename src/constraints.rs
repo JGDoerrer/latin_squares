@@ -328,7 +328,7 @@ impl ConstraintsDyn {
 
                 for value in candidates {
                     for j in 0..n {
-                        if self.cols[j].intersect(found).contains(value) {
+                        if !self.is_set(i, j) && self.cols[j].intersect(found).contains(value) {
                             self.set(i, j, value);
                             break;
                         }
@@ -351,7 +351,7 @@ impl ConstraintsDyn {
 
                 for value in candidates {
                     for j in 0..n {
-                        if self.rows[j].intersect(found).contains(value) {
+                        if !self.is_set(j, i) && self.rows[j].intersect(found).contains(value) {
                             self.set(j, i, value);
                             break;
                         }

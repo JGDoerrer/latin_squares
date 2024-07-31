@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, vec};
 
 #[derive(Debug, Clone)]
 pub struct BitVec {
@@ -26,7 +26,9 @@ impl BitVec {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.words.iter().all(|word| *word == 0)
+        // debug_assert_eq!(self.words.is_empty(), self.words.iter().all(|w| *w == 0));
+        // self.words.is_empty()
+        self.words.iter().all(|w| *w == 0)
     }
 
     #[inline]
@@ -44,27 +46,27 @@ impl BitVec {
 
     #[inline]
     pub fn remove(&mut self, index: usize) {
-        let word = index / usize::BITS as usize;
-        let bit = index % usize::BITS as usize;
-        let bit_mask = 1 << bit;
+        let word_index = index / usize::BITS as usize;
 
-        if self.words.len() <= word {
-            return;
+        if let Some(word) = self.words.get_mut(word_index) {
+            let bit = index % usize::BITS as usize;
+            let bit_mask = 1 << bit;
+
+            *word &= !bit_mask;
         }
-
-        self.words[word] &= !bit_mask;
     }
 
     #[inline]
     pub fn contains(&self, index: usize) -> bool {
         let word = index / usize::BITS as usize;
-        let bit = index % usize::BITS as usize;
-        let bit_mask = 1 << bit;
 
-        if self.words.len() <= word {
-            false
+        if let Some(word) = self.words.get(word) {
+            let bit = index % usize::BITS as usize;
+            let bit_mask = 1 << bit;
+
+            word & bit_mask != 0
         } else {
-            (self.words[word] & bit_mask) != 0
+            false
         }
     }
 
@@ -203,15 +205,14 @@ impl<'a> Iterator for BitVecIter<'a> {
         const BITS: usize = usize::BITS as usize;
 
         let word_index = self.index / BITS;
-        let bit_index = self.index % BITS;
-
-        if word_index >= self.bitvec.words.len() {
+        let Some(word) = self.bitvec.words.get(word_index) else {
             return None;
-        }
+        };
 
+        let bit_index = self.index % BITS;
         let mask = !((1usize << bit_index) - 1);
 
-        let word = self.bitvec.words[word_index] & mask;
+        let word = word & mask;
         let next_one = word.trailing_zeros() as usize;
 
         if next_one == BITS {

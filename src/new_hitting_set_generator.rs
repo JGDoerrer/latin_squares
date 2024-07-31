@@ -11,19 +11,22 @@ type BitSetIter = BitSet128Iter;
 #[derive(Debug)]
 pub struct NewHittingSetGenerator {
     stack: Vec<StackEntry>,
+    stack_index: usize,
     sets: Vec<BitSet>,
     max_entries: usize,
     entry_to_sets: Vec<BitVec>,
     last_progress: Instant,
+    temp_entry: StackEntry,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StackEntry {
     cand: BitSet,
     hitting_set: BitSet,
     uncovered: BitVec,
     critical: Vec<BitVec>,
     c: BitSetIter,
+    c_set: BitSet,
 }
 
 impl NewHittingSetGenerator {
@@ -53,21 +56,58 @@ impl NewHittingSetGenerator {
         let c = uncovered_set.intersect(cand);
         cand = cand.intersect(c.complement());
 
-        let stack = vec![StackEntry {
+        let mut stack = vec![
+            StackEntry {
+                hitting_set: BitSet::empty(),
+                uncovered: BitVec::with_capacity(sets.len()),
+                cand: BitSet::empty(),
+                critical: vec![BitVec::with_capacity(sets.len()); largest_entry + 1],
+                c: BitSet::empty().iter(),
+                c_set: BitSet::empty(),
+            };
+            max_entries + 1
+        ];
+        stack[0] = StackEntry {
             hitting_set: BitSet::empty(),
             uncovered,
-            critical: vec![BitVec::empty(); largest_entry + 1],
+            critical: vec![BitVec::with_capacity(sets.len()); largest_entry + 1],
+            c_set: c,
             c: c.into_iter(),
             cand,
-        }];
+        };
 
         NewHittingSetGenerator {
             stack,
+            stack_index: 0,
             entry_to_sets: entry_to_set,
-            sets,
             max_entries,
             last_progress: Instant::now(),
+            temp_entry: StackEntry {
+                hitting_set: BitSet::empty(),
+                uncovered: BitVec::with_capacity(sets.len()),
+                cand: BitSet::empty(),
+                critical: vec![BitVec::with_capacity(sets.len()); largest_entry + 1],
+                c: BitSet::empty().iter(),
+                c_set: BitSet::empty(),
+            },
+            sets,
         }
+    }
+
+    fn progress(&self) -> f64 {
+        let totals: Vec<_> = self.stack[0..self.stack_index]
+            .iter()
+            .map(|entry| entry.c_set.len() as f64)
+            .collect();
+
+        self.stack[0..self.stack_index]
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| {
+                (totals[i] - entry.c.clone().count() as f64)
+                    / totals[0..=i].iter().copied().product::<f64>()
+            })
+            .sum::<f64>()
     }
 }
 
@@ -79,71 +119,83 @@ impl Iterator for NewHittingSetGenerator {
             return None;
         }
 
-        'w: while let Some(entry) = self.stack.last_mut() {
+        'w: while let Some(entry) = self.stack.get_mut(self.stack_index) {
             let StackEntry {
                 hitting_set,
                 uncovered,
                 critical,
                 c,
                 cand,
+                ..
             } = entry;
 
-            if hitting_set.len() >= self.max_entries {
-                self.stack.pop();
-                continue;
-            }
-
             for v in c {
-                let mut new_critical = critical.clone();
-                let mut new_uncovered = uncovered.clone();
-                let mut new_hitting_set = *hitting_set;
-                new_hitting_set.insert(v);
+                let next_entry = &mut self.temp_entry;
+                next_entry.critical.clone_from(critical);
+                next_entry.uncovered.clone_from(uncovered);
+                next_entry.hitting_set.clone_from(hitting_set);
+                next_entry.hitting_set.insert(v);
 
                 for f in self.entry_to_sets[v].iter() {
-                    for crit in &mut new_critical {
-                        crit.remove(f);
+                    for crit in &mut next_entry.critical {
+                        if !crit.is_empty() {
+                            crit.remove(f);
+                        }
                     }
 
-                    if new_uncovered.contains(f) {
-                        new_uncovered.remove(f);
-                        new_critical[v].insert(f);
+                    if next_entry.uncovered.contains(f) {
+                        next_entry.uncovered.remove(f);
+                        next_entry.critical[v].insert(f);
                     }
                 }
 
                 if hitting_set.into_iter().all(|f| {
-                    new_critical[f]
-                        .iter()
-                        .any(|c| self.sets[c].intersect(new_hitting_set) == BitSet::single(f))
+                    next_entry.critical[f].iter().any(|c| {
+                        self.sets[c].intersect(next_entry.hitting_set) == BitSet::single(f)
+                    })
                 }) {
                     cand.insert(v);
-                    if new_uncovered.is_empty() {
-                        let hitting_set = new_hitting_set;
+                    if next_entry.uncovered.is_empty() {
+                        let hitting_set = next_entry.hitting_set;
+
+                        let time_passed = (Instant::now() - self.last_progress).as_secs_f64();
+                        if time_passed >= 1.0 {
+                            self.last_progress = Instant::now();
+                            dbg!(self.progress());
+                        }
                         return Some(hitting_set);
                     }
+                    if hitting_set.len() + 1 >= self.max_entries {
+                        continue;
+                    }
 
-                    let uncovered_set_index = new_uncovered
+                    let uncovered_set_index = next_entry
+                        .uncovered
                         .iter()
                         .min_by_key(|index| self.sets[*index].intersect(*cand).len())
                         .unwrap();
                     let uncovered_set = &self.sets[uncovered_set_index];
 
                     let c = uncovered_set.intersect(*cand);
-                    let cand = cand.intersect(c.complement());
+                    next_entry.cand = cand.intersect(c.complement());
+                    next_entry.c = c.into_iter();
+                    next_entry.c_set = c;
 
-                    let new_entry = StackEntry {
-                        hitting_set: new_hitting_set,
-                        uncovered: new_uncovered,
-                        critical: new_critical,
-                        c: c.into_iter(),
-                        cand,
-                    };
-                    self.stack.push(new_entry);
+                    self.stack_index += 1;
+                    std::mem::swap(&mut self.stack[self.stack_index], &mut self.temp_entry);
+
                     continue 'w;
                 }
             }
 
-            let other_cand = self.stack.pop().unwrap().cand;
-            if let Some(cand) = &mut self.stack.last_mut().map(|e| e.cand) {
+            let other_cand = self.stack[self.stack_index].cand;
+            if self.stack_index > 0 {
+                self.stack_index -= 1;
+            } else {
+                self.stack.clear();
+            }
+
+            if let Some(cand) = &mut self.stack.get_mut(self.stack_index).map(|e| e.cand) {
                 *cand = cand.intersect(other_cand);
             }
         }

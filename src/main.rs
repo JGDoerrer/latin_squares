@@ -49,7 +49,6 @@ mod partial_latin_square_dyn;
 mod partial_oa_generator;
 mod partial_orthogonal_array;
 mod partial_square_generator;
-mod permutable;
 mod permutation;
 mod random_latin_square_generator;
 mod rc_generator;
@@ -121,18 +120,18 @@ fn main() {
                 Mode::NormalizeMainClass => normalize_main_class::<$N>(),
                 Mode::GenerateMainClasses => generate_main_classes::<$N>(),
                 Mode::FindSCS { start, end } => find_scs(start, end),
-                // Mode::FindMOLSSCS {
-                //     mols,
-                //     start,
-                //     end,
-                //     all,
-                // } => find_mols_scs_n::<$N>(mols, start, end, all),
-                Mode::RandomLatinSquares { seed } => random_latin_squares::<$N>(seed),
+                Mode::FindMOLSSCS {
+                    mols,
+                    start,
+                    end,
+                    all,
+                } => find_mols_scs_n::<$N>(mols, start, end, all),
+                // Mode::RandomLatinSquares { seed } => random_latin_squares::<$N>(seed),
                 Mode::FindOrthogonal { all } => find_orthogonal::<$N>(all),
                 Mode::Solve => solve(),
-                Mode::SortByIntercalates => sort_by_intercalates::<$N>(),
-                Mode::NumSubsquares { k } => num_subsquares::<$N>(k),
-                // Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
+                // Mode::SortByIntercalates => sort_by_intercalates::<$N>(),
+                // Mode::NumSubsquares { k } => num_subsquares::<$N>(k),
+                Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
                 // Mode::ShuffleMOLS { mols, seed } => shuffle_mols_n::<$N>(mols, seed),
                 // Mode::SolveMOLS { mols } => solve_mols_n::<$N>(mols),
                 _ => todo!(),
@@ -471,7 +470,7 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
         if start <= end {
             for i in start..=end {
                 dbg!(i);
-                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
@@ -505,7 +504,7 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
         } else {
             for i in (end..=start).rev() {
                 dbg!(i);
-                let hitting_sets = HittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();

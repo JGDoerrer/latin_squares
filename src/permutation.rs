@@ -113,6 +113,11 @@ impl<const N: usize> Permutation<N> {
         self.0[num]
     }
 
+    #[inline]
+    pub fn apply_u8(&self, num: u8) -> u8 {
+        self.0[num as usize] as u8
+    }
+
     pub fn apply_array<T>(&self, array: [T; N]) -> [T; N]
     where
         T: Copy,
