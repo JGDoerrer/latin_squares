@@ -14,7 +14,7 @@ use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::{LatinSquareGenerator, LatinSquareGeneratorDyn};
 use latin_square_oa_generator::LatinSquareOAGenerator;
 
-use latin_square_trait::PartialLatinSquareTrait;
+use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use main_class_generator::MainClassGenerator;
 use new_hitting_set_generator::NewHittingSetGenerator;
 use orthogonal_array::OrthogonalArray;
@@ -26,8 +26,6 @@ use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, PermutationIter};
 use random_latin_square_generator::RandomLatinSquareGenerator;
-
-use crate::hitting_set_generator::HittingSetGenerator;
 
 mod bitset;
 mod bitvec;
@@ -57,10 +55,16 @@ mod tuple_iterator;
 
 #[derive(Subcommand, Clone)]
 enum Mode {
-    Analyse,
+    Analyse {
+        n: usize,
+    },
     PrettyPrint,
-    NormalizeMainClass,
-    GenerateMainClasses,
+    NormalizeMainClass {
+        n: usize,
+    },
+    GenerateMainClasses {
+        n: usize,
+    },
     FindSCS {
         #[arg(short, long, default_value_t = 0)]
         start: usize,
@@ -76,8 +80,11 @@ enum Mode {
         #[arg(short, long)]
         all: bool,
     },
-    GenerateLatinSquares,
+    GenerateLatinSquares {
+        n: usize,
+    },
     RandomLatinSquares {
+        n: usize,
         seed: u64,
     },
     FindOrthogonal {
@@ -85,7 +92,6 @@ enum Mode {
         all: bool,
     },
     Solve,
-    SortByIntercalates,
     NumSubsquares {
         k: usize,
     },
@@ -103,7 +109,6 @@ enum Mode {
 
 #[derive(Parser)]
 struct Args {
-    n: usize,
     #[command(subcommand)]
     mode: Mode,
 }
@@ -111,62 +116,40 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    macro_rules! match_mode {
-        ($N: expr) => {
-            match args.mode {
-                Mode::Analyse => analyse::<$N>(),
-                Mode::GenerateLatinSquares => generate_latin_squares::<$N>(),
-                Mode::PrettyPrint => pretty_print::<$N>(),
-                Mode::NormalizeMainClass => normalize_main_class::<$N>(),
-                Mode::GenerateMainClasses => generate_main_classes::<$N>(),
-                Mode::FindSCS { start, end } => find_scs(start, end),
-                Mode::FindMOLSSCS {
-                    mols,
-                    start,
-                    end,
-                    all,
-                } => find_mols_scs_n::<$N>(mols, start, end, all),
-                // Mode::RandomLatinSquares { seed } => random_latin_squares::<$N>(seed),
-                Mode::FindOrthogonal { all } => find_orthogonal::<$N>(all),
-                Mode::Solve => solve(),
-                // Mode::SortByIntercalates => sort_by_intercalates::<$N>(),
-                // Mode::NumSubsquares { k } => num_subsquares::<$N>(k),
-                Mode::GenerateMOLS { mols } => generate_mols_n::<$N>(mols),
-                // Mode::ShuffleMOLS { mols, seed } => shuffle_mols_n::<$N>(mols, seed),
-                // Mode::SolveMOLS { mols } => solve_mols_n::<$N>(mols),
+    macro_rules! match_n {
+        ($n: expr, $f: ident) => {
+            match $n {
+                1 => $f::<1>(),
+                2 => $f::<2>(),
+                3 => $f::<3>(),
+                4 => $f::<4>(),
+                5 => $f::<5>(),
+                6 => $f::<6>(),
+                7 => $f::<7>(),
+                8 => $f::<8>(),
+                9 => $f::<9>(),
+                10 => $f::<10>(),
                 _ => todo!(),
             }
         };
     }
 
-    match args.n {
-        1 => match_mode!(1),
-        2 => match_mode!(2),
-        3 => match_mode!(3),
-        4 => match_mode!(4),
-        5 => match_mode!(5),
-        6 => match_mode!(6),
-        7 => match_mode!(7),
-        8 => match_mode!(8),
-        9 => match_mode!(9),
-        10 => match_mode!(10),
+    match args.mode {
+        Mode::Analyse { n } => match_n!(n, analyse),
+        Mode::PrettyPrint => pretty_print(),
+        Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
+        Mode::GenerateMainClasses { n } => match_n!(n, generate_main_classes),
+        Mode::FindSCS { start, end } => find_scs(start, end),
+        Mode::GenerateLatinSquares { n } => match_n!(n, generate_latin_squares),
+        Mode::Solve => solve(),
+        Mode::NumSubsquares { k } => num_subsquares(k),
         _ => todo!(),
     }
 }
 
-fn num_subsquares<const N: usize>(k: usize) {
-    for sq in read_sqs_from_stdin_n::<N>() {
+fn num_subsquares(k: usize) {
+    for sq in read_sqs_from_stdin() {
         println!("{}", sq.num_subsquares_dyn(k));
-    }
-}
-
-fn sort_by_intercalates<const N: usize>() {
-    let mut sqs: Vec<_> = read_sqs_from_stdin_n::<N>().collect();
-    sqs.sort_by_key(|a| a.intercalates());
-    for sq in sqs {
-        if writeln!(stdout(), "{}", sq).is_err() {
-            return;
-        }
     }
 }
 
@@ -261,8 +244,8 @@ fn generate_latin_squares<const N: usize>() {
     }
 }
 
-fn pretty_print<const N: usize>() {
-    for sq in read_partial_sqs_from_stdin_n::<N>() {
+fn pretty_print() {
+    for sq in read_partial_sqs_from_stdin() {
         pretty_print_sq(sq);
     }
 }

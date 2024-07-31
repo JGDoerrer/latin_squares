@@ -7,7 +7,7 @@ use crate::{
     bitset::BitSet128,
     latin_square::{self, Cell, LatinSquare},
     latin_square_oa_generator::LatinSquareOAGenerator,
-    latin_square_trait::{LatinSquareTrait, MOLSTrait, PartialMOLSTrait},
+    latin_square_trait::LatinSquareTrait,
     partial_orthogonal_array::PartialOrthogonalArray,
     permutation::Permutation,
     tuple_iterator::TupleIterator,
@@ -29,26 +29,6 @@ impl ValuePair {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrthogonalArray<const N: usize, const MOLS: usize> {
     sqs: [LatinSquare<N>; MOLS],
-}
-
-impl<const N: usize, const MOLS: usize> PartialMOLSTrait for OrthogonalArray<N, MOLS> {
-    fn n(&self) -> usize {
-        N
-    }
-
-    fn mols(&self) -> usize {
-        MOLS
-    }
-
-    fn partial_squares(&self) -> &[impl crate::latin_square_trait::PartialLatinSquareTrait] {
-        self.sqs.as_slice()
-    }
-}
-
-impl<const N: usize, const MOLS: usize> MOLSTrait for OrthogonalArray<N, MOLS> {
-    fn squares(&self) -> &[impl crate::latin_square_trait::LatinSquareTrait] {
-        self.sqs.as_slice()
-    }
 }
 
 impl<const N: usize, const MOLS: usize> OrthogonalArray<N, MOLS> {

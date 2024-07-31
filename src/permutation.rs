@@ -252,25 +252,24 @@ impl PermutationDyn {
         }
     }
 
-    // pub fn inverse(self) -> Self {
-    //     let mut identity = Self::identity().to_array();
-    //     let mut permutation = self.to_array();
+    pub fn inverse(self) -> Self {
+        let mut identity = Self::identity(self.0.len()).0;
+        let len = self.0.len();
+        let mut permutation = self.0;
 
-    //     for i in 0..N {
-    //         if permutation[i] == i {
-    //             continue;
-    //         }
+        for i in 0..len {
+            if permutation[i] == i {
+                continue;
+            }
 
-    //         let pos_i = permutation.iter().position(|e| *e == i).unwrap();
+            let pos_i = permutation.iter().position(|e| *e == i).unwrap();
 
-    //         identity.swap(i, pos_i);
-    //         permutation.swap(i, pos_i);
-    //     }
+            identity.swap(i, pos_i);
+            permutation.swap(i, pos_i);
+        }
 
-    //     let inverse = Self::from_array(identity);
-
-    //     inverse
-    // }
+        Self::from_vec(identity)
+    }
 
     pub fn apply(&self, num: usize) -> usize {
         self.0[num]

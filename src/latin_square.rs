@@ -11,7 +11,7 @@ use crate::{
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationDyn, PermutationDynIter, PermutationIter},
-    tuple_iterator::{TupleIterator, TupleIteratorDyn},
+    tuple_iterator::TupleIterator,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -258,7 +258,7 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         for (rows, _) in candidates {
-            let permutations = Self::minimize_rows(rows);
+            let permutations = Self::minimize_rows(&rows);
 
             for (s, c) in permutations {
                 let mut new_sq = sq.permuted_vals(&s).permuted_cols(&c);
@@ -327,7 +327,7 @@ impl<const N: usize> LatinSquare<N> {
         paratopic
     }
 
-    fn minimize_rows(rows: [[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
+    fn minimize_rows(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
         let row_permutation = {
             let mut permutation = [0; N];
 
@@ -493,7 +493,7 @@ impl<const N: usize> LatinSquare<N> {
             }
 
             for (rows, _) in candidates {
-                let permutations = Self::minimize_rows(rows);
+                let permutations = Self::minimize_rows(&rows);
 
                 for (s, c) in permutations {
                     let mut new_sq = sq.clone();
@@ -694,22 +694,6 @@ impl<const N: usize> LatinSquare<N> {
         values
     }
 
-    pub fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<u8>> {
-        debug_assert!(rows.len() == cols.len());
-
-        let k = rows.len();
-
-        let mut values = vec![vec![0; k]; k];
-
-        for i in 0..k {
-            for (j, col) in cols.iter().enumerate() {
-                values[i][j] = self.rows[rows[i]][*col];
-            }
-        }
-
-        values
-    }
-
     pub fn subsquares<const K: usize>(&self) -> Vec<([usize; K], [usize; K])> {
         if K > N {
             return vec![];
@@ -748,49 +732,6 @@ impl<const N: usize> LatinSquare<N> {
 
                 if LatinSquare::<K>::is_valid(&subsquare) {
                     subsquares.push((rows, cols));
-                }
-            }
-        }
-
-        subsquares
-    }
-
-    pub fn num_subsquares_dyn(&self, k: usize) -> usize {
-        let mut subsquares = 0;
-
-        for rows in TupleIteratorDyn::new(N, k) {
-            for cols in TupleIteratorDyn::new(N, k) {
-                let mut subsquare = self.get_subsquare_dyn(&rows, &cols);
-
-                let mut permutation: Vec<_> = subsquare[0].iter().map(|i| *i as usize).collect();
-
-                for i in 0..N {
-                    if !permutation.contains(&i) {
-                        permutation.push(i);
-                    }
-                }
-
-                let permutation: Permutation<N> = PermutationDyn::from_vec(permutation)
-                    .pad_with_id()
-                    .inverse();
-
-                for row in subsquare.iter_mut() {
-                    for val in row.iter_mut() {
-                        *val = permutation.apply(*val as usize) as u8;
-                    }
-                }
-                let is_subsquare = (0..k).all(|i| {
-                    (0..k)
-                        .map(|j| subsquare[i][j] as usize)
-                        .collect::<BitSet16>()
-                        == BitSet16::all_less_than(k)
-                        && (0..k)
-                            .map(|j| subsquare[j][i] as usize)
-                            .collect::<BitSet16>()
-                            == BitSet16::all_less_than(k)
-                });
-                if is_subsquare {
-                    subsquares += 1;
                 }
             }
         }

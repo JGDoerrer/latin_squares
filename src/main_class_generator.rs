@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 
 use crate::{
-    constraints::Constraints,
-    latin_square::LatinSquare,
-    latin_square_generator::LatinSquareGenerator,
-    partial_latin_square::PartialLatinSquare,
-    permutation::{Permutation, PermutationDyn, PermutationDynIter},
+    constraints::Constraints, latin_square::LatinSquare,
+    latin_square_generator::LatinSquareGenerator, partial_latin_square::PartialLatinSquare,
+    permutation::Permutation,
 };
 
 pub struct MainClassGenerator<const N: usize> {
