@@ -143,21 +143,25 @@ impl<const N: usize> Permutation<N> {
         self.0[num as usize] as u8
     }
 
-    pub fn apply_array<T>(&self, mut array: [T; N]) -> [T; N] {
-        let mut permutation = self.0;
+    pub fn apply_array<T>(&self, array: [T; N]) -> [T; N]
+    where
+        T: Copy,
+    {
+        let permutation = self.0;
 
-        while let Some((a, &b)) = permutation.iter().enumerate().find(|(a, b)| a != *b) {
-            permutation.swap(a, b);
-            array.swap(a, b);
+        let mut new_array = [MaybeUninit::uninit(); N];
+
+        for (i, p) in permutation.into_iter().enumerate() {
+            new_array[p].write(array[i]);
         }
 
-        array
+        new_array.map(|i| unsafe { i.assume_init() })
     }
 
     pub fn apply_arrays<T>(&self, arrays: &mut [[T; N]]) {
         let mut permutation = self.0;
 
-        while let Some((a, &b)) = permutation.iter().enumerate().find(|(a, b)| a != *b) {
+        while let Some((a, &b)) = permutation.iter().enumerate().find(|(a, b)| *a != **b) {
             permutation.swap(a, b);
             for array in arrays.iter_mut() {
                 array.swap(a, b);

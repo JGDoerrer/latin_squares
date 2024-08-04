@@ -2,13 +2,13 @@ use std::{
     cmp::Ordering,
     fmt::{Debug, Display, Write},
     mem::MaybeUninit,
-    vec,
 };
 
 use crate::{
     bitset::{BitSet128, BitSet16},
     latin_square_oa_generator::LatinSquareOAGenerator,
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
+    main_class_generator::{generate_cycle_structures, CYCLE_STRUCTURES},
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationDyn, PermutationDynIter, PermutationIter},
     tuple_iterator::TupleIterator,
@@ -381,6 +381,70 @@ impl<const N: usize> LatinSquare<N> {
 
         // dbg!(self.to_string());
         // assert_eq!(self.reduced_paratopic_old(), paratopic);
+
+        paratopic
+    }
+
+    pub fn main_class_lookup(&self, lookup: &Vec<Vec<(Permutation<N>, Permutation<N>)>>) -> Self {
+        let sq = &self.reduced();
+
+        let mut paratopic = *sq;
+        let mut min_cycles = vec![N];
+
+        for sq in sq.paratopic() {
+            let mut candidates = Vec::new();
+
+            for [row0, row1] in
+                TupleIterator::<2>::new(N).flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
+            {
+                let rows = [*sq.get_row(row0), *sq.get_row(row1)];
+                let row_permutation = {
+                    let mut permutation = [0; N];
+
+                    for i in 0..N {
+                        let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                        permutation[i] = rows[1][position].into();
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let mut cycles: Vec<_> = row_permutation.cycle_lengths();
+                cycles.sort();
+
+                if cycles < min_cycles {
+                    min_cycles = cycles.clone();
+                    candidates.clear();
+                }
+                if cycles == min_cycles {
+                    candidates.push((rows, cycles));
+                }
+            }
+
+            for (rows, _) in candidates {
+                let permutations = minimize_rows_with_lookup(&rows, lookup);
+
+                for (s, c) in permutations {
+                    let mut new_sq = sq;
+                    new_sq.permute_vals(&s);
+                    new_sq.permute_cols(&c);
+
+                    let mut new_rows = [[0; N]; N];
+                    for i in 0..N {
+                        new_rows[new_sq.rows[i][0] as usize] = new_sq.rows[i];
+                    }
+
+                    let new_sq = LatinSquare::new(new_rows);
+
+                    if new_sq.cmp_rows(&paratopic).is_lt() {
+                        paratopic = new_sq;
+                    }
+                }
+            }
+        }
+
+        // dbg!(self.to_string());
+        // assert_eq!(self.main_class(), paratopic);
 
         paratopic
     }
@@ -985,8 +1049,7 @@ impl<const N: usize> CyclePermutations<N> {
             Permutation::from_array(permutation)
         };
 
-        let mut cycles = row_permutation.cycles();
-        cycles.sort_by_key(|c| c.len());
+        let cycles = row_permutation.cycles();
 
         let cycles_by_len = {
             const EMPTY_VEC: Vec<Vec<usize>> = Vec::new();
@@ -1110,9 +1173,53 @@ impl<const N: usize> Iterator for CyclePermutations<N> {
     }
 }
 
-pub fn minimize_rows_old<const N: usize>(
+pub fn generate_minimize_rows_lookup<const N: usize>() -> Vec<Vec<(Permutation<N>, Permutation<N>)>>
+{
+    generate_cycle_structures(N)
+        .into_iter()
+        .map(|cycle| {
+            let mut rows = [[0; N]; 2];
+
+            for i in 0..N {
+                rows[0][i] = i as u8;
+            }
+
+            let mut index = 0;
+            for cycle in cycle {
+                let start_index = index;
+                index += cycle;
+                for j in 0..cycle {
+                    rows[1][start_index + j] = (start_index + (j + 1) % cycle) as u8;
+                }
+            }
+
+            let cycle_permutations = CyclePermutations::new(rows);
+            let mut permutations: Vec<_> = cycle_permutations.collect();
+
+            permutations.sort_unstable();
+            permutations.dedup();
+            permutations.shrink_to_fit();
+
+            permutations
+        })
+        .collect()
+}
+
+pub fn minimize_rows<const N: usize>(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
+    let cycle_permutations = CyclePermutations::new(*rows);
+    let mut permutations: Vec<_> = cycle_permutations.collect();
+
+    permutations.sort_unstable();
+    permutations.dedup();
+
+    permutations
+}
+
+pub fn minimize_rows_with_lookup<'a, const N: usize>(
     rows: &[[u8; N]; 2],
-) -> Vec<(Permutation<N>, Permutation<N>)> {
+    lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
+) -> impl Iterator<Item = (Permutation<N>, Permutation<N>)> + 'a {
+    // find (s,c) to normalize
     let row_permutation = {
         let mut permutation = [0; N];
 
@@ -1127,132 +1234,62 @@ pub fn minimize_rows_old<const N: usize>(
     let mut cycles = row_permutation.cycles();
     cycles.sort_by_key(|c| c.len());
 
-    let cycles_by_len = {
-        const EMPTY_VEC: Vec<Vec<usize>> = Vec::new();
-        let mut array = [EMPTY_VEC; N];
+    let cycle_lengths: Vec<_> = cycles.iter().map(|c| c.len()).collect();
 
+    let symbol_permutation = {
+        let mut permutation = [0; N];
+
+        let mut index = 0;
         for cycle in cycles {
-            array[cycle.len() - 1].push(cycle);
+            let cycle_len = cycle.len();
+            let start_index = index;
+            index += cycle_len;
+            for (i, j) in cycle.into_iter().enumerate() {
+                permutation[j] = start_index + (i + 1) % cycle_len;
+            }
         }
 
-        for i in 0..N {
-            array[i].sort();
-        }
-
-        array
+        Permutation::from_array(permutation)
     };
 
-    const NONE: Option<(PermutationDyn, PermutationDynIter)> = None;
-    // permutes the cycles of the same length
-    let mut cycle_permutations = [NONE; N];
+    let column_permutation =
+        Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
 
-    for i in 0..N {
-        if cycles_by_len[i].is_empty() {
-            continue;
-        }
-        let mut iter = PermutationDynIter::new(cycles_by_len[i].len());
-        cycle_permutations[i] = Some((iter.next().unwrap(), iter));
-    }
+    // dbg!(
+    //     rows,
+    //     rows.map(|row| row.map(|v| symbol_permutation.apply_u8(v))),
+    //     rows.map(|row| column_permutation.apply_array(row.map(|v| symbol_permutation.apply_u8(v))))
+    // );
 
-    const EMPTY_VEC: Vec<usize> = Vec::new();
-    // permutes the elements of a cycle
-    let mut per_cycle_permutation = [EMPTY_VEC; N];
+    // lookup
+    // TODO: optimize
+    let cycle_index = CYCLE_STRUCTURES[N]
+        .into_iter()
+        .position(|c| c == &cycle_lengths)
+        .unwrap();
 
-    for i in 0..N {
-        per_cycle_permutation[i] = vec![0; cycles_by_len[i].len()];
-    }
+    let permutations = &lookup[cycle_index];
 
-    let mut permutations = Vec::new();
+    // fix lookup by (s,c)
+    let symbol_permutation = symbol_permutation.inverse();
+    let column_permutation = column_permutation.inverse();
 
-    let mut cycles = vec![];
-    loop {
-        for i in 0..N {
-            let Some((permutation, _)) = &cycle_permutations[i] else {
-                continue;
-            };
+    let permutations = permutations.iter().map(move |(s, c)| {
+        (
+            Permutation::from_array(symbol_permutation.apply_array(s.clone().into_array())),
+            Permutation::from_array(column_permutation.apply_array(c.clone().into_array())),
+        )
+    });
 
-            for j in permutation.as_vec() {
-                let mut cycle = cycles_by_len[i][*j].clone();
-                cycle.rotate_left(per_cycle_permutation[i][*j]);
-
-                cycles.push(cycle);
-            }
-        }
-
-        let mut last_done = true;
-        'i: for i in 0..N {
-            let Some((permutation, iter)) = &mut cycle_permutations[i] else {
-                continue;
-            };
-
-            for j in &mut per_cycle_permutation[i] {
-                if *j == i + 1 {
-                    *j = 0;
-                } else {
-                    *j += 1;
-                    last_done = false;
-                    break 'i;
-                }
-            }
-
-            let next = iter.next();
-            if let Some(next) = next {
-                *permutation = next;
-                last_done = false;
-                break;
-            } else {
-                *iter = PermutationDynIter::new(cycles_by_len[i].len());
-
-                *permutation = iter.next().unwrap();
-            }
-        }
-
-        if last_done {
-            break;
-        }
-
-        let symbol_permutation = {
-            let mut permutation = [0; N];
-
-            let mut index = 0;
-            for cycle in cycles.drain(..) {
-                let start_index = index;
-                let len = cycle.len();
-                index += len;
-
-                for (i, v) in cycle.iter().enumerate() {
-                    permutation[*v] = start_index + i;
-                }
-            }
-
-            Permutation::from_array(permutation)
-        };
-
-        let column_permutation =
-            Permutation::from_array(rows[0].map(|i| symbol_permutation.apply(i.into())));
-
-        permutations.push((symbol_permutation, column_permutation));
-    }
-
-    permutations
-}
-
-pub fn minimize_rows<const N: usize>(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
-    let cycle_permutations = CyclePermutations::new(*rows);
-    let mut permutations: Vec<_> = cycle_permutations.collect();
-
-    // TODO: precompute?
-
-    // dbg!(permutations.len());
-
-    // permutations.dedup();
-    // dbg!(permutations.len());
-
-    permutations.sort_unstable();
-    permutations.dedup();
-    // dbg!(permutations.len());
-
-    // dbg!(format!("{permutations:?}"));
+    // for (s, c) in permutations.clone() {
+    //     // dbg!(rows.map(|row| c.apply_array(row.map(|v| s.apply_u8(v)))));
+    //     assert_eq!(
+    //         rows.map(
+    //             |row| column_permutation.apply_array(row.map(|v| symbol_permutation.apply_u8(v)))
+    //         ),
+    //         rows.map(|row| c.apply_array(row.map(|v| s.apply_u8(v)))),
+    //     )
+    // }
 
     permutations
 }

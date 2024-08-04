@@ -8,7 +8,7 @@ use std::{
 
 use clap::{self, Parser, Subcommand};
 
-use latin_square::LatinSquare;
+use latin_square::{generate_minimize_rows_lookup, LatinSquare};
 
 use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::{LatinSquareGenerator, LatinSquareGeneratorDyn};
@@ -279,7 +279,8 @@ fn normalize_main_class<const N: usize>() {
 }
 
 fn generate_main_classes<const N: usize>() {
-    for (i, sq) in MainClassGenerator::<N>::new().enumerate() {
+    let lookup = generate_minimize_rows_lookup();
+    for (i, sq) in MainClassGenerator::<N>::new(&lookup).enumerate() {
         dbg!(i + 1);
 
         if writeln!(stdout(), "{sq}").is_err() {
