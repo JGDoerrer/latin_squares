@@ -170,7 +170,7 @@ impl<const N: usize> Iterator for RowGenerator<N> {
         }
 
         let sq = constraints.partial_sq().minimize_rows();
-        if self.sqs.insert(sq.clone()) {
+        if self.sqs.insert(sq) {
             Some(sq)
         } else {
             self.next()

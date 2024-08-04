@@ -1,4 +1,4 @@
-use std::{hash::Hash, mem::MaybeUninit};
+use std::mem::MaybeUninit;
 
 pub fn factorial(n: usize) -> usize {
     (2..=n).product()

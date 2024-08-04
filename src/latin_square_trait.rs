@@ -28,7 +28,7 @@ pub trait LatinSquareTrait: PartialLatinSquareTrait {
             for cols in TupleIteratorDyn::new(n, k) {
                 let mut subsquare = self.get_subsquare_dyn(&rows, &cols);
 
-                let mut permutation: Vec<_> = subsquare[0].iter().map(|i| *i as usize).collect();
+                let mut permutation: Vec<_> = subsquare[0].iter().copied().collect();
 
                 for i in 0..n {
                     if !permutation.contains(&i) {
@@ -45,13 +45,9 @@ pub trait LatinSquareTrait: PartialLatinSquareTrait {
                 }
 
                 let is_subsquare = (0..k).all(|i| {
-                    (0..k)
-                        .map(|j| subsquare[i][j] as usize)
-                        .collect::<BitSet16>()
+                    (0..k).map(|j| subsquare[i][j]).collect::<BitSet16>()
                         == BitSet16::all_less_than(k)
-                        && (0..k)
-                            .map(|j| subsquare[j][i] as usize)
-                            .collect::<BitSet16>()
+                        && (0..k).map(|j| subsquare[j][i]).collect::<BitSet16>()
                             == BitSet16::all_less_than(k)
                 });
                 if is_subsquare {

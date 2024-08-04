@@ -119,8 +119,8 @@ impl NewHittingSetGenerator {
         let time_passed = Instant::now() - self.start;
         let progress = self.progress();
         let total_time = time_passed.div_f64(progress);
-        let time_left = total_time - time_passed;
-        time_left
+
+        total_time - time_passed
     }
 }
 

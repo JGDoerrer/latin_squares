@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    collections::HashSet,
     fmt::{Debug, Display, Write},
     mem::MaybeUninit,
     vec,
@@ -368,7 +367,7 @@ impl<const N: usize> LatinSquare<N> {
                 let permutations = minimize_rows(&rows);
 
                 for (s, c) in permutations {
-                    let mut new_sq = sq.clone();
+                    let mut new_sq = sq;
                     new_sq.permute_vals(&s);
                     new_sq.permute_cols(&c);
                     new_sq.rows.sort();
@@ -757,7 +756,7 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn permuted_cols(&self, permutation: &Permutation<N>) -> Self {
-        let mut new = self.clone();
+        let mut new = *self;
         new.permute_cols(permutation);
         new
     }
@@ -782,7 +781,7 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn permuted_vals(&self, permutation: &Permutation<N>) -> Self {
-        let mut new = self.clone();
+        let mut new = *self;
         new.permute_vals(permutation);
         new
     }
