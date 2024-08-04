@@ -6,14 +6,15 @@ use std::{
 
 use crate::{
     bitset::BitSet16,
-    latin_square::LatinSquare,
+    latin_square::{minimize_rows, LatinSquare},
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     permutation::Permutation,
+    tuple_iterator::TupleIterator,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PartialLatinSquare<const N: usize> {
-    values: [[Option<u8>; N]; N],
+    rows: [[Option<u8>; N]; N],
 }
 
 impl<const N: usize> Default for PartialLatinSquare<N> {
@@ -28,57 +29,57 @@ impl<const N: usize> PartialLatinSquareTrait for PartialLatinSquare<N> {
     }
 
     fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
-        self.values[row][col].map(|val| val.into())
+        self.rows[row][col].map(|val| val.into())
     }
 }
 
 impl<const N: usize> PartialLatinSquare<N> {
     pub fn empty() -> Self {
         PartialLatinSquare {
-            values: [[None; N]; N],
+            rows: [[None; N]; N],
         }
     }
 
     pub fn from_array(values: [[Option<u8>; N]; N]) -> Self {
-        PartialLatinSquare { values }
+        PartialLatinSquare { rows: values }
     }
 
     pub fn values(self) -> [[Option<u8>; N]; N] {
-        self.values
+        self.rows
     }
 
     pub fn get(&self, row: usize, col: usize) -> Option<usize> {
-        self.values[row][col].map(|val| val.into())
+        self.rows[row][col].map(|val| val.into())
     }
 
     pub fn get_row(&self, i: usize) -> &[Option<u8>; N] {
-        &self.values[i]
+        &self.rows[i]
     }
 
     pub fn get_col(&self, i: usize) -> [Option<u8>; N] {
         let mut col = [None; N];
 
         for (j, val) in col.iter_mut().enumerate() {
-            *val = self.values[j][i];
+            *val = self.rows[j][i];
         }
 
         col
     }
 
     pub fn set(&mut self, i: usize, j: usize, value: Option<usize>) {
-        self.values[i][j] = value.map(|v| v as u8);
+        self.rows[i][j] = value.map(|v| v as u8);
     }
 
     pub fn is_complete(&self) -> bool {
-        self.values
+        self.rows
             .iter()
             .all(|row| row.iter().all(|val| val.is_some()))
     }
 
     pub fn is_reduced(&self) -> bool {
         for i in 0..N {
-            if self.values[0][i].is_some_and(|j| j != i as u8)
-                || self.values[i][0].is_some_and(|j| j != i as u8)
+            if self.rows[0][i].is_some_and(|j| j != i as u8)
+                || self.rows[i][0].is_some_and(|j| j != i as u8)
             {
                 return false;
             }
@@ -106,11 +107,11 @@ impl<const N: usize> PartialLatinSquare<N> {
 
         for (i, row) in values.iter_mut().enumerate() {
             for (j, val) in row.iter_mut().enumerate() {
-                *val = self.values[j][i];
+                *val = self.rows[j][i];
             }
         }
 
-        Self { values }
+        Self { rows: values }
     }
 
     pub fn num_entries(&self) -> usize {
@@ -153,19 +154,17 @@ impl<const N: usize> PartialLatinSquare<N> {
     }
 
     pub fn permute_rows(&self, permutation: &Permutation<N>) -> Self {
-        let values = permutation.apply_array(self.values);
+        let rows = permutation.apply_array(self.rows);
 
-        Self { values }
+        Self { rows }
     }
 
     pub fn permute_cols(&self, permutation: &Permutation<N>) -> Self {
-        let mut values = self.values;
+        let mut rows = self.rows;
 
-        values.iter_mut().for_each(|row| {
-            *row = permutation.apply_array(*row);
-        });
+        permutation.apply_arrays(&mut rows);
 
-        Self { values }
+        Self { rows }
     }
 
     pub fn permute_rows_and_cols(&self, permutation: &Permutation<N>) -> Self {
@@ -174,18 +173,18 @@ impl<const N: usize> PartialLatinSquare<N> {
         let permutation = permutation.as_array();
 
         for (i, new_row) in values.iter_mut().enumerate() {
-            let row = self.values[permutation[i]];
+            let row = self.rows[permutation[i]];
 
             for (j, new_val) in new_row.iter_mut().enumerate() {
                 *new_val = row[permutation[j]];
             }
         }
 
-        Self { values }
+        Self { rows: values }
     }
 
     pub fn permute_vals(&self, permutation: &Permutation<N>) -> Self {
-        let mut values = self.values;
+        let mut values = self.rows;
 
         for row in &mut values {
             for val in row {
@@ -195,7 +194,7 @@ impl<const N: usize> PartialLatinSquare<N> {
             }
         }
 
-        Self { values }
+        Self { rows: values }
     }
 
     pub fn sort_entries_top_left(&self) -> Self {
@@ -214,9 +213,9 @@ impl<const N: usize> PartialLatinSquare<N> {
             })
             .unwrap();
 
-        new.values.swap(0, top_row_index);
+        new.rows.swap(0, top_row_index);
         if bottom_row_index != 0 {
-            new.values.swap(N - 1, bottom_row_index);
+            new.rows.swap(N - 1, bottom_row_index);
         }
 
         let mut top_cols = Permutation::<N>::identity().into_array().map(|j| {
@@ -273,7 +272,7 @@ impl<const N: usize> PartialLatinSquare<N> {
                 continue;
             }
 
-            new.values.swap(i, max_row);
+            new.rows.swap(i, max_row);
         }
 
         for i in (1..N - 1).rev() {
@@ -302,14 +301,14 @@ impl<const N: usize> PartialLatinSquare<N> {
                 continue;
             }
 
-            new.values.swap(i, max_row);
+            new.rows.swap(i, max_row);
         }
 
         new
     }
 
     pub fn has_entry_determined_by_row_col(&self) -> bool {
-        let rows = self.values.map(|row| {
+        let rows = self.rows.map(|row| {
             row.into_iter()
                 .flatten()
                 .map(|i| i as usize)
@@ -342,19 +341,101 @@ impl<const N: usize> PartialLatinSquare<N> {
         false
     }
 
+    pub fn minimize_rows(&self) -> Self {
+        let full_rows: Vec<_> = self
+            .rows
+            .iter()
+            .filter(|row| row.iter().all(|v| v.is_some()))
+            .map(|row| row.map(|v| v.unwrap()))
+            .collect();
+
+        let mut candidates = Vec::new();
+        let mut min_cycles = vec![N];
+
+        for [row0, row1] in TupleIterator::<2>::new(full_rows.len())
+            .flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
+        {
+            let rows = [full_rows[row0], full_rows[row1]];
+            let row_permutation = {
+                let mut permutation = [0; N];
+
+                for i in 0..N {
+                    let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                    permutation[i] = rows[1][position].into();
+                }
+
+                Permutation::from_array(permutation)
+            };
+
+            let mut cycles: Vec<_> = row_permutation.cycle_lengths();
+            cycles.sort();
+
+            if cycles < min_cycles {
+                min_cycles = cycles.clone();
+                candidates.clear();
+            }
+            if cycles == min_cycles {
+                candidates.push((rows, cycles));
+            }
+        }
+
+        let mut min = *self;
+
+        for (rows, _) in candidates {
+            let permutations = minimize_rows(&rows);
+
+            for (s, c) in permutations {
+                let mut new_sq = self.permute_vals(&s).permute_cols(&c);
+                new_sq.rows.sort_by(|a, b| {
+                    match (a[0], b[0]) {
+                        (None, None) => {}
+                        (Some(_), None) => return Ordering::Less,
+                        (None, Some(_)) => return Ordering::Greater,
+                        (Some(i), Some(j)) => match i.cmp(&j) {
+                            Ordering::Equal => {}
+                            o => return o,
+                        },
+                    }
+                    Ordering::Equal
+                });
+
+                if new_sq.cmp_rows(&min).is_lt() {
+                    min = new_sq;
+                }
+            }
+        }
+
+        min
+    }
+
+    pub fn cmp_rows(&self, other: &Self) -> Ordering {
+        for i in 0..N {
+            for j in 0..N {
+                match (self.rows[i][j], other.rows[i][j]) {
+                    (None, None) => {}
+                    (Some(_), None) => return Ordering::Less,
+                    (None, Some(_)) => return Ordering::Greater,
+                    (Some(i), Some(j)) => match i.cmp(&j) {
+                        Ordering::Equal => {}
+                        o => return o,
+                    },
+                }
+            }
+        }
+        Ordering::Equal
+    }
+
     pub fn cmp_diagonal(&self, other: &Self) -> Ordering {
         for i in 0..N {
             for j in (0..=i).rev() {
-                match self.values[j][i].cmp(&other.values[j][i]) {
-                    Ordering::Less => return Ordering::Less,
-                    Ordering::Greater => return Ordering::Greater,
+                match self.rows[j][i].cmp(&other.rows[j][i]) {
                     Ordering::Equal => {}
+                    o => return o,
                 }
                 if i != j {
-                    match self.values[i][j].cmp(&other.values[i][j]) {
-                        Ordering::Less => return Ordering::Less,
-                        Ordering::Greater => return Ordering::Greater,
+                    match self.rows[i][j].cmp(&other.rows[i][j]) {
                         Ordering::Equal => {}
+                        o => return o,
                     }
                 }
             }
@@ -372,36 +453,19 @@ impl<const N: usize> PartialOrd for PartialLatinSquare<N> {
 
 impl<const N: usize> Ord for PartialLatinSquare<N> {
     fn cmp(&self, other: &Self) -> Ordering {
-        for i in 0..N {
-            for j in (0..=i).rev() {
-                match self.values[j][i].cmp(&other.values[j][i]) {
-                    Ordering::Less => return Ordering::Less,
-                    Ordering::Greater => return Ordering::Greater,
-                    Ordering::Equal => {}
-                }
-                if i != j {
-                    match self.values[i][j].cmp(&other.values[i][j]) {
-                        Ordering::Less => return Ordering::Less,
-                        Ordering::Greater => return Ordering::Greater,
-                        Ordering::Equal => {}
-                    }
-                }
-            }
-        }
-
-        Ordering::Equal
+        self.cmp_rows(other)
     }
 }
 
 impl<const N: usize> From<LatinSquare<N>> for PartialLatinSquare<N> {
     fn from(value: LatinSquare<N>) -> Self {
         let mut sq = PartialLatinSquare {
-            values: [[None; N]; N],
+            rows: [[None; N]; N],
         };
 
         for i in 0..N {
             for j in 0..N {
-                sq.values[i][j] = Some(value.get(i, j) as u8);
+                sq.rows[i][j] = Some(value.get(i, j) as u8);
             }
         }
 
@@ -467,7 +531,7 @@ impl<const N: usize> TryFrom<&str> for PartialLatinSquare<N> {
             }
         }
 
-        Ok(PartialLatinSquare { values })
+        Ok(PartialLatinSquare { rows: values })
     }
 }
 
@@ -508,5 +572,24 @@ mod test {
             sq.permute_rows(&perm).permute_cols(&perm),
             sq.permute_rows_and_cols(&perm)
         );
+    }
+
+    #[test]
+    fn minimize_rows() {
+        assert_eq!(
+            PartialLatinSquare::from_array([
+                [Some(0), Some(1), Some(2), Some(3)],
+                [Some(1), Some(2), Some(3), Some(0)],
+                [Some(2), Some(3), Some(0), Some(1)],
+                [None; 4]
+            ])
+            .minimize_rows(),
+            PartialLatinSquare::from_array([
+                [Some(0), Some(1), Some(2), Some(3)],
+                [Some(1), Some(0), Some(3), Some(2)],
+                [Some(2), Some(3), Some(1), Some(0)],
+                [None; 4]
+            ])
+        )
     }
 }

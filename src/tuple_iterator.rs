@@ -5,16 +5,19 @@ pub struct TupleIterator<const K: usize> {
 
 impl<const K: usize> TupleIterator<K> {
     pub fn new(n: usize) -> Self {
-        assert!(n >= K);
-        let mut first = [0; K];
+        if n >= K {
+            let mut first = [0; K];
 
-        for (i, element) in first.iter_mut().enumerate() {
-            *element = i;
-        }
+            for (i, element) in first.iter_mut().enumerate() {
+                *element = i;
+            }
 
-        TupleIterator {
-            n,
-            current: Some(first),
+            TupleIterator {
+                n,
+                current: Some(first),
+            }
+        } else {
+            TupleIterator { n, current: None }
         }
     }
 }
@@ -119,6 +122,16 @@ mod test {
         let mut iter = TupleIterator::new(3);
 
         assert_eq!(iter.next(), Some([0, 1, 2]));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_3_2() {
+        let mut iter = TupleIterator::new(3);
+
+        assert_eq!(iter.next(), Some([0, 1]));
+        assert_eq!(iter.next(), Some([0, 2]));
+        assert_eq!(iter.next(), Some([1, 2]));
         assert_eq!(iter.next(), None);
     }
 }

@@ -1,5 +1,6 @@
 use std::{
     cmp::Ordering,
+    collections::HashSet,
     fmt::{Debug, Display, Write},
     mem::MaybeUninit,
     vec,
@@ -217,7 +218,7 @@ impl<const N: usize> LatinSquare<N> {
         })
     }
 
-    pub fn reduced_isotopic(&self) -> Self {
+    pub fn isotopy_class(&self) -> Self {
         let sq = &self.reduced();
 
         let mut isotopic = *sq;
@@ -258,7 +259,7 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         for (rows, _) in candidates {
-            let permutations = Self::minimize_rows(&rows);
+            let permutations = minimize_rows(&rows);
 
             for (s, c) in permutations {
                 let mut new_sq = sq.permuted_vals(&s).permuted_cols(&c);
@@ -277,7 +278,7 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn symmetries(&self) -> Vec<Permutation<3>> {
-        let isotopy_class = self.reduced_isotopic();
+        let isotopy_class = self.isotopy_class();
 
         let mut rows = [[0; N]; N];
         for (i, row) in rows.iter_mut().enumerate() {
@@ -297,14 +298,14 @@ impl<const N: usize> LatinSquare<N> {
         for permutation in PermutationIter::new() {
             let [rows, cols, vals] = permutation.apply_array([rows, cols, vals]);
             let sq = Self::from_rcv(rows, cols, vals);
-            if sq.reduced_isotopic() == isotopy_class {
+            if sq.isotopy_class() == isotopy_class {
                 symmetries.push(permutation);
             }
         }
         symmetries
     }
 
-    pub fn main_class_reduced_old(&self) -> Self {
+    pub fn main_class_old(&self) -> Self {
         let sq = &self.reduced();
 
         let mut paratopic = *sq;
@@ -327,132 +328,7 @@ impl<const N: usize> LatinSquare<N> {
         paratopic
     }
 
-    fn minimize_rows(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
-        let row_permutation = {
-            let mut permutation = [0; N];
-
-            for i in 0..N {
-                let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
-                permutation[i] = rows[1][position].into();
-            }
-
-            Permutation::from_array(permutation)
-        };
-
-        let mut cycles = row_permutation.cycles();
-        cycles.sort_by_key(|c| c.len());
-
-        let cycles_by_len = {
-            const EMPTY_VEC: Vec<Vec<usize>> = Vec::new();
-            let mut array = [EMPTY_VEC; N];
-
-            for cycle in cycles {
-                array[cycle.len() - 1].push(cycle);
-            }
-
-            for i in 0..N {
-                array[i].sort();
-            }
-
-            array
-        };
-
-        const NONE: Option<(PermutationDyn, PermutationDynIter)> = None;
-        // permutes the cycles of the same length
-        let mut cycle_permutations = [NONE; N];
-
-        for i in 0..N {
-            if cycles_by_len[i].is_empty() {
-                continue;
-            }
-            let mut iter = PermutationDynIter::new(cycles_by_len[i].len());
-            cycle_permutations[i] = Some((iter.next().unwrap(), iter));
-        }
-
-        const EMPTY_VEC: Vec<usize> = Vec::new();
-        // permutes the elements of a cycle
-        let mut per_cycle_permutation = [EMPTY_VEC; N];
-
-        for i in 0..N {
-            per_cycle_permutation[i] = vec![0; cycles_by_len[i].len()];
-        }
-
-        let mut permutations = Vec::new();
-
-        let mut cycles = vec![];
-        loop {
-            for i in 0..N {
-                let Some((permutation, _)) = &cycle_permutations[i] else {
-                    continue;
-                };
-
-                for j in permutation.as_vec() {
-                    let mut cycle = cycles_by_len[i][*j].clone();
-                    cycle.rotate_right(per_cycle_permutation[i][*j]);
-
-                    cycles.push(cycle);
-                }
-            }
-
-            let mut last_done = true;
-            'i: for i in 0..N {
-                let Some((permutation, iter)) = &mut cycle_permutations[i] else {
-                    continue;
-                };
-
-                for j in &mut per_cycle_permutation[i] {
-                    if *j == i + 1 {
-                        *j = 0;
-                    } else {
-                        *j += 1;
-                        last_done = false;
-                        break 'i;
-                    }
-                }
-
-                let next = iter.next();
-                if let Some(next) = next {
-                    *permutation = next;
-                    last_done = false;
-                    break;
-                } else {
-                    *iter = PermutationDynIter::new(cycles_by_len[i].len());
-
-                    *permutation = iter.next().unwrap();
-                }
-            }
-
-            if last_done {
-                break;
-            }
-
-            let symbol_permutation = {
-                let mut permutation = [0; N];
-
-                let mut index = 0;
-                for cycle in cycles.drain(..) {
-                    let start_index = index;
-                    let len = cycle.len();
-                    index += len;
-
-                    for (i, v) in cycle.iter().enumerate() {
-                        permutation[*v] = start_index + i;
-                    }
-                }
-
-                Permutation::from_array(permutation)
-            };
-
-            let column_permutation =
-                Permutation::from_array(rows[0].map(|i| symbol_permutation.apply(i.into())));
-
-            permutations.push((symbol_permutation, column_permutation));
-        }
-
-        permutations
-    }
-
-    pub fn main_class_reduced(&self) -> Self {
+    pub fn main_class(&self) -> Self {
         let sq = &self.reduced();
 
         let mut paratopic = *sq;
@@ -476,11 +352,7 @@ impl<const N: usize> LatinSquare<N> {
                     Permutation::from_array(permutation)
                 };
 
-                let mut cycles: Vec<_> = row_permutation
-                    .cycles()
-                    .into_iter()
-                    .map(|c| c.len())
-                    .collect();
+                let mut cycles: Vec<_> = row_permutation.cycle_lengths();
                 cycles.sort();
 
                 if cycles < min_cycles {
@@ -493,7 +365,7 @@ impl<const N: usize> LatinSquare<N> {
             }
 
             for (rows, _) in candidates {
-                let permutations = Self::minimize_rows(&rows);
+                let permutations = minimize_rows(&rows);
 
                 for (s, c) in permutations {
                     let mut new_sq = sq.clone();
@@ -758,11 +630,7 @@ impl<const N: usize> LatinSquare<N> {
                 Permutation::from_array(permutation)
             };
 
-            let mut cycle: Vec<_> = row_permutation
-                .cycles()
-                .into_iter()
-                .map(|c| c.len())
-                .collect();
+            let mut cycle: Vec<_> = row_permutation.cycle_lengths();
             cycle.sort();
 
             cycles.push(cycle);
@@ -787,11 +655,7 @@ impl<const N: usize> LatinSquare<N> {
                 Permutation::from_array(permutation)
             };
 
-            let mut cycle: Vec<_> = col_permutation
-                .cycles()
-                .into_iter()
-                .map(|c| c.len())
-                .collect();
+            let mut cycle: Vec<_> = col_permutation.cycle_lengths();
             cycle.sort();
 
             cycles.push(cycle);
@@ -816,11 +680,7 @@ impl<const N: usize> LatinSquare<N> {
                 Permutation::from_array(permutation)
             };
 
-            let mut cycle: Vec<_> = val_permutation
-                .cycles()
-                .into_iter()
-                .map(|c| c.len())
-                .collect();
+            let mut cycle: Vec<_> = val_permutation.cycle_lengths();
             cycle.sort();
 
             cycles.push(cycle);
@@ -897,13 +757,13 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn permuted_cols(&self, permutation: &Permutation<N>) -> Self {
-        let mut new_values = self.rows;
+        let mut new = self.clone();
+        new.permute_cols(permutation);
+        new
+    }
 
-        new_values.iter_mut().for_each(|row| {
-            *row = permutation.apply_array(*row);
-        });
-
-        Self::new(new_values)
+    pub fn permute_cols(&mut self, permutation: &Permutation<N>) {
+        permutation.apply_arrays(&mut self.rows);
     }
 
     pub fn permuted_rows_and_cols(&self, permutation: &Permutation<N>) -> Self {
@@ -922,15 +782,9 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn permuted_vals(&self, permutation: &Permutation<N>) -> Self {
-        let mut new_values = self.rows;
-
-        for row in &mut new_values {
-            for val in row {
-                *val = permutation.apply_u8(*val);
-            }
-        }
-
-        Self::new(new_values)
+        let mut new = self.clone();
+        new.permute_vals(permutation);
+        new
     }
 
     pub fn permute_vals(&mut self, permutation: &Permutation<N>) {
@@ -939,12 +793,6 @@ impl<const N: usize> LatinSquare<N> {
                 *val = permutation.apply_u8(*val);
             }
         }
-    }
-
-    pub fn permute_cols(&mut self, permutation: &Permutation<N>) {
-        self.rows.iter_mut().for_each(|row| {
-            *row = permutation.apply_array(*row);
-        });
     }
 
     pub fn cmp_diagonal(&self, other: &Self) -> Ordering {
@@ -1115,5 +963,311 @@ impl Cell {
     }
     pub fn from_index<const N: usize>(value: usize) -> Self {
         Cell(value / N, value % N)
+    }
+}
+
+struct CyclePermutations<const N: usize> {
+    cycles_by_len: [Vec<Vec<usize>>; N],
+    cycle_permutations: [Option<(PermutationDyn, PermutationDynIter)>; N],
+    per_cycle_permutation: [[usize; N]; N],
+    rows: [[u8; N]; 2],
+}
+
+impl<const N: usize> CyclePermutations<N> {
+    fn new(rows: [[u8; N]; 2]) -> Self {
+        let row_permutation = {
+            let mut permutation = [0; N];
+
+            for i in 0..N {
+                let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                permutation[i] = rows[1][position].into();
+            }
+
+            Permutation::from_array(permutation)
+        };
+
+        let mut cycles = row_permutation.cycles();
+        cycles.sort_by_key(|c| c.len());
+
+        let cycles_by_len = {
+            const EMPTY_VEC: Vec<Vec<usize>> = Vec::new();
+            let mut array = [EMPTY_VEC; N];
+
+            for cycle in cycles {
+                array[cycle.len() - 1].push(cycle);
+            }
+
+            for i in 0..N {
+                array[i].sort();
+            }
+
+            array
+        };
+
+        let per_cycle_permutation = [[0; N]; N];
+
+        const NONE: Option<(PermutationDyn, PermutationDynIter)> = None;
+        let mut cycle_permutations = [NONE; N];
+
+        for i in 0..N {
+            if cycles_by_len[i].is_empty() {
+                continue;
+            }
+            let mut iter = PermutationDynIter::new(cycles_by_len[i].len());
+            cycle_permutations[i] = Some((iter.next().unwrap(), iter));
+        }
+
+        CyclePermutations {
+            rows,
+            cycles_by_len,
+            cycle_permutations,
+            per_cycle_permutation,
+        }
+    }
+
+    fn next_permutation(&mut self) -> bool {
+        for i in 0..N {
+            if self.cycles_by_len[i].is_empty() {
+                continue;
+            }
+
+            for j in self.per_cycle_permutation[i]
+                .iter_mut()
+                .take(self.cycles_by_len[i].len())
+            {
+                if *j == i + 1 {
+                    *j = 0;
+                } else {
+                    *j += 1;
+                    return false;
+                }
+            }
+        }
+
+        for i in 0..N {
+            let Some((permutation, iter)) = &mut self.cycle_permutations[i] else {
+                continue;
+            };
+
+            let next = iter.next();
+            if let Some(next) = next {
+                *permutation = next;
+                return false;
+            } else {
+                *iter = PermutationDynIter::new(self.cycles_by_len[i].len());
+
+                *permutation = iter.next().unwrap();
+            }
+        }
+
+        true
+    }
+}
+
+impl<const N: usize> Iterator for CyclePermutations<N> {
+    type Item = (Permutation<N>, Permutation<N>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_permutation() {
+            return None;
+        }
+
+        let symbol_permutation = {
+            let mut permutation = [0; N];
+
+            let mut index = 0;
+
+            for (i, cycles) in self.cycles_by_len.iter().enumerate() {
+                let cycle_len = i + 1;
+                for cycle_index in 0..cycles.len() {
+                    let start_index = index;
+                    index += cycle_len;
+
+                    let cycle_index = self.cycle_permutations[i]
+                        .as_ref()
+                        .unwrap()
+                        .0
+                        .apply(cycle_index);
+
+                    for j in 0..cycle_len {
+                        let cycle = &cycles[cycle_index];
+
+                        let offset = self.per_cycle_permutation[i][cycle_index];
+
+                        let v = cycle[(j + offset) % cycle.len()];
+
+                        permutation[v] = start_index + j;
+                    }
+                }
+            }
+
+            Permutation::from_array(permutation)
+        };
+
+        let column_permutation =
+            Permutation::from_array(self.rows[0].map(|i| symbol_permutation.apply(i.into())));
+
+        Some((symbol_permutation, column_permutation))
+    }
+}
+
+pub fn minimize_rows_old<const N: usize>(
+    rows: &[[u8; N]; 2],
+) -> Vec<(Permutation<N>, Permutation<N>)> {
+    let row_permutation = {
+        let mut permutation = [0; N];
+
+        for i in 0..N {
+            let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+            permutation[i] = rows[1][position].into();
+        }
+
+        Permutation::from_array(permutation)
+    };
+
+    let mut cycles = row_permutation.cycles();
+    cycles.sort_by_key(|c| c.len());
+
+    let cycles_by_len = {
+        const EMPTY_VEC: Vec<Vec<usize>> = Vec::new();
+        let mut array = [EMPTY_VEC; N];
+
+        for cycle in cycles {
+            array[cycle.len() - 1].push(cycle);
+        }
+
+        for i in 0..N {
+            array[i].sort();
+        }
+
+        array
+    };
+
+    const NONE: Option<(PermutationDyn, PermutationDynIter)> = None;
+    // permutes the cycles of the same length
+    let mut cycle_permutations = [NONE; N];
+
+    for i in 0..N {
+        if cycles_by_len[i].is_empty() {
+            continue;
+        }
+        let mut iter = PermutationDynIter::new(cycles_by_len[i].len());
+        cycle_permutations[i] = Some((iter.next().unwrap(), iter));
+    }
+
+    const EMPTY_VEC: Vec<usize> = Vec::new();
+    // permutes the elements of a cycle
+    let mut per_cycle_permutation = [EMPTY_VEC; N];
+
+    for i in 0..N {
+        per_cycle_permutation[i] = vec![0; cycles_by_len[i].len()];
+    }
+
+    let mut permutations = Vec::new();
+
+    let mut cycles = vec![];
+    loop {
+        for i in 0..N {
+            let Some((permutation, _)) = &cycle_permutations[i] else {
+                continue;
+            };
+
+            for j in permutation.as_vec() {
+                let mut cycle = cycles_by_len[i][*j].clone();
+                cycle.rotate_left(per_cycle_permutation[i][*j]);
+
+                cycles.push(cycle);
+            }
+        }
+
+        let mut last_done = true;
+        'i: for i in 0..N {
+            let Some((permutation, iter)) = &mut cycle_permutations[i] else {
+                continue;
+            };
+
+            for j in &mut per_cycle_permutation[i] {
+                if *j == i + 1 {
+                    *j = 0;
+                } else {
+                    *j += 1;
+                    last_done = false;
+                    break 'i;
+                }
+            }
+
+            let next = iter.next();
+            if let Some(next) = next {
+                *permutation = next;
+                last_done = false;
+                break;
+            } else {
+                *iter = PermutationDynIter::new(cycles_by_len[i].len());
+
+                *permutation = iter.next().unwrap();
+            }
+        }
+
+        if last_done {
+            break;
+        }
+
+        let symbol_permutation = {
+            let mut permutation = [0; N];
+
+            let mut index = 0;
+            for cycle in cycles.drain(..) {
+                let start_index = index;
+                let len = cycle.len();
+                index += len;
+
+                for (i, v) in cycle.iter().enumerate() {
+                    permutation[*v] = start_index + i;
+                }
+            }
+
+            Permutation::from_array(permutation)
+        };
+
+        let column_permutation =
+            Permutation::from_array(rows[0].map(|i| symbol_permutation.apply(i.into())));
+
+        permutations.push((symbol_permutation, column_permutation));
+    }
+
+    permutations
+}
+
+pub fn minimize_rows<const N: usize>(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
+    let cycle_permutations = CyclePermutations::new(*rows);
+    let mut permutations: Vec<_> = cycle_permutations.collect();
+
+    // TODO: precompute?
+
+    // dbg!(permutations.len());
+
+    // permutations.dedup();
+    // dbg!(permutations.len());
+
+    permutations.sort_unstable();
+    permutations.dedup();
+    // dbg!(permutations.len());
+
+    // dbg!(format!("{permutations:?}"));
+
+    permutations
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn normalize_main_class() {
+        assert_eq!(
+            LatinSquare::new([[0, 1, 2, 3], [1, 3, 0, 2], [2, 0, 3, 1], [3, 2, 1, 0]]).main_class(),
+            LatinSquare::new([[0, 1, 2, 3], [1, 0, 3, 2], [2, 3, 1, 0], [3, 2, 0, 1]])
+        )
     }
 }

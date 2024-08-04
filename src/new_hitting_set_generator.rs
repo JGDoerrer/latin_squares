@@ -1,4 +1,7 @@
-use std::{time::Instant, vec};
+use std::{
+    time::{Duration, Instant},
+    vec,
+};
 
 use crate::{
     bitset::{BitSet128, BitSet128Iter},
@@ -15,8 +18,9 @@ pub struct NewHittingSetGenerator {
     sets: Vec<BitSet>,
     max_entries: usize,
     entry_to_sets: Vec<BitVec>,
-    last_progress: Instant,
     temp_entry: StackEntry,
+    start: Instant,
+    last_progress: Instant,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +86,7 @@ impl NewHittingSetGenerator {
             entry_to_sets: entry_to_set,
             max_entries,
             last_progress: Instant::now(),
+            start: Instant::now(),
             temp_entry: StackEntry {
                 hitting_set: BitSet::empty(),
                 uncovered: BitVec::with_capacity(sets.len()),
@@ -95,19 +100,27 @@ impl NewHittingSetGenerator {
     }
 
     fn progress(&self) -> f64 {
-        let totals: Vec<_> = self.stack[0..self.stack_index]
+        let totals: Vec<_> = self.stack[0..=self.stack_index]
             .iter()
             .map(|entry| entry.c_set.len() as f64)
             .collect();
 
-        self.stack[0..self.stack_index]
+        self.stack[0..=self.stack_index]
             .iter()
             .enumerate()
             .map(|(i, entry)| {
-                (totals[i] - entry.c.clone().count() as f64)
+                (totals[i] - (entry.c.clone().count() + 1) as f64)
                     / totals[0..=i].iter().copied().product::<f64>()
             })
             .sum::<f64>()
+    }
+
+    fn estimated_time_left(&self) -> Duration {
+        let time_passed = Instant::now() - self.start;
+        let progress = self.progress();
+        let total_time = time_passed.div_f64(progress);
+        let time_left = total_time - time_passed;
+        time_left
     }
 }
 
@@ -161,7 +174,7 @@ impl Iterator for NewHittingSetGenerator {
                         let time_passed = (Instant::now() - self.last_progress).as_secs_f64();
                         if time_passed >= 1.0 {
                             self.last_progress = Instant::now();
-                            dbg!(self.progress());
+                            dbg!(self.progress(), self.estimated_time_left());
                         }
                         return Some(hitting_set);
                     }

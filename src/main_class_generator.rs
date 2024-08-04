@@ -1,14 +1,13 @@
 use std::collections::HashSet;
 
 use crate::{
-    constraints::Constraints, latin_square::LatinSquare,
-    latin_square_generator::LatinSquareGenerator, partial_latin_square::PartialLatinSquare,
-    permutation::Permutation,
+    constraints::Constraints, latin_square::LatinSquare, partial_latin_square::PartialLatinSquare,
+    permutation::Permutation, tuple_iterator::TupleIterator,
 };
 
 pub struct MainClassGenerator<const N: usize> {
     cycle_generator: CycleGenerator<N>,
-    generator: Option<LatinSquareGenerator<N>>,
+    generator: Option<SqGenerator<N>>,
     sqs: HashSet<LatinSquare<N>>,
 }
 
@@ -24,8 +23,19 @@ impl<const N: usize> MainClassGenerator<N> {
     fn get_next_sq(&mut self) -> Option<LatinSquare<N>> {
         if let Some(generator) = &mut self.generator {
             for sq in generator.by_ref() {
-                // dbg!(sq);
-                let main_class = sq.main_class_reduced();
+                if sq
+                    .col_cycles()
+                    .into_iter()
+                    .any(|c| !self.cycle_generator.cycles().contains(&c))
+                    || sq
+                        .val_cycles()
+                        .into_iter()
+                        .any(|c| !self.cycle_generator.cycles().contains(&c))
+                {
+                    continue;
+                }
+
+                let main_class = sq.main_class();
 
                 if self.sqs.insert(main_class) {
                     return Some(main_class);
@@ -50,7 +60,10 @@ impl<const N: usize> Iterator for MainClassGenerator<N> {
 
         dbg!(partial_sq);
 
-        self.generator = Some(LatinSquareGenerator::from_partial_sq(&partial_sq));
+        self.generator = Some(SqGenerator::new(
+            partial_sq,
+            self.cycle_generator.cycles().to_vec(),
+        ));
         self.next()
     }
 }
@@ -58,8 +71,6 @@ impl<const N: usize> Iterator for MainClassGenerator<N> {
 struct CycleGenerator<const N: usize> {
     cycle_structures: Vec<Vec<usize>>,
     row_cycle_index: usize,
-    // col_cycle_index: usize,
-    // col_permutation: PermutationDynIter,
 }
 
 impl<const N: usize> CycleGenerator<N> {
@@ -68,18 +79,8 @@ impl<const N: usize> CycleGenerator<N> {
         CycleGenerator {
             cycle_structures,
             row_cycle_index: 0,
-            // col_cycle_index: 0,
-            // col_permutation: PermutationDynIter::new(N - 2),
         }
     }
-
-    // fn is_compatible(row_cycle: &Vec<usize>, col_cycle: &Vec<usize>) -> bool {
-    //     if row_cycle.starts_with(&[2]) {
-    //         col_cycle.starts_with(&[2])
-    //     } else {
-    //         true
-    //     }
-    // }
 
     fn cycles(&self) -> &[Vec<usize>] {
         &self.cycle_structures[self.row_cycle_index - 1..]
@@ -95,36 +96,13 @@ impl<const N: usize> Iterator for CycleGenerator<N> {
         }
 
         let row_cycle = &self.cycle_structures[self.row_cycle_index];
-        // let col_cycle = &self.cycle_structures[self.col_cycle_index];
-        // let mut col_permutation = self.col_permutation.next();
 
-        // if col_permutation.is_none() {
-        //     self.col_cycle_index += 1;
-        //     if self.col_cycle_index >= self.cycle_structures.len() {
-        //         self.row_cycle_index += 1;
-        //         self.col_cycle_index = self.row_cycle_index;
-        //     }
-        //     self.col_permutation = PermutationDynIter::new(N - 2);
-        //     col_permutation = self.col_permutation.next();
-        // }
-        // let col_permutation = col_permutation.unwrap();
-
-        // if !Self::is_compatible(row_cycle, col_cycle) {
-        //     self.col_cycle_index += 1;
-        //     if self.col_cycle_index >= self.cycle_structures.len() {
         self.row_cycle_index += 1;
-        // self.col_cycle_index = self.row_cycle_index;
-        //     }
-        //     self.col_permutation = PermutationDynIter::new(N - 2);
-        //     return self.next();
-        // }
 
-        // dbg!(row_cycle, col_cycle);
         let mut sq = PartialLatinSquare::<N>::empty();
 
         for i in 0..N {
             sq.set(0, i, Some(i));
-            sq.set(i, 0, Some(i));
         }
 
         let mut index = 0;
@@ -136,27 +114,6 @@ impl<const N: usize> Iterator for CycleGenerator<N> {
             }
         }
 
-        // let mut col_permutation = col_permutation.into_vec();
-        // for v in col_permutation.iter_mut() {
-        //     *v += 2;
-        // }
-        // col_permutation.insert(0, 0);
-        // col_permutation.insert(1, 1);
-        // // col_permutation.insert(2, 2);
-        // let col_permutation = PermutationDyn::from_vec(col_permutation).pad_with_id::<N>();
-
-        // let mut index = 0;
-        // for cycle in col_cycle {
-        //     let start_index = index;
-        //     index += cycle;
-        //     for j in 0..*cycle {
-        //         let value = start_index + (j + 1) % cycle;
-        //         let value = col_permutation.apply(value);
-        //         let row = col_permutation.apply(start_index + j);
-        //         sq.set(row, 1, Some(value));
-        //     }
-        // }
-
         Some(sq)
     }
 }
@@ -165,14 +122,19 @@ struct RowGenerator<const N: usize> {
     constraints: Constraints<N>,
     indices: [usize; N],
     row: usize,
+    sqs: HashSet<PartialLatinSquare<N>>,
 }
 
 impl<const N: usize> RowGenerator<N> {
     fn new(sq: &PartialLatinSquare<N>, row: usize) -> Self {
+        let mut constraints = Constraints::new_partial(sq);
+        constraints.set(row, 0, row);
+
         RowGenerator {
-            constraints: Constraints::new_partial(sq),
+            constraints,
             row,
             indices: [0; N],
+            sqs: HashSet::new(),
         }
     }
 }
@@ -181,25 +143,21 @@ impl<const N: usize> Iterator for RowGenerator<N> {
     type Item = PartialLatinSquare<N>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut constraints = self.constraints.clone();
-        if !constraints.is_solvable() {
-            return None;
-        }
-
         let row = self.row;
+        let mut constraints = self.constraints.clone();
 
         for i in 1..N {
             let index = self.indices[i];
 
             let Some(value) = constraints.get_possibilities(row, i).into_iter().nth(index) else {
-                if i != 1 {
+                if i == 1 {
+                    return None;
+                } else {
                     self.indices[i - 1] += 1;
                     for i in i..N {
                         self.indices[i] = 0;
                     }
                     return self.next();
-                } else {
-                    return None;
                 }
             };
 
@@ -207,7 +165,16 @@ impl<const N: usize> Iterator for RowGenerator<N> {
         }
         self.indices[N - 1] += 1;
 
-        Some(*constraints.partial_sq())
+        if !constraints.is_solvable() {
+            return None;
+        }
+
+        let sq = constraints.partial_sq().minimize_rows();
+        if self.sqs.insert(sq.clone()) {
+            Some(sq)
+        } else {
+            self.next()
+        }
     }
 }
 
@@ -245,13 +212,19 @@ impl<const N: usize> Iterator for SqGenerator<N> {
                 return Some(sq.try_into().unwrap());
             }
 
-            let new_row_index = self.row_generators.len() + 1;
+            let new_row_index = (0..N)
+                .find(|row| sq.get_row(*row).iter().all(|v| v.is_none()))
+                .unwrap();
+
+            let full_rows: Vec<_> = (0..N)
+                .filter(|row| sq.get_row(*row).iter().all(|v| v.is_some()))
+                .collect();
 
             if !self.all_cycles {
-                for rows in (0..new_row_index - 1)
-                    .flat_map(|i| [[i, new_row_index - 1], [new_row_index - 1, i]])
+                for rows in TupleIterator::<2>::new(full_rows.len())
+                    .flat_map(|[row0, row1]| [[row0, row1], [row1, row0]])
                 {
-                    let rows = rows.map(|i| sq.get_row(i).map(|v| v.unwrap()));
+                    let rows = rows.map(|i| sq.get_row(full_rows[i]).map(|v| v.unwrap()));
 
                     let row_permutation = {
                         let mut permutation = [0; N];
@@ -264,11 +237,7 @@ impl<const N: usize> Iterator for SqGenerator<N> {
                         Permutation::from_array(permutation)
                     };
 
-                    let mut cycles: Vec<_> = row_permutation
-                        .cycles()
-                        .into_iter()
-                        .map(|c| c.len())
-                        .collect();
+                    let mut cycles: Vec<_> = row_permutation.cycle_lengths();
                     cycles.sort();
 
                     if !self.cycles.contains(&cycles) {
@@ -278,7 +247,7 @@ impl<const N: usize> Iterator for SqGenerator<N> {
             }
 
             self.row_generators
-                .push(RowGenerator::new(&sq, new_row_index + 1));
+                .push(RowGenerator::new(&sq, new_row_index));
         }
 
         None
@@ -321,6 +290,18 @@ mod test {
         assert_eq!(
             generate_cycle_structures(7),
             vec![vec![2, 2, 3], vec![2, 5], vec![3, 4], vec![7]]
+        );
+        assert_eq!(
+            generate_cycle_structures(8),
+            vec![
+                vec![2, 2, 2, 2],
+                vec![2, 2, 4],
+                vec![2, 3, 3],
+                vec![2, 6],
+                vec![3, 5],
+                vec![4, 4],
+                vec![8]
+            ]
         );
     }
 }

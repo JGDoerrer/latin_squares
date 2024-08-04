@@ -1,10 +1,10 @@
-use std::mem::MaybeUninit;
+use std::{hash::Hash, mem::MaybeUninit};
 
 pub fn factorial(n: usize) -> usize {
     (2..=n).product()
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct Permutation<const N: usize>([usize; N]);
 
 impl<const N: usize> Permutation<N> {
@@ -108,6 +108,31 @@ impl<const N: usize> Permutation<N> {
         cycles
     }
 
+    pub fn cycle_lengths(&self) -> Vec<usize> {
+        let mut cycles = Vec::new();
+        let mut used = [false; N];
+
+        for start in self.0 {
+            if used[start] {
+                continue;
+            }
+
+            used[start] = true;
+            let mut cycle_len = 1;
+            let mut current = self.apply(start);
+
+            while current != start {
+                used[current] = true;
+                cycle_len += 1;
+                current = self.apply(current);
+            }
+
+            cycles.push(cycle_len);
+        }
+
+        cycles
+    }
+
     #[inline]
     pub fn apply(&self, num: usize) -> usize {
         self.0[num]
@@ -118,19 +143,26 @@ impl<const N: usize> Permutation<N> {
         self.0[num as usize] as u8
     }
 
-    pub fn apply_array<T>(&self, array: [T; N]) -> [T; N]
-    where
-        T: Copy,
-    {
-        let permutation = self.0;
+    pub fn apply_array<T>(&self, mut array: [T; N]) -> [T; N] {
+        let mut permutation = self.0;
 
-        let mut new_array = [MaybeUninit::uninit(); N];
-
-        for (i, p) in permutation.into_iter().enumerate() {
-            new_array[p].write(array[i]);
+        while let Some((a, &b)) = permutation.iter().enumerate().find(|(a, b)| a != *b) {
+            permutation.swap(a, b);
+            array.swap(a, b);
         }
 
-        new_array.map(|i| unsafe { i.assume_init() })
+        array
+    }
+
+    pub fn apply_arrays<T>(&self, arrays: &mut [[T; N]]) {
+        let mut permutation = self.0;
+
+        while let Some((a, &b)) = permutation.iter().enumerate().find(|(a, b)| a != *b) {
+            permutation.swap(a, b);
+            for array in arrays.iter_mut() {
+                array.swap(a, b);
+            }
+        }
     }
 }
 
