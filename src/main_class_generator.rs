@@ -139,7 +139,7 @@ impl<'a, const N: usize> SqGenerator<'a, N> {
     ) -> Self {
         SqGenerator {
             row_generators: vec![RowGenerator::new(&sq, 2, lookup)],
-            all_cycles: cycles == generate_cycle_structures(N),
+            all_cycles: cycles.len() == generate_cycle_structures(N).len(),
             cycles,
             lookup,
         }
@@ -196,6 +196,12 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
                     if !self.cycles.contains(&cycles) {
                         continue 'r;
                     }
+                }
+                if !self.cycles.contains(&sq.largest_min_col_cycle()) {
+                    continue 'r;
+                }
+                if !self.cycles.contains(&sq.largest_min_val_cycle()) {
+                    continue 'r;
                 }
             }
 

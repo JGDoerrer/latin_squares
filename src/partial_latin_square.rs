@@ -66,6 +66,21 @@ impl<const N: usize> PartialLatinSquare<N> {
         col
     }
 
+    /// Returns for each row, in which column the value `i` appears
+    pub fn get_val(&self, i: usize) -> [Option<u8>; N] {
+        let mut val = [None; N];
+
+        for j in 0..N {
+            val[j] = self
+                .get_row(j)
+                .iter()
+                .position(|v| v.is_some_and(|v| v as usize == i))
+                .map(|v| v as u8);
+        }
+
+        val
+    }
+
     pub fn set(&mut self, i: usize, j: usize, value: Option<usize>) {
         self.rows[i][j] = value.map(|v| v as u8);
     }
@@ -405,6 +420,97 @@ impl<const N: usize> PartialLatinSquare<N> {
         min
     }
 
+    /// returns the smallest col cycle after completing the col cycles in the maximal way
+    pub fn largest_min_col_cycle(&self) -> Vec<usize> {
+        let mut min_cycle = vec![N];
+
+        for cols in TupleIterator::<2>::new(N).map(|cols| cols.map(|row| self.get_col(row))) {
+            let mut col_permutation = [None; N];
+
+            for i in 0..N {
+                let Some(position) = cols[0].iter().position(|v| *v == Some(i as u8)) else {
+                    continue;
+                };
+                col_permutation[i] = cols[1][position].map(|v| v as usize);
+            }
+
+            let cycle = Self::largest_possible_cycle(col_permutation);
+
+            min_cycle = min_cycle.min(cycle);
+        }
+
+        min_cycle
+    }
+
+    /// returns the smallest val cycle after completing the val cycles in the maximal way
+    pub fn largest_min_val_cycle(&self) -> Vec<usize> {
+        let mut min_cycle = vec![N];
+
+        for vals in TupleIterator::<2>::new(N).map(|vals| vals.map(|val| self.get_val(val))) {
+            let mut val_permutation = [None; N];
+
+            for i in 0..N {
+                let Some(position) = vals[0].iter().position(|v| *v == Some(i as u8)) else {
+                    continue;
+                };
+                val_permutation[i] = vals[1][position].map(|v| v as usize);
+            }
+
+            let cycle = Self::largest_possible_cycle(val_permutation);
+
+            min_cycle = min_cycle.min(cycle);
+        }
+
+        min_cycle
+    }
+
+    fn largest_possible_cycle(permutation: [Option<usize>; N]) -> Vec<usize> {
+        let mut cycles = Vec::new();
+        let mut unfinished_cycle_lens = [None; N];
+        let mut used = [false; N];
+
+        for start in permutation.into_iter().flatten() {
+            if used[start] {
+                continue;
+            }
+
+            used[start] = true;
+            let mut cycle_len = 1;
+            let mut last = start;
+            let mut current = permutation[start];
+
+            while current.is_some_and(|c| c != start) {
+                let c = current.unwrap();
+
+                used[c] = true;
+                cycle_len += 1;
+                last = c;
+                current = permutation[c];
+            }
+
+            if current.is_some_and(|c| c == start) {
+                cycles.push(cycle_len);
+            } else {
+                unfinished_cycle_lens[last] =
+                    Some(cycle_len.max(unfinished_cycle_lens[last].unwrap_or(0)));
+            }
+        }
+
+        let unused = used.into_iter().filter(|b| !b).count();
+
+        if unfinished_cycle_lens.iter().flatten().next().is_none() {
+            // just add all unused elements as one new cycle
+            cycles.push(unused);
+            cycles.sort();
+            cycles
+        } else {
+            // we can join unfinished cycles
+            cycles.push(unfinished_cycle_lens.into_iter().flatten().sum::<usize>() + unused);
+            cycles.sort();
+            cycles
+        }
+    }
+
     pub fn cmp_rows(&self, other: &Self) -> Ordering {
         for i in 0..N {
             for j in 0..N {
@@ -589,4 +695,28 @@ mod test {
     //         ])
     //     )
     // }
+
+    #[test]
+    fn largest_possible_col_cycle() {
+        assert_eq!(
+            PartialLatinSquare::from_array([
+                [Some(0), Some(1), Some(2), Some(3)],
+                [Some(1), Some(2), Some(3), Some(0)],
+                [Some(2), Some(3), Some(0), Some(1)],
+                [None; 4]
+            ])
+            .largest_min_col_cycle(),
+            vec![4]
+        );
+        assert_eq!(
+            PartialLatinSquare::from_array([
+                [Some(0), Some(1), None, None],
+                [Some(1), Some(0), None, None],
+                [None, None, Some(0), Some(1)],
+                [None, None, Some(1), Some(0)],
+            ])
+            .largest_min_col_cycle(),
+            vec![4]
+        );
+    }
 }
