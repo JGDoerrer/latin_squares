@@ -5,16 +5,16 @@ use crate::{
     partial_latin_square::PartialLatinSquare, partial_orthogonal_array::PartialOrthogonalArray,
 };
 
-pub struct LatinSquareOAGenerator<const N: usize, const MOLS: usize> {
+pub struct OAGenerator<const N: usize, const MOLS: usize> {
     stack: Vec<(OAConstraints<N, MOLS>, (usize, usize), usize)>,
 }
 
-impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
+impl<const N: usize, const MOLS: usize> OAGenerator<N, MOLS> {
     pub fn new() -> Self {
         let constraints = OAConstraints::new();
 
         let cell = constraints.most_constrained_cell().unwrap();
-        LatinSquareOAGenerator {
+        OAGenerator {
             stack: vec![(constraints, cell, 0)],
         }
     }
@@ -23,7 +23,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
         let constraints = OAConstraints::new_reduced();
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
-        LatinSquareOAGenerator {
+        OAGenerator {
             stack: vec![(constraints, cell, 0)],
         }
     }
@@ -32,7 +32,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
         let constraints = OAConstraints::from_partial_sq(sq);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
-        LatinSquareOAGenerator {
+        OAGenerator {
             stack: vec![(constraints, cell, 0)],
         }
     }
@@ -41,7 +41,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
         let constraints = OAConstraints::from_partial_sq_reduced(sq);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
-        LatinSquareOAGenerator {
+        OAGenerator {
             stack: vec![(constraints, cell, 0)],
         }
     }
@@ -50,7 +50,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
         let constraints = OAConstraints::from_partial_oa(oa);
 
         let cell = constraints.most_constrained_cell().unwrap_or((0, 0));
-        LatinSquareOAGenerator {
+        OAGenerator {
             stack: vec![(constraints, cell, 0)],
         }
     }
@@ -147,7 +147,7 @@ impl<const N: usize, const MOLS: usize> LatinSquareOAGenerator<N, MOLS> {
     }
 }
 
-impl<const N: usize, const MOLS: usize> Iterator for LatinSquareOAGenerator<N, MOLS> {
+impl<const N: usize, const MOLS: usize> Iterator for OAGenerator<N, MOLS> {
     type Item = OrthogonalArray<N, MOLS>;
 
     fn next(&mut self) -> Option<Self::Item> {

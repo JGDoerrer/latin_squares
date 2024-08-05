@@ -6,8 +6,8 @@ use std::{
 use crate::{
     bitset::BitSet128,
     latin_square::{self, Cell, LatinSquare},
-    latin_square_oa_generator::LatinSquareOAGenerator,
     latin_square_trait::LatinSquareTrait,
+    oa_generator::OAGenerator,
     partial_orthogonal_array::PartialOrthogonalArray,
     permutation::Permutation,
     tuple_iterator::TupleIterator,
@@ -57,7 +57,7 @@ impl<const N: usize, const MOLS: usize> OrthogonalArray<N, MOLS> {
                 .into_iter()
                 .chain((0..MOLS).map(|i| self.without_vals(i, &triple)))
             {
-                let solutions = LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&partial);
+                let solutions = OAGenerator::<N, MOLS>::from_partial_oa(&partial);
 
                 for solution in solutions {
                     let difference = self.difference_mask(&solution);

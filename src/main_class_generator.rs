@@ -5,6 +5,7 @@ use crate::{
     permutation::Permutation, tuple_iterator::TupleIterator,
 };
 
+/// Generates a representative of each main class
 pub struct MainClassGenerator<'a, const N: usize> {
     cycle_generator: CycleGenerator<N>,
     generator: Option<SqGenerator<'a, N>>,
@@ -71,6 +72,7 @@ impl<'a, const N: usize> Iterator for MainClassGenerator<'a, N> {
     }
 }
 
+/// Generates a latin square where the first 2 rows are filled with a specific cycle structure
 struct CycleGenerator<const N: usize> {
     cycle_structures: Vec<Vec<usize>>,
     row_cycle_index: usize,
@@ -121,6 +123,7 @@ impl<const N: usize> Iterator for CycleGenerator<N> {
     }
 }
 
+/// Generates latin squares by filling them one row at a time
 struct SqGenerator<'a, const N: usize> {
     row_generators: Vec<RowGenerator<'a, N>>,
     cycles: Vec<Vec<usize>>,
@@ -170,6 +173,7 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
                 .collect();
 
             if !self.all_cycles {
+                // check for rows with disallowed cycle structure
                 for rows in TupleIterator::<2>::new(full_rows.len())
                     .flat_map(|[row0, row1]| [[row0, row1], [row1, row0]])
                 {
@@ -203,6 +207,7 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
     }
 }
 
+/// fills a row in all (minimal) possible ways
 struct RowGenerator<'a, const N: usize> {
     constraints: Constraints<N>,
     indices: [usize; N],
@@ -277,6 +282,7 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
     }
 }
 
+/// Generates all possible cycle structures of a permutation with no fixed points
 pub fn generate_cycle_structures(n: usize) -> Vec<Vec<usize>> {
     let mut cycles = Vec::new();
     cycles.push(vec![n]);

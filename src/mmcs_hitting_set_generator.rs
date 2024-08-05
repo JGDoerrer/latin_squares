@@ -11,8 +11,9 @@ use crate::{
 type BitSet = BitSet128;
 type BitSetIter = BitSet128Iter;
 
+/// Generates all critical sets for a hitting set problem using the MMCS algorithm
 #[derive(Debug)]
-pub struct NewHittingSetGenerator {
+pub struct MMCSHittingSetGenerator {
     stack: Vec<StackEntry>,
     stack_index: usize,
     sets: Vec<BitSet>,
@@ -33,7 +34,7 @@ struct StackEntry {
     c_set: BitSet,
 }
 
-impl NewHittingSetGenerator {
+impl MMCSHittingSetGenerator {
     pub fn new(mut sets: Vec<Vec<BitSet>>, max_entries: usize) -> Self {
         let sets = sets.remove(0);
         let largest_entry = sets
@@ -80,7 +81,7 @@ impl NewHittingSetGenerator {
             cand,
         };
 
-        NewHittingSetGenerator {
+        MMCSHittingSetGenerator {
             stack,
             stack_index: 0,
             entry_to_sets: entry_to_set,
@@ -124,7 +125,7 @@ impl NewHittingSetGenerator {
     }
 }
 
-impl Iterator for NewHittingSetGenerator {
+impl Iterator for MMCSHittingSetGenerator {
     type Item = BitSet;
 
     fn next(&mut self) -> Option<Self::Item> {

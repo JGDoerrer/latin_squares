@@ -4,6 +4,7 @@ pub fn factorial(n: usize) -> usize {
     (2..=n).product()
 }
 
+/// A permutation of N elements
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct Permutation<const N: usize>([usize; N]);
 
@@ -143,6 +144,7 @@ impl<const N: usize> Permutation<N> {
         self.0[num as usize] as u8
     }
 
+    /// permutes the values of the array
     pub fn apply_array<T>(&self, array: [T; N]) -> [T; N]
     where
         T: Copy,
@@ -158,6 +160,7 @@ impl<const N: usize> Permutation<N> {
         new_array.map(|i| unsafe { i.assume_init() })
     }
 
+    /// permutes the values of each array
     pub fn apply_arrays<T>(&self, arrays: &mut [[T; N]]) {
         let mut permutation = self.0;
 
@@ -176,6 +179,7 @@ impl<const N: usize> From<[usize; N]> for Permutation<N> {
     }
 }
 
+/// An iterater that generates all permutations
 pub struct PermutationIter<const N: usize> {
     indices: [usize; N],
     left: usize,
@@ -240,6 +244,7 @@ impl<const N: usize> ExactSizeIterator for PermutationIter<N> {
     }
 }
 
+/// A permutation of elements
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PermutationDyn(Vec<usize>);
 
@@ -261,9 +266,9 @@ impl PermutationDyn {
     }
 
     pub fn from_vec(elements: Vec<usize>) -> Self {
-        // for i in 0..elements.len() {
-        //     debug_assert!(elements.contains(&i));
-        // }
+        for i in 0..elements.len() {
+            debug_assert!(elements.contains(&i));
+        }
 
         PermutationDyn(elements)
     }
@@ -277,14 +282,16 @@ impl PermutationDyn {
     }
 
     pub fn pad_with_id<const N: usize>(&self) -> Permutation<N> {
-        if self.0.len() >= N {
+        if self.0.len() == N {
             self.into()
-        } else {
+        } else if self.0.len() < N {
             let mut new = Permutation::identity();
             for i in 0..self.0.len() {
                 new.0[i] = self.0[i];
             }
             new
+        } else {
+            todo!()
         }
     }
 
@@ -332,7 +339,7 @@ impl PermutationDyn {
 
 impl<const N: usize> From<&PermutationDyn> for Permutation<N> {
     fn from(value: &PermutationDyn) -> Self {
-        assert!(value.0.len() == N);
+        debug_assert!(value.0.len() == N);
         let mut vals = [0; N];
         vals.copy_from_slice(&value.0);
         Permutation(vals)

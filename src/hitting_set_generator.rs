@@ -4,6 +4,7 @@ use crate::{bitset::BitSet128, bitvec::BitVec};
 
 type BitSet = BitSet128;
 
+/// Generates all critical sets for a hitting set problem
 #[derive(Debug)]
 pub struct HittingSetGenerator {
     stack: Vec<StackEntry>,

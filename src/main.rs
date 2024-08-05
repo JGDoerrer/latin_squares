@@ -12,11 +12,11 @@ use latin_square::{generate_minimize_rows_lookup, LatinSquare};
 
 use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::{LatinSquareGenerator, LatinSquareGeneratorDyn};
-use latin_square_oa_generator::LatinSquareOAGenerator;
+use oa_generator::OAGenerator;
 
 use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use main_class_generator::MainClassGenerator;
-use new_hitting_set_generator::NewHittingSetGenerator;
+use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 use orthogonal_array::OrthogonalArray;
 use partial_latin_square::PartialLatinSquare;
 
@@ -35,11 +35,11 @@ mod hitting_set_generator;
 mod latin_square;
 mod latin_square_dyn;
 mod latin_square_generator;
-mod latin_square_oa_generator;
 mod latin_square_trait;
 mod main_class_generator;
-mod new_hitting_set_generator;
+mod mmcs_hitting_set_generator;
 mod oa_constraints;
+mod oa_generator;
 mod orthogonal_array;
 mod orthogonal_generator;
 mod partial_latin_square;
@@ -160,15 +160,14 @@ fn find_orthogonal<const N: usize>(all: bool) {
     for sq in read_sqs_from_stdin_n::<N>() {
         println!("{}", sq);
         if all {
-            for [_, sq] in LatinSquareOAGenerator::<N, 2>::from_partial_sq_reduced(sq.into())
-                .map(|oa| oa.squares())
+            for [_, sq] in
+                OAGenerator::<N, 2>::from_partial_sq_reduced(sq.into()).map(|oa| oa.squares())
             {
                 println!("{}", sq);
             }
-        } else if let Some([_, sq]) =
-            LatinSquareOAGenerator::<N, 2>::from_partial_sq_reduced(sq.into())
-                .map(|oa| oa.squares())
-                .next()
+        } else if let Some([_, sq]) = OAGenerator::<N, 2>::from_partial_sq_reduced(sq.into())
+            .map(|oa| oa.squares())
+            .next()
         {
             println!("{}", sq);
         }
@@ -306,7 +305,7 @@ fn find_scs(reverse: bool) {
         if !reverse {
             for i in start..=end {
                 dbg!(i);
-                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
@@ -342,7 +341,7 @@ fn find_scs(reverse: bool) {
         } else {
             for i in (start..=end).rev() {
                 dbg!(i);
-                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
@@ -397,7 +396,7 @@ fn find_lcs(reverse: bool) {
         if reverse {
             for i in (start..=end).rev() {
                 dbg!(i);
-                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut lcs = HashSet::new();
@@ -457,7 +456,7 @@ fn find_lcs(reverse: bool) {
 
             for i in start..=end {
                 dbg!(i);
-                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 'h: for hitting_set in hitting_sets {
@@ -546,7 +545,7 @@ fn generate_mols_n<const N: usize>(mols: usize) {
 }
 
 fn generate_mols<const N: usize, const MOLS: usize>() {
-    for mols in LatinSquareOAGenerator::<N, MOLS>::new_reduced() {
+    for mols in OAGenerator::<N, MOLS>::new_reduced() {
         for (i, sq) in mols.squares().into_iter().enumerate() {
             print!("{sq}");
             if i != MOLS - 1 {
@@ -594,7 +593,7 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
         if start <= end {
             for i in start..=end {
                 dbg!(i);
-                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
@@ -602,8 +601,7 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
                     let partial_sq = oa.mask(hitting_set);
 
                     for partial_oa in PartialOAGenerator::new_partial(oa.clone(), partial_sq, i) {
-                        let mut solutions =
-                            LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
+                        let mut solutions = OAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
                         let first_solution = solutions.next();
                         let second_solution = solutions.next();
 
@@ -628,7 +626,7 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
         } else {
             for i in (end..=start).rev() {
                 dbg!(i);
-                let hitting_sets = NewHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
@@ -636,8 +634,7 @@ fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, al
                     let partial_sq = oa.mask(hitting_set);
 
                     for partial_oa in PartialOAGenerator::new_partial(oa.clone(), partial_sq, i) {
-                        let mut solutions =
-                            LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
+                        let mut solutions = OAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
                         let first_solution = solutions.next();
                         let second_solution = solutions.next();
 
@@ -748,7 +745,7 @@ fn solve_mols_n<const N: usize>(mols: usize) {
 
 fn solve_mols<const N: usize, const MOLS: usize>() {
     for oa in read_partial_mols_from_stdin() {
-        let solutions = LatinSquareOAGenerator::<N, MOLS>::from_partial_oa(&oa);
+        let solutions = OAGenerator::<N, MOLS>::from_partial_oa(&oa);
 
         for solution in solutions {
             if writeln!(stdout(), "{}", solution).is_err() {
