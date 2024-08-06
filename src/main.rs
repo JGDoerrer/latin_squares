@@ -85,7 +85,7 @@ enum Mode {
     GenerateLatinSquares {
         n: usize,
     },
-    RandomLatinSquares {
+    Random {
         n: usize,
         seed: u64,
     },
@@ -119,18 +119,18 @@ fn main() {
     let args = Args::parse();
 
     macro_rules! match_n {
-        ($n: expr, $f: ident) => {
+        ($n: expr, $f: ident $(, $args: expr)*) => {
             match $n {
-                1 => $f::<1>(),
-                2 => $f::<2>(),
-                3 => $f::<3>(),
-                4 => $f::<4>(),
-                5 => $f::<5>(),
-                6 => $f::<6>(),
-                7 => $f::<7>(),
-                8 => $f::<8>(),
-                9 => $f::<9>(),
-                10 => $f::<10>(),
+                1 => $f::<1>($($args),*),
+                2 => $f::<2>($($args),*),
+                3 => $f::<3>($($args),*),
+                4 => $f::<4>($($args),*),
+                5 => $f::<5>($($args),*),
+                6 => $f::<6>($($args),*),
+                7 => $f::<7>($($args),*),
+                8 => $f::<8>($($args),*),
+                9 => $f::<9>($($args),*),
+                10 => $f::<10>($($args),*),
                 _ => todo!(),
             }
         };
@@ -146,6 +146,7 @@ fn main() {
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindLCS { reverse } => find_lcs(reverse),
+        Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         _ => todo!(),
     }
 }

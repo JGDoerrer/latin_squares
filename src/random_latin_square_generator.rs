@@ -78,7 +78,7 @@ impl<const N: usize> Iterator for RandomLatinSquareGenerator<N> {
             }
 
             stack.clear();
-            stack.push((Constraints::new_reduced(), 1, 1));
+            stack.push((Constraints::new(), 1, 1));
         }
 
         unreachable!()
