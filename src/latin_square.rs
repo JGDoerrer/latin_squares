@@ -175,6 +175,179 @@ impl<const N: usize> LatinSquare<N> {
         true
     }
 
+    pub fn num_transversals(&self) -> usize {
+        let mut count = 0;
+
+        'p: for permutation in PermutationIter::<N>::new() {
+            let mut used_cols = [false; N];
+
+            for i in 0..N {
+                let val = permutation.as_array()[i];
+
+                let col = self
+                    .get_row(i)
+                    .iter()
+                    .position(|v| *v as usize == val)
+                    .unwrap();
+
+                if used_cols[col] {
+                    continue 'p;
+                } else {
+                    used_cols[col] = true;
+                }
+            }
+
+            count += 1;
+        }
+
+        count
+    }
+
+    pub fn transversals(&self) -> impl Iterator<Item = [usize; N]> + '_ {
+        PermutationIter::<N>::new().filter_map(|permutation| {
+            let mut used_cols = [false; N];
+
+            for i in 0..N {
+                let val = permutation.as_array()[i];
+
+                let col = self
+                    .get_row(i)
+                    .iter()
+                    .position(|v| *v as usize == val)
+                    .unwrap();
+
+                if used_cols[col] {
+                    return None;
+                } else {
+                    used_cols[col] = true;
+                }
+            }
+
+            Some(permutation.as_array().clone())
+        })
+    }
+
+    // pub fn max_disjoint_transversals(&self) -> usize {
+    //     let mut max = 0;
+
+    //     let transversals: Vec<_> = self.transversals().collect();
+    //     for (i, transversal) in transversals.iter().enumerate() {
+    //         // TODO: check all possibilities with backtracking
+    //         let mut disjoint = vec![transversal];
+
+    //         for other in transversals.iter().skip(i + 1) {
+    //             let is_disjoint = disjoint
+    //                 .iter()
+    //                 .all(|t| other.iter().zip(*t).all(|(a, b)| *a != *b));
+
+    //             if is_disjoint {
+    //                 disjoint.push(other);
+    //             }
+    //         }
+
+    //         max = max.max(disjoint.len());
+    //         if max == N {
+    //             break;
+    //         }
+    //     }
+
+    //     max
+    // }
+
+    pub fn max_disjoint_transversals(&self) -> usize {
+        let mut transversals_by_start = [(); N].map(|_| Vec::new());
+
+        for t in self.transversals() {
+            transversals_by_start[t[0]].push(t);
+        }
+
+        transversals_by_start[0]
+            .iter()
+            .filter_map(|transversal| {
+                let mut disjoint = vec![*transversal];
+                let mut max_len = 1;
+
+                let mut indices = vec![0];
+
+                'i: while let Some(index) = indices.last_mut() {
+                    let i = disjoint.len();
+
+                    for other in transversals_by_start[i].iter().skip(*index) {
+                        *index += 1;
+
+                        let is_disjoint = disjoint
+                            .iter()
+                            .all(|t| other.iter().zip(t).all(|(a, b)| *a != *b));
+
+                        if is_disjoint {
+                            disjoint.push(*other);
+                            max_len = max_len.max(disjoint.len());
+                            if max_len == N {
+                                return Some(max_len);
+                            }
+                            indices.push(0);
+                            continue 'i;
+                        }
+                    }
+
+                    indices.pop();
+                    disjoint.pop();
+                }
+
+                Some(max_len)
+            })
+            .max()
+            .unwrap_or(0)
+    }
+
+    pub fn full_disjoint_transversals(&self) -> impl Iterator<Item = [[usize; N]; N]> {
+        let mut transversals_by_start = [(); N].map(|_| Vec::new());
+
+        for t in self.transversals() {
+            transversals_by_start[t[0]].push(t);
+        }
+
+        transversals_by_start[0]
+            .clone()
+            .into_iter()
+            .flat_map(move |transversal| {
+                let mut disjoint = [[0; N]; N];
+                disjoint[0] = transversal;
+                let mut all = vec![];
+
+                let mut indices = vec![0];
+
+                'i: while !indices.is_empty() {
+                    let i = indices.len();
+                    let index = indices.last_mut().unwrap();
+
+                    for other in transversals_by_start[i].iter().skip(*index) {
+                        *index += 1;
+
+                        let is_disjoint = disjoint
+                            .iter()
+                            .take(i)
+                            .all(|t| other.iter().zip(t).all(|(a, b)| *a != *b));
+
+                        if is_disjoint {
+                            disjoint[i] = *other;
+
+                            if i == N - 1 {
+                                all.push(disjoint.clone());
+                            } else {
+                                indices.push(0);
+                            }
+                            continue 'i;
+                        }
+                    }
+
+                    indices.pop();
+                }
+
+                all
+            })
+    }
+
     pub fn reduced(&self) -> Self {
         let first_row = self.get_row(0).map(|i| i as usize);
         let row_reduced = self.permuted_cols(&Permutation::from_array(first_row));
@@ -1306,4 +1479,7 @@ mod test {
             LatinSquare::new([[0, 1, 2, 3], [1, 0, 3, 2], [2, 3, 1, 0], [3, 2, 0, 1]])
         )
     }
+
+    #[test]
+    fn transversal() {}
 }

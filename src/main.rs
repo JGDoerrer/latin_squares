@@ -90,6 +90,7 @@ enum Mode {
         seed: u64,
     },
     FindOrthogonal {
+        n: usize,
         #[arg(short, long)]
         all: bool,
     },
@@ -147,6 +148,7 @@ fn main() {
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindLCS { reverse } => find_lcs(reverse),
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
+        Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         _ => todo!(),
     }
 }
@@ -161,14 +163,15 @@ fn find_orthogonal<const N: usize>(all: bool) {
     for sq in read_sqs_from_stdin_n::<N>() {
         println!("{}", sq);
         if all {
-            for [_, sq] in
-                OAGenerator::<N, 2>::from_partial_sq_reduced(sq.into()).map(|oa| oa.squares())
+            for [_, sq] in OAGenerator::<N, 2>::from_partial_sq_reduced(sq.reduced().into())
+                .map(|oa| oa.squares())
             {
                 println!("{}", sq);
             }
-        } else if let Some([_, sq]) = OAGenerator::<N, 2>::from_partial_sq_reduced(sq.into())
-            .map(|oa| oa.squares())
-            .next()
+        } else if let Some([_, sq]) =
+            OAGenerator::<N, 2>::from_partial_sq_reduced(sq.reduced().into())
+                .map(|oa| oa.squares())
+                .next()
         {
             println!("{}", sq);
         }
@@ -178,7 +181,9 @@ fn find_orthogonal<const N: usize>(all: bool) {
 
 fn random_latin_squares<const N: usize>(seed: u64) {
     for sq in RandomLatinSquareGenerator::<N>::new(seed) {
-        println!("{}", sq);
+        if writeln!(stdout(), "{}", sq).is_err() {
+            return;
+        }
     }
 }
 
@@ -197,6 +202,17 @@ fn analyse<const N: usize>() {
             let rcv: String = symmetry.apply_array(['R', 'C', 'V']).into_iter().collect();
             println!("{rcv}");
         }
+        println!();
+
+        println!("Transversals: {}", sq.num_transversals());
+        println!(
+            "Max disjoint transversals: {}",
+            sq.max_disjoint_transversals()
+        );
+        println!(
+            "Full disjoint transversals: {}",
+            sq.full_disjoint_transversals().count()
+        );
         println!();
 
         for cycles in [sq.row_cycles(), sq.col_cycles(), sq.val_cycles()] {
