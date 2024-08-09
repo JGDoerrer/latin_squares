@@ -41,7 +41,6 @@ mod mmcs_hitting_set_generator;
 mod oa_constraints;
 mod oa_generator;
 mod orthogonal_array;
-mod orthogonal_generator;
 mod partial_latin_square;
 mod partial_latin_square_dyn;
 mod partial_oa_generator;
