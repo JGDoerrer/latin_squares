@@ -8,7 +8,7 @@ use crate::{
     bitset::BitSet16,
     latin_square::{minimize_rows_with_lookup, LatinSquare},
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
-    permutation::Permutation,
+    permutation::{Permutation, PermutationIter},
     tuple_iterator::TupleIterator,
 };
 
@@ -34,7 +34,7 @@ impl<const N: usize> PartialLatinSquareTrait for PartialLatinSquare<N> {
 }
 
 impl<const N: usize> PartialLatinSquare<N> {
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         PartialLatinSquare {
             rows: [[None; N]; N],
         }
@@ -42,6 +42,32 @@ impl<const N: usize> PartialLatinSquare<N> {
 
     pub fn from_array(values: [[Option<u8>; N]; N]) -> Self {
         PartialLatinSquare { rows: values }
+    }
+
+    pub fn from_rcv(
+        rows: [[Option<usize>; N]; N],
+        cols: [[Option<usize>; N]; N],
+        vals: [[Option<usize>; N]; N],
+    ) -> Self {
+        let mut new_values = [[None; N]; N];
+
+        for i in 0..N {
+            for j in 0..N {
+                let Some(row) = rows[i][j] else {
+                    continue;
+                };
+                let Some(col) = cols[i][j] else {
+                    continue;
+                };
+                let Some(val) = vals[i][j] else {
+                    continue;
+                };
+
+                new_values[row][col] = Some(val as u8);
+            }
+        }
+
+        Self::from_array(new_values)
     }
 
     pub fn values(self) -> [[Option<u8>; N]; N] {
@@ -420,6 +446,62 @@ impl<const N: usize> PartialLatinSquare<N> {
         min
     }
 
+    /// returns all permutations of rows, columns and values
+    pub fn paratopic(&self) -> impl Iterator<Item = Self> + '_ {
+        let mut rows = [[None; N]; N];
+        for (i, row) in rows.iter_mut().enumerate() {
+            *row = [Some(i); N];
+        }
+
+        let mut col = [None; N];
+
+        for (i, val) in col.iter_mut().enumerate() {
+            *val = Some(i);
+        }
+
+        let cols = [col; N];
+        let vals = self.rows.map(|row| row.map(|val| val.map(|v| v as usize)));
+
+        PermutationIter::new().map(move |perm| {
+            let [rows, cols, vals] = perm.apply_array([rows, cols, vals]);
+            Self::from_rcv(rows, cols, vals)
+        })
+    }
+
+    pub fn minimize_main_class(&self, lookup: &Vec<Vec<(Permutation<N>, Permutation<N>)>>) -> Self {
+        let mut min = *self;
+
+        for sq in self.paratopic() {
+            let sq = sq.minimize_rows(lookup);
+
+            min = min.min(sq);
+        }
+
+        min
+    }
+
+    /// returns the smallest row cycle after completing the row cycles in the maximal way
+    pub fn largest_min_row_cycle(&self) -> Vec<usize> {
+        let mut min_cycle = vec![N];
+
+        for rows in TupleIterator::<2>::new(N).map(|rows| rows.map(|row| self.get_row(row))) {
+            let mut row_permutation = [None; N];
+
+            for i in 0..N {
+                let Some(position) = rows[0].iter().position(|v| *v == Some(i as u8)) else {
+                    continue;
+                };
+                row_permutation[i] = rows[1][position].map(|v| v as usize);
+            }
+
+            let cycle = Self::largest_possible_cycle(row_permutation);
+
+            min_cycle = min_cycle.min(cycle);
+        }
+
+        min_cycle
+    }
+
     /// returns the smallest col cycle after completing the col cycles in the maximal way
     pub fn largest_min_col_cycle(&self) -> Vec<usize> {
         let mut min_cycle = vec![N];
@@ -640,22 +722,21 @@ impl<const N: usize> TryFrom<&str> for PartialLatinSquare<N> {
 
 impl<const N: usize> Debug for PartialLatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "[")?;
+        writeln!(f)?;
         for i in 0..N {
-            write!(f, "    [")?;
+            writeln!(f, "+{}", "---+".repeat(N))?;
+            write!(f, "|")?;
             for j in 0..N {
                 if let Some(value) = self.get_partial(i, j) {
-                    write!(f, "{:2}, ", value)?;
+                    write!(f, " {} |", value)?;
                 } else {
-                    write!(f, "??, ")?;
+                    write!(f, "   |")?;
                 }
             }
-            write!(f, "]")?;
-            if i != N - 1 {
-                writeln!(f, ",")?;
-            }
+            writeln!(f)?;
         }
-        write!(f, "\n]")?;
+        write!(f, "+{}", "---+".repeat(N))?;
+
         Ok(())
     }
 }

@@ -1,4 +1,7 @@
-use std::{time::Instant, vec};
+use std::{
+    time::{Duration, Instant},
+    vec,
+};
 
 use crate::{bitset::BitSet128, bitvec::BitVec};
 
@@ -12,6 +15,7 @@ pub struct HittingSetGenerator {
     max_entries: usize,
     entry_to_set: Vec<BitVec>,
     temp: Option<BitVec>,
+    start: Instant,
 }
 
 #[derive(Debug)]
@@ -54,6 +58,7 @@ impl HittingSetGenerator {
             sets,
             max_entries,
             temp: Some(BitVec::empty()),
+            start: Instant::now(),
         }
     }
 
@@ -77,6 +82,14 @@ impl HittingSetGenerator {
             })
             .reduce(|a, b| a + b)
             .unwrap()
+    }
+
+    fn estimated_time_left(&self) -> Duration {
+        let time_passed = Instant::now() - self.start;
+        let progress = self.progress();
+        let total_time = time_passed.div_f64(progress);
+
+        total_time - time_passed
     }
 }
 
@@ -110,7 +123,7 @@ impl Iterator for HittingSetGenerator {
 
                 let time_passed = (Instant::now() - last_progress).as_secs_f64();
                 if time_passed >= 1.0 {
-                    dbg!(self.progress());
+                    dbg!(self.progress(), self.estimated_time_left());
 
                     last_progress = Instant::now();
                 }

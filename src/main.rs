@@ -17,7 +17,7 @@ use oa_generator::OAGenerator;
 use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use main_class_generator::MainClassGenerator;
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
-use orthogonal_array::OrthogonalArray;
+use orthogonal_array::{OrthogonalArray, SEPARATOR};
 use partial_latin_square::PartialLatinSquare;
 
 use partial_latin_square_dyn::PartialLatinSquareDyn;
@@ -55,10 +55,11 @@ mod tuple_iterator;
 
 #[derive(Subcommand, Clone)]
 enum Mode {
+    PrettyPrint,
+    Solve,
     Analyse {
         n: usize,
     },
-    PrettyPrint,
     NormalizeMainClass {
         n: usize,
     },
@@ -94,11 +95,11 @@ enum Mode {
         #[arg(short, long)]
         all: bool,
     },
-    Solve,
     NumSubsquares {
         k: usize,
     },
-    GenerateMOLS {
+    FindMOLS {
+        n: usize,
         mols: usize,
     },
     ShuffleMOLS {
@@ -149,6 +150,7 @@ fn main() {
         Mode::FindLCS { reverse } => find_lcs(reverse),
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
+        Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
         _ => todo!(),
     }
 }
@@ -161,20 +163,18 @@ fn num_subsquares(k: usize) {
 
 fn find_orthogonal<const N: usize>(all: bool) {
     for sq in read_sqs_from_stdin_n::<N>() {
-        println!("{}", sq);
+        println!("{sq}");
+
         if all {
-            for [_, sq] in OAGenerator::<N, 2>::from_partial_sq_reduced(sq.reduced().into())
-                .map(|oa| oa.squares())
-            {
-                println!("{}", sq);
+            for sq in sq.orthogonal_squares() {
+                println!("{sq}");
             }
-        } else if let Some([_, sq]) =
-            OAGenerator::<N, 2>::from_partial_sq_reduced(sq.reduced().into())
-                .map(|oa| oa.squares())
-                .next()
-        {
-            println!("{}", sq);
+        } else {
+            if let Some(sq) = sq.orthogonal_squares().next() {
+                println!("{sq}");
+            }
         }
+
         println!()
     }
 }
@@ -210,7 +210,7 @@ fn analyse<const N: usize>() {
             sq.max_disjoint_transversals()
         );
         println!(
-            "Full disjoint transversals: {}",
+            "Full disjoint transversal count: {}",
             sq.full_disjoint_transversals().count()
         );
         println!();
@@ -536,40 +536,53 @@ fn find_lcs(reverse: bool) {
     // println!("min: {min}");
 }
 
-fn generate_mols_n<const N: usize>(mols: usize) {
-    assert!(mols > 0);
-    assert!(mols < N);
+fn find_mols<const N: usize>(mols: usize) {
+    for sq in read_sqs_from_stdin_n::<N>() {
+        let has_orthogonal = sq
+            .full_disjoint_transversals()
+            .nth(mols.saturating_sub(2))
+            .is_some();
 
-    macro_rules! match_mols {
-        ($( $i : literal),+) => {
-            match mols {
-                $(
-                    $i => generate_mols::<N, $i>(),
-                )*
-                _ => unreachable!(),
-            }
-        };
-    }
-
-    match N {
-        3 => match_mols!(1, 2),
-        4 => match_mols!(1, 2, 3),
-        5 => match_mols!(1, 2, 3, 4),
-        6 => match_mols!(1, 2, 3, 4, 5),
-        10 => match_mols!(2, 3),
-        _ => todo!(),
-    }
-}
-
-fn generate_mols<const N: usize, const MOLS: usize>() {
-    for mols in OAGenerator::<N, MOLS>::new_reduced() {
-        for (i, sq) in mols.squares().into_iter().enumerate() {
-            print!("{sq}");
-            if i != MOLS - 1 {
-                print!("-");
-            }
+        if !has_orthogonal {
+            continue;
         }
-        println!()
+
+        let mut current_mols = vec![sq];
+        let mut indices = vec![0];
+        let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
+
+        'i: while let Some(index) = indices.last_mut() {
+            for orthogonal in orthogonal.iter().skip(*index) {
+                *index += 1;
+                if current_mols
+                    .iter()
+                    .all(|sq| sq.is_orthogonal_to(orthogonal))
+                {
+                    current_mols.push(*orthogonal);
+
+                    if current_mols.len() == mols {
+                        println!(
+                            "{}",
+                            current_mols
+                                .iter()
+                                .map(|sq| sq.to_string())
+                                .reduce(|a, b| format!("{a}{}{b}", SEPARATOR))
+                                .unwrap()
+                        );
+
+                        current_mols.pop();
+                    } else {
+                        let next_index = *index;
+                        indices.push(next_index);
+                    }
+
+                    continue 'i;
+                }
+            }
+
+            current_mols.pop();
+            indices.pop();
+        }
     }
 }
 

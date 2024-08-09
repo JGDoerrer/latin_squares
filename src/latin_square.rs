@@ -204,6 +204,7 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn transversals(&self) -> impl Iterator<Item = [usize; N]> + '_ {
+        // TODO: not use permutations
         PermutationIter::<N>::new().filter_map(|permutation| {
             let mut used_cols = [false; N];
 
@@ -223,7 +224,16 @@ impl<const N: usize> LatinSquare<N> {
                 }
             }
 
-            Some(permutation.as_array().clone())
+            let mut cols = [0; N];
+            for (row, v) in permutation.into_array().into_iter().enumerate() {
+                cols[row] = self
+                    .get_row(row)
+                    .into_iter()
+                    .position(|a| *a as usize == v)
+                    .unwrap();
+            }
+
+            Some(cols)
         })
     }
 
@@ -348,6 +358,23 @@ impl<const N: usize> LatinSquare<N> {
             })
     }
 
+    pub fn orthogonal_squares(&self) -> impl Iterator<Item = LatinSquare<N>> + '_ {
+        self.full_disjoint_transversals().map(move |transversals| {
+            let mut rows = [[0; N]; N];
+
+            for (i, t) in transversals.into_iter().enumerate() {
+                for (row, col) in t.into_iter().enumerate() {
+                    rows[row][col] = i as u8;
+                }
+            }
+
+            let sq = LatinSquare::new(rows);
+            debug_assert!(self.is_orthogonal_to(&sq));
+
+            sq
+        })
+    }
+
     pub fn reduced(&self) -> Self {
         let first_row = self.get_row(0).map(|i| i as usize);
         let row_reduced = self.permuted_cols(&Permutation::from_array(first_row));
@@ -369,6 +396,7 @@ impl<const N: usize> LatinSquare<N> {
         })
     }
 
+    /// returns all permutations of rows, columns and values
     pub fn paratopic(&self) -> impl Iterator<Item = Self> + '_ {
         let mut rows = [[0; N]; N];
         for (i, row) in rows.iter_mut().enumerate() {
@@ -1435,7 +1463,6 @@ pub fn minimize_rows_with_lookup<'a, const N: usize>(
     // );
 
     // lookup
-    // TODO: optimize
     let cycle_index = CYCLE_STRUCTURES[N]
         .into_iter()
         .position(|c| c == &cycle_lengths)
