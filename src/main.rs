@@ -143,7 +143,7 @@ fn main() {
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
         Mode::GenerateMainClasses { n } => match_n!(n, generate_main_classes),
         Mode::FindSCS { reverse } => find_scs(reverse),
-        Mode::GenerateLatinSquares { n } => match_n!(n, generate_latin_squares),
+        Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindLCS { reverse } => find_lcs(reverse),
@@ -256,8 +256,8 @@ fn analyse<const N: usize>() {
     }
 }
 
-fn generate_latin_squares<const N: usize>() {
-    for sq in LatinSquareGenerator::<N>::new() {
+fn generate_latin_squares(n: usize) {
+    for sq in LatinSquareGeneratorDyn::new(n) {
         println!("{sq}");
     }
 }
