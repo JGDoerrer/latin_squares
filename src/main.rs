@@ -1,8 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::OpenOptions,
-    io::{stdin, stdout, BufRead, BufReader, Write},
-    path::Path,
+    io::{stdin, stdout, Write},
     vec,
 };
 
@@ -11,20 +9,18 @@ use clap::{self, Parser, Subcommand};
 use latin_square::{generate_minimize_rows_lookup, LatinSquare};
 
 use latin_square_dyn::LatinSquareDyn;
-use latin_square_generator::{LatinSquareGenerator, LatinSquareGeneratorDyn};
+use latin_square_generator::LatinSquareGeneratorDyn;
 use oa_generator::OAGenerator;
 
 use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use main_class_generator::MainClassGenerator;
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 use orthogonal_array::{OrthogonalArray, SEPARATOR};
-use partial_latin_square::PartialLatinSquare;
 
 use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_oa_generator::PartialOAGenerator;
 use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
-use permutation::{factorial, PermutationIter};
 use random_latin_square_generator::RandomLatinSquareGenerator;
 
 mod bitset;
@@ -100,10 +96,6 @@ enum Mode {
     FindMOLS {
         n: usize,
         mols: usize,
-    },
-    ShuffleMOLS {
-        mols: usize,
-        seed: u64,
     },
     SolveMOLS {
         mols: usize,
@@ -699,55 +691,6 @@ fn solve() {
     }
 }
 
-fn shuffle_mols_n<const N: usize>(mols: usize, seed: u64) {
-    assert!(mols > 0);
-    assert!(mols < N);
-
-    macro_rules! match_mols {
-        ($( $i : literal),+) => {
-            match mols {
-                $(
-                    $i => shuffle_mols::<N, $i>(seed),
-                )*
-                _ => unreachable!(),
-            }
-        };
-    }
-
-    todo!()
-}
-
-fn shuffle_mols<const N: usize, const MOLS: usize>(seed: u64) {
-    let mut state = [seed, 1, 2, 3];
-
-    fn xoshiro(state: &mut [u64; 4]) -> u64 {
-        let result = state[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
-
-        let new_state = [
-            state[0] ^ state[1] ^ state[3],
-            state[0] ^ state[1] ^ state[2],
-            state[2] ^ state[0] ^ (state[1] << 17),
-            (state[3] ^ state[1]).rotate_left(45),
-        ];
-
-        *state = new_state;
-
-        result
-    }
-
-    for mut mols in read_mols_from_stdin::<N, MOLS>() {
-        let row_perm = xoshiro(&mut state) as usize % factorial(N);
-        let col_perm = xoshiro(&mut state) as usize % factorial(N);
-        let val_perms = [0; MOLS].map(|_| xoshiro(&mut state) as usize % factorial(N));
-
-        mols = mols.permute_rows(&PermutationIter::new().nth(row_perm).unwrap());
-
-        println!("{}", mols);
-    }
-
-    todo!()
-}
-
 fn solve_mols_n<const N: usize>(mols: usize) {
     assert!(mols > 0);
     assert!(mols < N);
@@ -782,22 +725,6 @@ fn solve_mols<const N: usize, const MOLS: usize>() {
             }
         }
     }
-}
-
-fn read_sqs_from_file<const N: usize>(path: &Path) -> Vec<LatinSquare<N>> {
-    let file = OpenOptions::new().read(true).open(path).unwrap();
-
-    let mut reader = BufReader::new(file);
-
-    let mut line = String::new();
-    let mut sqs = vec![];
-    while reader.read_line(&mut line).is_ok_and(|i| i != 0) {
-        line.pop(); // remove newline
-        let sq = LatinSquare::try_from(line.as_str()).unwrap();
-        sqs.push(sq);
-        line.clear();
-    }
-    sqs
 }
 
 fn read_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = LatinSquare<N>> {
@@ -835,28 +762,6 @@ fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
                 Err(err) => {
                     eprintln!("{err}");
                     line.clear();
-                    continue;
-                }
-            }
-        }
-        None
-    })
-}
-
-fn read_partial_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = PartialLatinSquare<N>> {
-    (0..).map_while(|_| {
-        let mut line = String::new();
-        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
-            line = line.trim().into(); // remove newline
-            match PartialLatinSquare::try_from(line.as_str()) {
-                Ok(sq) => {
-                    line.clear();
-
-                    return Some(sq);
-                }
-                Err(err) => {
-                    line.clear();
-                    eprintln!("{}", err);
                     continue;
                 }
             }
