@@ -617,8 +617,7 @@ impl<const N: usize> LatinSquare<N> {
 
                 for (s, c) in permutations {
                     let mut new_sq = sq;
-                    new_sq.permute_vals_simd(&s);
-                    new_sq.permute_cols_simd(&c);
+                    new_sq.permute_cols_vals_simd(&c, &s);
 
                     let mut new_rows = [[0; N]; N];
                     for i in 0..N {

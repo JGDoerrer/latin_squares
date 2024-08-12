@@ -9,8 +9,6 @@ use crate::{
 pub struct MainClassGenerator<'a, const N: usize> {
     cycle_structures: Vec<Vec<usize>>,
     row_cycle_index: usize,
-    col_cycle_index: usize,
-    val_cycle_index: usize,
     partial_sq: Option<PartialLatinSquare<N>>,
     generator: Option<SqGenerator<'a, N>>,
     sqs: HashSet<LatinSquare<N>>,
@@ -45,8 +43,6 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
         let generator = MainClassGenerator {
             cycle_structures,
             row_cycle_index: 0,
-            col_cycle_index: 0,
-            val_cycle_index: 0,
             partial_sq,
             generator,
             sqs: HashSet::new(),
@@ -60,25 +56,6 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
     fn next_main_class(&mut self) -> Option<LatinSquare<N>> {
         if let Some(generator) = &mut self.generator {
             for sq in generator.by_ref() {
-                let col_cycles = sq.col_cycles();
-                if
-                // !col_cycles.contains(&self.cycle_structures[self.col_cycle_index])
-                //     ||
-                col_cycles
-                    .iter()
-                    .any(|c| self.cycle_structures[..self.col_cycle_index].contains(c))
-                    || {
-                        let val_cycles = sq.val_cycles();
-                        // !val_cycles.contains(&self.cycle_structures[self.val_cycle_index])
-                        //     ||
-                        val_cycles
-                            .iter()
-                            .any(|c| self.cycle_structures[..self.val_cycle_index].contains(c))
-                    }
-                {
-                    continue;
-                }
-
                 self.candidates += 1;
                 // debug_assert_eq!(sq, sq.isotopy_class());
                 let main_class = sq.main_class_lookup(&self.lookup);
@@ -94,8 +71,6 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
 
     fn next_base_square(&mut self) -> bool {
         self.row_cycle_index += 1;
-        self.col_cycle_index = self.row_cycle_index;
-        self.val_cycle_index = self.col_cycle_index;
 
         if self.row_cycle_index >= self.cycle_structures.len() {
             self.partial_sq = None;
@@ -191,7 +166,7 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
                 .unwrap();
 
             let full_rows: Vec<_> = (0..N)
-                .filter(|row| sq.get_row(*row).iter().all(|v| v.is_some()))
+                .filter(|row| sq.get_row(*row).iter().any(|v| v.is_some()))
                 .collect();
 
             if self.row_cycle_index != 0 {
@@ -298,6 +273,10 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
             }
 
             let sq = constraints.partial_sq().minimize_rows(&self.lookup);
+
+            if sq.get(row, 0).is_none() {
+                continue;
+            }
 
             if self.sqs.insert(sq) {
                 return Some(sq);
