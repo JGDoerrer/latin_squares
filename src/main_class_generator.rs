@@ -39,7 +39,7 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
             }
         }
 
-        let generator = Some(SqGenerator::new(sq, 0, 0, 0, &lookup));
+        let generator = Some(SqGenerator::new(sq, 0, &lookup));
         let partial_sq = Some(sq);
 
         let generator = MainClassGenerator {
@@ -80,6 +80,7 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
                 }
 
                 self.candidates += 1;
+                // debug_assert_eq!(sq, sq.isotopy_class());
                 let main_class = sq.main_class_lookup(&self.lookup);
 
                 if self.sqs.insert(main_class) {
@@ -118,43 +119,9 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
             }
         }
 
-        self.generator = Some(SqGenerator::new(
-            sq,
-            self.row_cycle_index,
-            self.col_cycle_index,
-            self.val_cycle_index,
-            &self.lookup,
-        ));
+        self.generator = Some(SqGenerator::new(sq, self.row_cycle_index, &self.lookup));
         self.partial_sq = Some(sq);
         dbg!(sq);
-
-        false
-    }
-
-    fn next_cycle(&mut self) -> bool {
-        self.val_cycle_index += 1;
-        if self.val_cycle_index >= self.cycle_structures.len() {
-            self.col_cycle_index += 1;
-            self.val_cycle_index = self.col_cycle_index;
-
-            if self.col_cycle_index >= self.cycle_structures.len() {
-                return true;
-            }
-        }
-
-        dbg!((
-            self.row_cycle_index,
-            self.col_cycle_index,
-            self.val_cycle_index,
-        ));
-
-        self.generator = Some(SqGenerator::new(
-            self.partial_sq.unwrap(),
-            self.row_cycle_index,
-            self.col_cycle_index,
-            self.val_cycle_index,
-            &self.lookup,
-        ));
 
         false
     }
@@ -184,8 +151,6 @@ impl<'a, const N: usize> Iterator for MainClassGenerator<'a, N> {
 struct SqGenerator<'a, const N: usize> {
     row_generators: Vec<RowGenerator<'a, N>>,
     row_cycle_index: usize,
-    col_cycle_index: usize,
-    val_cycle_index: usize,
     lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
 }
 
@@ -193,15 +158,11 @@ impl<'a, const N: usize> SqGenerator<'a, N> {
     fn new(
         sq: PartialLatinSquare<N>,
         row_cycle_index: usize,
-        col_cycle_index: usize,
-        val_cycle_index: usize,
         lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
     ) -> Self {
         SqGenerator {
             row_generators: vec![RowGenerator::new(&sq, 2, lookup)],
             row_cycle_index,
-            col_cycle_index,
-            val_cycle_index,
             lookup,
         }
     }
@@ -258,20 +219,6 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
                         continue 'r;
                     }
                 }
-            }
-
-            if self.col_cycle_index != 0
-                && !CYCLE_STRUCTURES[N][self.col_cycle_index..]
-                    .contains(&sq.largest_min_col_cycle().as_slice())
-            {
-                continue 'r;
-            }
-
-            if self.val_cycle_index != 0
-                && !CYCLE_STRUCTURES[N][self.val_cycle_index..]
-                    .contains(&sq.largest_min_val_cycle().as_slice())
-            {
-                continue 'r;
             }
 
             self.row_generators
@@ -351,6 +298,7 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
             }
 
             let sq = constraints.partial_sq().minimize_rows(&self.lookup);
+
             if self.sqs.insert(sq) {
                 return Some(sq);
             }
@@ -429,6 +377,8 @@ pub const CYCLE_STRUCTURES: [&[&[usize]]; 11] = [
 #[cfg(test)]
 mod test {
 
+    use crate::latin_square::generate_minimize_rows_lookup;
+
     use super::*;
 
     #[test]
@@ -463,5 +413,20 @@ mod test {
         for i in 0..CYCLE_STRUCTURES.len() {
             assert_eq!(generate_cycle_structures(i), CYCLE_STRUCTURES[i]);
         }
+    }
+
+    #[test]
+    fn main_class_count() {
+        let lookup4 = generate_minimize_rows_lookup::<4>();
+        assert_eq!(MainClassGenerator::new(&lookup4).count(), 2);
+
+        let lookup5 = generate_minimize_rows_lookup::<5>();
+        assert_eq!(MainClassGenerator::new(&lookup5).count(), 2);
+
+        let lookup6 = generate_minimize_rows_lookup::<6>();
+        assert_eq!(MainClassGenerator::new(&lookup6).count(), 12);
+
+        // let lookup7 = generate_minimize_rows_lookup::<7>();
+        // assert_eq!(MainClassGenerator::new(&lookup7).count(), 147);
     }
 }

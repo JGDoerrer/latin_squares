@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Write},
@@ -206,6 +208,7 @@ fn analyse<const N: usize>() {
         );
         println!();
 
+        println!("Cycles:");
         for cycles in [sq.row_cycles(), sq.col_cycles(), sq.val_cycles()] {
             let mut counts: Vec<_> = {
                 let mut map = HashMap::new();
@@ -228,7 +231,7 @@ fn analyse<const N: usize>() {
             println!();
         }
 
-        let isotopy_class = sq.isotopy_class();
+        let (isotopy_class, _) = sq.isotopy_class_permutation();
         if isotopy_class != sq {
             println!("Isotopy class: ");
             println!("{}", isotopy_class);

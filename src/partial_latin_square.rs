@@ -238,6 +238,52 @@ impl<const N: usize> PartialLatinSquare<N> {
         Self { rows: values }
     }
 
+    pub fn permute_cols_vals_simd(
+        &mut self,
+        col_permutation: &Permutation<N>,
+        val_permutation: &Permutation<N>,
+    ) {
+        use std::simd::Simd;
+
+        assert!(N <= 16);
+
+        let mut col_permutation_simd = [0; 16];
+        col_permutation_simd[0..N].copy_from_slice(
+            &col_permutation
+                .clone()
+                .inverse()
+                .into_array()
+                .map(|v| v as u8),
+        );
+        let col_permutation = Simd::from_array(col_permutation_simd);
+
+        let mut val_permutation_simd = [0; 16];
+        val_permutation_simd[0..N]
+            .copy_from_slice(&val_permutation.clone().into_array().map(|v| v as u8));
+        let val_permutation = Simd::from_array(val_permutation_simd);
+
+        for i in 0..N {
+            debug_assert!(self.rows[i]
+                .iter()
+                .all(|v| v.is_some() == self.rows[i][0].is_some()));
+
+            if self.rows[i][0].is_none() {
+                continue;
+            }
+
+            let mut simd = [0; 16];
+            simd[0..N].copy_from_slice(&self.rows[i].map(|v| v.unwrap()));
+            let simd = Simd::from_array(simd);
+            let new_row = val_permutation
+                .swizzle_dyn(simd)
+                .swizzle_dyn(col_permutation);
+
+            for j in 0..N {
+                self.rows[i][j] = Some(new_row[j]);
+            }
+        }
+    }
+
     pub fn sort_entries_top_left(&self) -> Self {
         let mut new = *self;
 
@@ -416,17 +462,18 @@ impl<const N: usize> PartialLatinSquare<N> {
                 candidates.clear();
             }
             if cycles == min_cycles {
-                candidates.push((rows, cycles));
+                candidates.push(rows);
             }
         }
 
         let mut min = *self;
 
-        for (rows, _) in candidates {
+        for rows in candidates {
             let permutations = minimize_rows_with_lookup(&rows, lookup);
 
             for (s, c) in permutations {
-                let new_sq = self.permute_vals(&s).permute_cols(&c);
+                let mut new_sq = *self;
+                new_sq.permute_cols_vals_simd(&c, &s);
 
                 let mut new_rows = [[None; N]; N];
                 for i in 0..N {

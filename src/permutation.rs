@@ -38,21 +38,13 @@ impl<const N: usize> Permutation<N> {
     }
 
     pub fn inverse(self) -> Self {
-        let mut identity = Self::identity().into_array();
-        let mut permutation = self.into_array();
+        let mut inverse = Self::identity().into_array();
 
         for i in 0..N {
-            if permutation[i] == i {
-                continue;
-            }
-
-            let pos_i = permutation.iter().position(|e| *e == i).unwrap();
-
-            identity.swap(i, pos_i);
-            permutation.swap(i, pos_i);
+            inverse[self.0[i]] = i;
         }
 
-        Self::from_array(identity)
+        Self::from_array(inverse)
     }
 
     pub fn order(&self) -> usize {
