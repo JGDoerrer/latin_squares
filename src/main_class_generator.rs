@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
 use crate::{
     constraints::Constraints, latin_square::LatinSquare, partial_latin_square::PartialLatinSquare,
-    permutation::Permutation, tuple_iterator::TupleIterator,
+    permutation::Permutation,
 };
 
 /// Generates a representative of each main class
@@ -11,7 +9,6 @@ pub struct MainClassGenerator<'a, const N: usize> {
     row_cycle_index: usize,
     partial_sq: Option<PartialLatinSquare<N>>,
     generator: Option<SqGenerator<'a, N>>,
-    sqs: HashSet<LatinSquare<N>>,
     lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
     candidates: usize,
 }
@@ -37,30 +34,27 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
             }
         }
 
-        let generator = Some(SqGenerator::new(sq, 0, &lookup));
+        let generator = Some(SqGenerator::new(sq, 0, lookup));
         let partial_sq = Some(sq);
 
-        let generator = MainClassGenerator {
+        MainClassGenerator {
             cycle_structures,
             row_cycle_index: 0,
             partial_sq,
             generator,
-            sqs: HashSet::new(),
             lookup,
             candidates: 0,
-        };
-
-        generator
+        }
     }
 
     fn next_main_class(&mut self) -> Option<LatinSquare<N>> {
         if let Some(generator) = &mut self.generator {
             for sq in generator.by_ref() {
                 self.candidates += 1;
-                // debug_assert_eq!(sq, sq.isotopy_class());
-                let main_class = sq.main_class_lookup(&self.lookup);
+                debug_assert_eq!(sq, sq.isotopy_class());
+                let main_class = sq.main_class_lookup(self.lookup);
 
-                if self.sqs.insert(main_class) {
+                if sq == main_class {
                     dbg!(self.candidates);
                     return Some(main_class);
                 }
@@ -94,7 +88,7 @@ impl<'a, const N: usize> MainClassGenerator<'a, N> {
             }
         }
 
-        self.generator = Some(SqGenerator::new(sq, self.row_cycle_index, &self.lookup));
+        self.generator = Some(SqGenerator::new(sq, self.row_cycle_index, self.lookup));
         self.partial_sq = Some(sq);
         dbg!(sq);
 
@@ -109,10 +103,6 @@ impl<'a, const N: usize> Iterator for MainClassGenerator<'a, N> {
         if let Some(value) = self.next_main_class() {
             return Some(value);
         }
-
-        // if !self.next_cycle() {
-        //     return self.next();
-        // }
 
         if !self.next_base_square() {
             return self.next();
@@ -161,20 +151,14 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
                 return Some(sq.try_into().unwrap());
             }
 
-            let next_row_index = (0..N)
-                .find(|row| sq.get_row(*row).iter().any(|v| v.is_none()))
-                .unwrap();
-
-            let full_rows: Vec<_> = (0..N)
-                .filter(|row| sq.get_row(*row).iter().any(|v| v.is_some()))
-                .collect();
+            let next_row_index = (0..N).find(|row| sq.get_row(*row)[0].is_none()).unwrap();
 
             if self.row_cycle_index != 0 {
                 // check for rows with disallowed cycle structure
-                for rows in TupleIterator::<2>::new(full_rows.len())
-                    .flat_map(|[row0, row1]| [[row0, row1], [row1, row0]])
+                for rows in (0..next_row_index - 1)
+                    .flat_map(|i| [[next_row_index - 1, i], [i, next_row_index - 1]])
                 {
-                    let rows = rows.map(|i| sq.get_row(full_rows[i]).map(|v| v.unwrap()));
+                    let rows = rows.map(|i| sq.get_row(i).map(|v| v.unwrap()));
 
                     let row_permutation = {
                         let mut permutation = [0; N];
@@ -196,6 +180,18 @@ impl<'a, const N: usize> Iterator for SqGenerator<'a, N> {
                 }
             }
 
+            if !CYCLE_STRUCTURES[N][self.row_cycle_index..]
+                .contains(&sq.largest_min_col_cycle().as_slice())
+            {
+                continue 'r;
+            }
+
+            if !CYCLE_STRUCTURES[N][self.row_cycle_index..]
+                .contains(&sq.largest_min_val_cycle().as_slice())
+            {
+                continue 'r;
+            }
+
             self.row_generators
                 .push(RowGenerator::new(&sq, next_row_index, self.lookup));
         }
@@ -209,7 +205,6 @@ struct RowGenerator<'a, const N: usize> {
     constraints: Constraints<N>,
     indices: [usize; N],
     row: usize,
-    sqs: HashSet<PartialLatinSquare<N>>,
     lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
 }
 
@@ -234,7 +229,6 @@ impl<'a, const N: usize> RowGenerator<'a, N> {
             constraints,
             row,
             indices: [0; N],
-            sqs: HashSet::new(),
             lookup,
         }
     }
@@ -268,23 +262,13 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
             }
             self.indices[N - 1] += 1;
 
-            if !constraints.is_solvable() {
-                return None;
-            }
+            let sq = constraints.partial_sq();
 
-            let sq = constraints.partial_sq().minimize_rows(&self.lookup);
-
-            if sq.get(row, 0).is_none() {
+            if !sq.is_minimal(self.lookup) {
                 continue;
             }
 
-            if self.sqs.insert(sq) {
-                return Some(sq);
-            }
-            // else {
-            //     // dbg!(sq);
-            //     self.next()
-            // }
+            return Some(*sq);
         }
     }
 }

@@ -493,6 +493,69 @@ impl<const N: usize> PartialLatinSquare<N> {
         min
     }
 
+    pub fn is_minimal(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> bool {
+        let full_rows: Vec<_> = self
+            .rows
+            .iter()
+            .take_while(|row| row.iter().all(|v| v.is_some()))
+            .map(|row| row.map(|v| v.unwrap()))
+            .collect();
+
+        let mut candidates = Vec::new();
+        let mut min_cycles = vec![N];
+
+        for [row0, row1] in TupleIterator::<2>::new(full_rows.len())
+            .flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
+        {
+            let rows = [full_rows[row0], full_rows[row1]];
+            let row_permutation = {
+                let mut permutation = [0; N];
+
+                for i in 0..N {
+                    let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                    permutation[i] = rows[1][position].into();
+                }
+
+                Permutation::from_array(permutation)
+            };
+
+            let mut cycles: Vec<_> = row_permutation.cycle_lengths();
+            cycles.sort();
+
+            if cycles < min_cycles {
+                min_cycles = cycles.clone();
+                candidates.clear();
+            }
+            if cycles == min_cycles {
+                candidates.push(rows);
+            }
+        }
+
+        for rows in candidates {
+            let permutations = minimize_rows_with_lookup(&rows, lookup);
+
+            for (s, c) in permutations {
+                let mut new_sq = *self;
+                new_sq.permute_cols_vals_simd(&c, &s);
+
+                let mut new_rows = [[None; N]; N];
+                for i in 0..N {
+                    if let Some(j) = new_sq.rows[i][0] {
+                        new_rows[j as usize] = new_sq.rows[i];
+                    }
+                }
+
+                let new_sq = PartialLatinSquare::from_array(new_rows);
+
+                if new_sq.cmp_rows(self).is_lt() {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
     /// returns all permutations of rows, columns and values
     pub fn paratopic(&self) -> impl Iterator<Item = Self> + '_ {
         let mut rows = [[None; N]; N];
