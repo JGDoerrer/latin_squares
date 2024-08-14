@@ -100,6 +100,10 @@ impl MMCSHittingSetGenerator {
         }
     }
 
+    pub fn decrease_max_entries(&mut self) {
+        self.max_entries -= 1;
+    }
+
     fn progress(&self) -> f64 {
         let totals: Vec<_> = self.stack[0..=self.stack_index]
             .iter()
