@@ -28,7 +28,7 @@ pub trait LatinSquareTrait: PartialLatinSquareTrait {
             for cols in TupleIteratorDyn::new(n, k) {
                 let mut subsquare = self.get_subsquare_dyn(&rows, &cols);
 
-                let mut permutation: Vec<_> = subsquare[0].iter().copied().collect();
+                let mut permutation: Vec<_> = subsquare[0].to_vec();
 
                 for i in 0..n {
                     if !permutation.contains(&i) {

@@ -205,9 +205,7 @@ impl<'a> Iterator for BitVecIter<'a> {
         const BITS: usize = usize::BITS as usize;
 
         let word_index = self.index / BITS;
-        let Some(word) = self.bitvec.words.get(word_index) else {
-            return None;
-        };
+        let word = self.bitvec.words.get(word_index)?;
 
         let bit_index = self.index % BITS;
         let mask = !((1usize << bit_index) - 1);

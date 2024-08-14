@@ -69,7 +69,7 @@ impl LatinSquareDyn {
 
     pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
         let mut sets = Vec::new();
-        let max_size = self.n * self.n / 2;
+        let max_size = self.n * 3;
 
         let triple_iter = TupleIterator::<3>::new(self.n);
 
