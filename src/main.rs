@@ -67,10 +67,7 @@ enum Mode {
         #[arg(short, long)]
         reverse: bool,
     },
-    FindLCS {
-        #[arg(short, long)]
-        reverse: bool,
-    },
+    FindLCS,
     FindMOLSSCS {
         mols: usize,
         #[arg(short, long, default_value_t = 0)]
@@ -140,7 +137,7 @@ fn main() {
         Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
-        Mode::FindLCS { reverse } => find_lcs(reverse),
+        Mode::FindLCS => find_lcs(),
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
@@ -396,7 +393,7 @@ fn find_scs(reverse: bool) {
     // println!("min: {min}");
 }
 
-fn find_lcs(reverse: bool) {
+fn find_lcs() {
     for sq in read_sqs_from_stdin() {
         println!("{}", sq);
 
@@ -451,8 +448,8 @@ fn find_lcs(reverse: bool) {
         }
 
         println!("{lcs}");
+        println!();
     }
-    println!();
 
     // println!("min: {min}");
 }
