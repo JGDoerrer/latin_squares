@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Write},
-    vec,
+    thread, vec,
 };
 
 use clap::{self, Parser, Subcommand};
@@ -417,60 +417,64 @@ fn find_scs(reverse: bool) {
 
 fn find_lcs() {
     for sq in read_sqs_from_stdin() {
-        println!("{}", sq);
+        thread::spawn(move || {
+            let unavoidable_sets = sq.unavoidable_sets();
+            unavoidable_sets.iter().for_each(|sets| {
+                dbg!(sets.len());
+            });
 
-        let unavoidable_sets = sq.unavoidable_sets();
-        unavoidable_sets.iter().for_each(|sets| {
-            dbg!(sets.len());
-        });
+            let hitting_sets =
+                MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
 
-        let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+            let mut lcs = PartialLatinSquareDyn::empty(sq.n());
+            'h: for hitting_set in hitting_sets {
+                let partial_sq = sq.mask(hitting_set);
 
-        let mut lcs = PartialLatinSquareDyn::empty(sq.n());
-        'h: for hitting_set in hitting_sets {
-            let partial_sq = sq.mask(hitting_set);
-
-            {
-                // dbg!(partial_sq.to_string());
-                let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
-                let first_solution = solutions.next();
-                let second_solution = solutions.next();
-
-                if second_solution.is_some()
-                    || first_solution.is_none()
-                    || first_solution.is_some_and(|solution| solution != sq)
                 {
-                    continue;
-                }
+                    // dbg!(partial_sq.to_string());
+                    let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
+                    let first_solution = solutions.next();
+                    let second_solution = solutions.next();
 
-                // check if removing one entry results in >= 2 solutions
-                for i in 0..sq.n() {
-                    for j in 0..sq.n() {
-                        if partial_sq.get_partial(i, j).is_none() {
-                            continue;
-                        }
-                        let mut sq = partial_sq.clone();
-                        sq.set(i, j, None);
+                    if second_solution.is_some()
+                        || first_solution.is_none()
+                        || first_solution.is_some_and(|solution| solution != sq)
+                    {
+                        continue;
+                    }
 
-                        let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
-                        solutions.next();
-                        let second_solution = solutions.next();
-                        if second_solution.is_none() {
-                            continue 'h;
+                    // check if removing one entry results in >= 2 solutions
+                    for i in 0..sq.n() {
+                        for j in 0..sq.n() {
+                            if partial_sq.get_partial(i, j).is_none() {
+                                continue;
+                            }
+                            let mut sq = partial_sq.clone();
+                            sq.set(i, j, None);
+
+                            let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
+                            solutions.next();
+                            let second_solution = solutions.next();
+                            if second_solution.is_none() {
+                                continue 'h;
+                            }
                         }
                     }
-                }
 
-                // println!("{}", partial_sq.to_string());
+                    // println!("{}", partial_sq.to_string());
 
-                if lcs.num_entries() < partial_sq.num_entries() {
-                    lcs = partial_sq;
+                    if lcs.num_entries() < partial_sq.num_entries() {
+                        lcs = partial_sq;
+                    }
                 }
             }
-        }
 
-        println!("{lcs}");
-        println!();
+            let mut stdout = stdout().lock();
+
+            writeln!(stdout, "{}", sq).unwrap();
+            writeln!(stdout, "{lcs}").unwrap();
+            writeln!(stdout,).unwrap();
+        });
     }
 
     // println!("min: {min}");
