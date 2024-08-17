@@ -1,11 +1,8 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{
-    bitset::BitSet16,
-    latin_square::{minimize_rows, LatinSquare},
-    main_class_generator::CYCLE_STRUCTURES,
-    permutation::Permutation,
-    tuple_iterator::TupleIterator,
+    bitset::BitSet16, latin_square::LatinSquare, main_class_generator::CYCLE_STRUCTURES,
+    permutation::Permutation, tuple_iterator::TupleIterator,
 };
 
 #[derive(Clone)]
@@ -32,18 +29,14 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     fn pad_row(row: [u8; N]) -> [u8; 16] {
         assert!(N <= 16);
         let mut new_row = [0; 16];
-        for i in 0..N {
-            new_row[i] = row[i];
-        }
+        new_row[..N].copy_from_slice(&row);
         new_row
     }
 
     fn shrink_row(row: [u8; 16]) -> [u8; N] {
         assert!(N <= 16);
         let mut new_row = [0; N];
-        for i in 0..N {
-            new_row[i] = row[i];
-        }
+        new_row.copy_from_slice(&row[..N]);
         new_row
     }
 
@@ -254,7 +247,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
 
                 for (s, c) in permutations {
                     let mut sq = sq.clone();
-                    sq.permute_cols_vals_simd(&c, &s);
+                    sq.permute_cols_vals_simd(c, s);
 
                     // dbg!(&sq);
                     sq.sort_rows();
@@ -345,7 +338,7 @@ impl<const N: usize> TryFrom<RowPartialLatinSquare<N>> for LatinSquare<N> {
             return Err(());
         }
 
-        let rows = sq.rows.map(|row| RowPartialLatinSquare::shrink_row(row));
+        let rows = sq.rows.map(RowPartialLatinSquare::shrink_row);
 
         Ok(LatinSquare::new(rows))
     }

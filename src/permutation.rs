@@ -90,9 +90,10 @@ impl<const N: usize> Permutation<N> {
 
     pub fn cycles(&self) -> Vec<Vec<usize>> {
         let mut cycles = Vec::new();
+        let mut used = [false; N];
 
         for start in self.0 {
-            if cycles.iter().any(|c: &Vec<usize>| c.contains(&start)) {
+            if used[start] {
                 continue;
             }
 
@@ -100,6 +101,7 @@ impl<const N: usize> Permutation<N> {
             let mut current = self.apply(start);
 
             while current != start {
+                used[current] = true;
                 cycle.push(current);
                 current = self.apply(current);
             }
@@ -122,12 +124,12 @@ impl<const N: usize> Permutation<N> {
 
             used[start] = true;
             let mut cycle_len = 1;
-            let mut current = self.apply(start);
+            let mut current = self.0[start];
 
             while current != start {
                 used[current] = true;
                 cycle_len += 1;
-                current = self.apply(current);
+                current = self.0[current];
             }
 
             cycles.push(cycle_len);

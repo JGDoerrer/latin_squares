@@ -16,7 +16,6 @@ use latin_square_generator::LatinSquareGeneratorDyn;
 use oa_generator::OAGenerator;
 
 use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
-use main_class_generator::MainClassGenerator;
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 use orthogonal_array::{OrthogonalArray, SEPARATOR};
 

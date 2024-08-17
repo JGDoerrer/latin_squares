@@ -176,11 +176,11 @@ impl Iterator for MMCSHittingSetGenerator {
                     if next_entry.uncovered.is_empty() {
                         let hitting_set = next_entry.hitting_set;
 
-                        // let time_passed = (Instant::now() - self.last_progress).as_secs_f64();
-                        // if time_passed >= 1.0 {
-                        //     self.last_progress = Instant::now();
-                        //     dbg!(self.progress(), self.estimated_time_left());
-                        // }
+                        let time_passed = (Instant::now() - self.last_progress).as_secs_f64();
+                        if time_passed >= 10.0 {
+                            self.last_progress = Instant::now();
+                            dbg!(self.progress(), self.estimated_time_left());
+                        }
                         return Some(hitting_set);
                     }
                     if hitting_set.len() + 1 >= self.max_entries {
