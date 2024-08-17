@@ -25,6 +25,16 @@ impl<const N: usize> Permutation<N> {
         Permutation(elements)
     }
 
+    pub fn from_slice(elements: &[u8]) -> Self {
+        let mut array = [0; N];
+
+        for i in 0..N {
+            array[i] = elements[i] as usize;
+        }
+
+        Permutation::from_array(array)
+    }
+
     pub fn into_array(self) -> [usize; N] {
         self.0
     }

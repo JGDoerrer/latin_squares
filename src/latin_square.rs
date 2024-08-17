@@ -442,11 +442,11 @@ impl<const N: usize> LatinSquare<N> {
             }
 
             if cycles == min_cycles {
-                candidates.push((rows, cycles));
+                candidates.push(rows);
             }
         }
 
-        for (rows, _) in candidates {
+        for rows in candidates {
             let permutations = minimize_rows(&rows);
 
             for (s, c) in permutations {
@@ -486,7 +486,7 @@ impl<const N: usize> LatinSquare<N> {
         &self,
         lookup: &'a [Vec<(Permutation<N>, Permutation<N>)>],
     ) -> Self {
-        let mut main_class = *self;
+        let mut isotopy_class = *self;
         let mut min_cycles = vec![N];
         let mut candidates = Vec::new();
 
@@ -523,15 +523,16 @@ impl<const N: usize> LatinSquare<N> {
             for (s, c) in permutations {
                 let mut new_sq = *self;
                 new_sq.permute_cols_vals_simd(c, s);
+
                 new_sq.rows.sort();
 
-                if new_sq.cmp_rows(&main_class).is_lt() {
-                    main_class = new_sq;
+                if new_sq.cmp_rows(&isotopy_class).is_lt() {
+                    isotopy_class = new_sq;
                 }
             }
         }
 
-        main_class
+        isotopy_class
     }
 
     pub fn symmetries(&self) -> Vec<Permutation<3>> {
@@ -660,16 +661,48 @@ impl<const N: usize> LatinSquare<N> {
                     candidates.clear();
                 }
                 if cycles == min_cycles {
-                    candidates.push((rows, cycles));
+                    candidates.push((rows, row_permutation));
                 }
             }
 
-            for (rows, _) in candidates {
-                let permutations = minimize_rows_with_lookup(&rows, lookup);
+            for (rows, row_permutation) in candidates {
+                let mut cycles = row_permutation.cycles();
+                cycles.sort_by_key(|c| c.len());
+
+                let cycle_lens: Vec<_> = cycles.iter().map(|c| c.len()).collect();
+
+                let symbol_permutation = {
+                    let mut permutation = [0; N];
+
+                    let mut index = 0;
+                    for cycle in cycles {
+                        let cycle_len = cycle.len();
+                        let start_index = index;
+                        index += cycle_len;
+                        for (i, j) in cycle.into_iter().enumerate() {
+                            permutation[j] = start_index + (i + 1) % cycle_len;
+                        }
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let column_permutation =
+                    Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
+
+                let cycle_index = CYCLE_STRUCTURES[N]
+                    .iter()
+                    .position(|c| c == &cycle_lens)
+                    .unwrap();
+
+                let permutations = &lookup[cycle_index];
+
+                let mut sq = sq.clone();
+                sq.permute_cols_vals_simd(column_permutation, symbol_permutation);
 
                 for (s, c) in permutations {
                     let mut new_sq = sq;
-                    new_sq.permute_cols_vals_simd(c, s);
+                    new_sq.permute_cols_vals_simd(c.clone(), s.clone());
 
                     let mut new_rows = [[0; N]; N];
                     for i in 0..N {
@@ -1552,7 +1585,7 @@ pub fn minimize_rows<const N: usize>(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>
 pub fn minimize_rows_with_lookup<'a, const N: usize>(
     rows: &[[u8; N]; 2],
     lookup: &'a [Vec<(Permutation<N>, Permutation<N>)>],
-) -> impl Iterator<Item = (Permutation<N>, Permutation<N>)> + 'a {
+) -> Box<dyn Iterator<Item = (Permutation<N>, Permutation<N>)> + 'a> {
     // find (s,c) to normalize
     let row_permutation = {
         let mut permutation = [0; N];
@@ -1624,7 +1657,7 @@ pub fn minimize_rows_with_lookup<'a, const N: usize>(
     //     )
     // }
 
-    permutations
+    Box::new(permutations)
 }
 
 #[cfg(test)]

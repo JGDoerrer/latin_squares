@@ -8,6 +8,7 @@ use std::{
 
 use clap::{self, Parser, Subcommand};
 
+use isotopy_class_generator::IsotopyClassGenerator;
 use latin_square::{generate_minimize_rows_lookup, LatinSquare};
 
 use latin_square_dyn::LatinSquareDyn;
@@ -30,6 +31,7 @@ mod bitvec;
 mod constants;
 mod constraints;
 mod hitting_set_generator;
+mod isotopy_class_generator;
 mod latin_square;
 mod latin_square_dyn;
 mod latin_square_generator;
@@ -48,6 +50,7 @@ mod permutation;
 mod random_latin_square_generator;
 mod rc_generator;
 mod rcs_generator;
+mod row_partial_latin_square;
 mod tuple_iterator;
 
 #[derive(Subcommand, Clone)]
@@ -58,6 +61,12 @@ enum Mode {
         n: usize,
     },
     NormalizeMainClass {
+        n: usize,
+    },
+    GenerateLatinSquares {
+        n: usize,
+    },
+    GenerateIsotopyClasses {
         n: usize,
     },
     GenerateMainClasses {
@@ -76,9 +85,6 @@ enum Mode {
         end: usize,
         #[arg(short, long)]
         all: bool,
-    },
-    GenerateLatinSquares {
-        n: usize,
     },
     Random {
         n: usize,
@@ -132,9 +138,10 @@ fn main() {
         Mode::Analyse { n } => match_n!(n, analyse),
         Mode::PrettyPrint => pretty_print(),
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
+        Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
+        Mode::GenerateIsotopyClasses { n } => match_n!(n, generate_isotopy_classes),
         Mode::GenerateMainClasses { n } => match_n!(n, generate_main_classes),
         Mode::FindSCS { reverse } => find_scs(reverse),
-        Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindLCS => find_lcs(),
@@ -283,9 +290,24 @@ fn normalize_main_class<const N: usize>() {
     }
 }
 
+fn generate_isotopy_classes<const N: usize>() {
+    let lookup = generate_minimize_rows_lookup();
+    for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup).enumerate() {
+        dbg!(i + 1);
+
+        if writeln!(stdout(), "{sq}").is_err() {
+            return;
+        }
+    }
+}
+
 fn generate_main_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
-    for (i, sq) in MainClassGenerator::<N>::new(&lookup).enumerate() {
+    for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup)
+        .filter(|sq| *sq == sq.main_class_lookup(&lookup))
+        .enumerate()
+    // for (i, sq) in MainClassGenerator::<N>::new(&lookup).enumerate()
+    {
         dbg!(i + 1);
 
         if writeln!(stdout(), "{sq}").is_err() {

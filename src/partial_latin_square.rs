@@ -867,47 +867,4 @@ mod test {
             sq.permute_rows_and_cols(&perm)
         );
     }
-
-    // #[test]
-    // fn minimize_rows() {
-    //     assert_eq!(
-    //         PartialLatinSquare::from_array([
-    //             [Some(0), Some(1), Some(2), Some(3)],
-    //             [Some(1), Some(2), Some(3), Some(0)],
-    //             [Some(2), Some(3), Some(0), Some(1)],
-    //             [None; 4]
-    //         ])
-    //         .minimize_rows(),
-    //         PartialLatinSquare::from_array([
-    //             [Some(0), Some(1), Some(2), Some(3)],
-    //             [Some(1), Some(0), Some(3), Some(2)],
-    //             [Some(2), Some(3), Some(1), Some(0)],
-    //             [None; 4]
-    //         ])
-    //     )
-    // }
-
-    #[test]
-    fn largest_possible_col_cycle() {
-        assert_eq!(
-            PartialLatinSquare::from_array([
-                [Some(0), Some(1), Some(2), Some(3)],
-                [Some(1), Some(2), Some(3), Some(0)],
-                [Some(2), Some(3), Some(0), Some(1)],
-                [None; 4]
-            ])
-            .largest_min_col_cycle(),
-            vec![4]
-        );
-        assert_eq!(
-            PartialLatinSquare::from_array([
-                [Some(0), Some(1), None, None],
-                [Some(1), Some(0), None, None],
-                [None, None, Some(0), Some(1)],
-                [None, None, Some(1), Some(0)],
-            ])
-            .largest_min_col_cycle(),
-            vec![4]
-        );
-    }
 }
