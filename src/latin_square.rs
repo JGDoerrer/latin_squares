@@ -6,8 +6,8 @@ use std::{
 
 use crate::{
     bitset::{BitSet128, BitSet16},
+    isotopy_class_generator::{generate_cycle_structures, CYCLE_STRUCTURES},
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
-    main_class_generator::{generate_cycle_structures, CYCLE_STRUCTURES},
     oa_generator::OAGenerator,
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationDyn, PermutationDynIter, PermutationIter},

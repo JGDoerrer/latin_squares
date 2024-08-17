@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{
-    bitset::BitSet16, latin_square::LatinSquare, main_class_generator::CYCLE_STRUCTURES,
+    bitset::BitSet16, isotopy_class_generator::CYCLE_STRUCTURES, latin_square::LatinSquare,
     permutation::Permutation, tuple_iterator::TupleIterator,
 };
 

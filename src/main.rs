@@ -35,7 +35,6 @@ mod latin_square;
 mod latin_square_dyn;
 mod latin_square_generator;
 mod latin_square_trait;
-mod main_class_generator;
 mod mmcs_hitting_set_generator;
 mod oa_constraints;
 mod oa_generator;

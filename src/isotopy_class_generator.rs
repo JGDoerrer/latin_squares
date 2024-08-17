@@ -150,6 +150,26 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
     }
 }
 
+/// Generates all possible cycle structures of a permutation with no fixed points
+pub fn generate_cycle_structures(n: usize) -> Vec<Vec<usize>> {
+    let mut cycles = Vec::new();
+    cycles.push(vec![n]);
+
+    for i in 2..=n / 2 {
+        let left = n - i;
+
+        for mut cycle in generate_cycle_structures(left) {
+            cycle.push(i);
+            cycle.sort();
+            cycles.push(cycle);
+        }
+    }
+
+    cycles.sort();
+    cycles.dedup();
+    cycles
+}
+
 pub const CYCLE_STRUCTURES: [&[&[usize]]; 11] = [
     &[&[0]],
     &[&[1]],
@@ -200,6 +220,40 @@ mod test {
     use crate::latin_square::generate_minimize_rows_lookup;
 
     use super::*;
+
+    #[test]
+    fn cycle_structures() {
+        assert_eq!(generate_cycle_structures(3), vec![vec![3]]);
+        assert_eq!(generate_cycle_structures(4), vec![vec![2, 2], vec![4]]);
+        assert_eq!(generate_cycle_structures(5), vec![vec![2, 3], vec![5]]);
+        assert_eq!(
+            generate_cycle_structures(6),
+            vec![vec![2, 2, 2], vec![2, 4], vec![3, 3], vec![6]]
+        );
+        assert_eq!(
+            generate_cycle_structures(7),
+            vec![vec![2, 2, 3], vec![2, 5], vec![3, 4], vec![7]]
+        );
+        assert_eq!(
+            generate_cycle_structures(8),
+            vec![
+                vec![2, 2, 2, 2],
+                vec![2, 2, 4],
+                vec![2, 3, 3],
+                vec![2, 6],
+                vec![3, 5],
+                vec![4, 4],
+                vec![8]
+            ]
+        );
+    }
+
+    #[test]
+    fn check_table() {
+        for i in 0..CYCLE_STRUCTURES.len() {
+            assert_eq!(generate_cycle_structures(i), CYCLE_STRUCTURES[i]);
+        }
+    }
 
     #[test]
     fn isotopy_class_count() {
