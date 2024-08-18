@@ -3,7 +3,8 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Write},
-    thread, vec,
+    thread::{self, available_parallelism},
+    vec,
 };
 
 use clap::{self, Parser, Subcommand};
@@ -54,6 +55,7 @@ mod tuple_iterator;
 #[derive(Subcommand, Clone)]
 enum Mode {
     PrettyPrint,
+    /// Prints all solutions for a partial latin square
     Solve,
     Analyse {
         n: usize,
@@ -414,68 +416,86 @@ fn find_scs(reverse: bool) {
 }
 
 fn find_lcs() {
-    for sq in read_sqs_from_stdin() {
-        thread::spawn(move || {
-            let unavoidable_sets = sq.unavoidable_sets();
-            unavoidable_sets.iter().for_each(|sets| {
-                dbg!(sets.len());
-            });
+    let mut threads = Vec::new();
 
-            let hitting_sets =
-                MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+    while let Some(sq) = read_sq_from_stdin() {
+        let thread = thread::spawn(move || find_lcs_sq(sq));
 
-            let mut lcs = PartialLatinSquareDyn::empty(sq.n());
-            'h: for hitting_set in hitting_sets {
-                let partial_sq = sq.mask(hitting_set);
+        threads.push(thread);
 
-                {
-                    // dbg!(partial_sq.to_string());
-                    let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
-                    let first_solution = solutions.next();
-                    let second_solution = solutions.next();
+        while threads.len()
+            >= available_parallelism()
+                .unwrap_or(1.try_into().unwrap())
+                .into()
+        {
+            for i in 0..threads.len() {
+                if !threads[i].is_finished() {
+                    continue;
+                }
 
-                    if second_solution.is_some()
-                        || first_solution.is_none()
-                        || first_solution.is_some_and(|solution| solution != sq)
-                    {
+                let thread = threads.swap_remove(i);
+                thread.join().unwrap();
+            }
+        }
+    }
+}
+
+fn find_lcs_sq(sq: LatinSquareDyn) {
+    let unavoidable_sets = sq.unavoidable_sets();
+    unavoidable_sets.iter().for_each(|sets| {
+        dbg!(sets.len());
+    });
+
+    let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+
+    let mut lcs = PartialLatinSquareDyn::empty(sq.n());
+    'h: for hitting_set in hitting_sets {
+        let partial_sq = sq.mask(hitting_set);
+
+        {
+            // dbg!(partial_sq.to_string());
+            let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
+            let first_solution = solutions.next();
+            let second_solution = solutions.next();
+
+            if second_solution.is_some()
+                || first_solution.is_none()
+                || first_solution.is_some_and(|solution| solution != sq)
+            {
+                continue;
+            }
+
+            // check if removing one entry results in >= 2 solutions
+            for i in 0..sq.n() {
+                for j in 0..sq.n() {
+                    if partial_sq.get_partial(i, j).is_none() {
                         continue;
                     }
+                    let mut sq = partial_sq.clone();
+                    sq.set(i, j, None);
 
-                    // check if removing one entry results in >= 2 solutions
-                    for i in 0..sq.n() {
-                        for j in 0..sq.n() {
-                            if partial_sq.get_partial(i, j).is_none() {
-                                continue;
-                            }
-                            let mut sq = partial_sq.clone();
-                            sq.set(i, j, None);
-
-                            let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
-                            solutions.next();
-                            let second_solution = solutions.next();
-                            if second_solution.is_none() {
-                                continue 'h;
-                            }
-                        }
-                    }
-
-                    // println!("{}", partial_sq.to_string());
-
-                    if lcs.num_entries() < partial_sq.num_entries() {
-                        lcs = partial_sq;
+                    let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
+                    solutions.next();
+                    let second_solution = solutions.next();
+                    if second_solution.is_none() {
+                        continue 'h;
                     }
                 }
             }
 
-            let mut stdout = stdout().lock();
+            // println!("{}", partial_sq.to_string());
 
-            writeln!(stdout, "{}", sq).unwrap();
-            writeln!(stdout, "{lcs}").unwrap();
-            writeln!(stdout,).unwrap();
-        });
+            if lcs.num_entries() < partial_sq.num_entries() {
+                lcs = partial_sq;
+            }
+        }
     }
 
-    // println!("min: {min}");
+    let mut stdout = stdout().lock();
+
+    writeln!(stdout, "{}", sq).unwrap();
+    writeln!(stdout, "{lcs}").unwrap();
+    writeln!(stdout,).unwrap();
 }
 
 fn find_mols<const N: usize>(mols: usize) {
@@ -700,25 +720,27 @@ fn read_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = LatinSquare<N
     })
 }
 
-fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
-    (0..).map_while(|_| {
-        let mut line = String::new();
-        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
-            line = line.trim().into(); // remove newline
-            match LatinSquareDyn::try_from(line.as_str()) {
-                Ok(sq) => {
-                    line.clear();
-                    return Some(sq);
-                }
-                Err(err) => {
-                    eprintln!("{err}");
-                    line.clear();
-                    continue;
-                }
+fn read_sq_from_stdin() -> Option<LatinSquareDyn> {
+    let mut line = String::new();
+    while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+        line = line.trim().into(); // remove newline
+        match LatinSquareDyn::try_from(line.as_str()) {
+            Ok(sq) => {
+                line.clear();
+                return Some(sq);
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                line.clear();
+                continue;
             }
         }
-        None
-    })
+    }
+    None
+}
+
+fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
+    (0..).map_while(|_| read_sq_from_stdin())
 }
 
 fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> {
