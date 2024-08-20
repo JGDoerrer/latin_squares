@@ -435,6 +435,7 @@ fn find_lcs() {
 
                 let thread = threads.swap_remove(i);
                 thread.join().unwrap();
+                break;
             }
         }
     }
