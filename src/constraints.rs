@@ -330,6 +330,7 @@ impl ConstraintsDyn {
                     for j in 0..n {
                         if !self.is_set(i, j) && self.cols[j].intersect(found).contains(value) {
                             self.set(i, j, value);
+                            changed = true;
                             break;
                         }
                     }
@@ -353,6 +354,7 @@ impl ConstraintsDyn {
                     for j in 0..n {
                         if !self.is_set(j, i) && self.rows[j].intersect(found).contains(value) {
                             self.set(j, i, value);
+                            changed = true;
                             break;
                         }
                     }
