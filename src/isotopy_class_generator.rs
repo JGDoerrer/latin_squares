@@ -1,5 +1,7 @@
 use crate::{
-    bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation,
+    bitset::BitSet16,
+    latin_square::LatinSquare,
+    permutation::{Permutation, CYCLE_STRUCTURES},
     row_partial_latin_square::RowPartialLatinSquare,
 };
 
@@ -135,13 +137,11 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
             }
             self.indices[N - 1] += 1;
 
-            if !sq.is_valid_next_row(new_row) {
+            if !sq.add_row(new_row) {
                 continue;
             }
 
-            sq.add_row(new_row);
-
-            if row_index != N - 2 && !sq.is_minimal(self.lookup) {
+            if sq.full_rows() != N - 1 && !sq.is_minimal(self.lookup) {
                 continue;
             }
 
@@ -150,110 +150,12 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
     }
 }
 
-/// Generates all possible cycle structures of a permutation with no fixed points
-pub fn generate_cycle_structures(n: usize) -> Vec<Vec<usize>> {
-    let mut cycles = Vec::new();
-    cycles.push(vec![n]);
-
-    for i in 2..=n / 2 {
-        let left = n - i;
-
-        for mut cycle in generate_cycle_structures(left) {
-            cycle.push(i);
-            cycle.sort();
-            cycles.push(cycle);
-        }
-    }
-
-    cycles.sort();
-    cycles.dedup();
-    cycles
-}
-
-pub const CYCLE_STRUCTURES: [&[&[usize]]; 11] = [
-    &[&[0]],
-    &[&[1]],
-    &[&[2]],
-    &[&[3]],
-    &[&[2, 2], &[4]],
-    &[&[2, 3], &[5]],
-    &[&[2, 2, 2], &[2, 4], &[3, 3], &[6]],
-    &[&[2, 2, 3], &[2, 5], &[3, 4], &[7]],
-    &[
-        &[2, 2, 2, 2],
-        &[2, 2, 4],
-        &[2, 3, 3],
-        &[2, 6],
-        &[3, 5],
-        &[4, 4],
-        &[8],
-    ],
-    &[
-        &[2, 2, 2, 3],
-        &[2, 2, 5],
-        &[2, 3, 4],
-        &[2, 7],
-        &[3, 3, 3],
-        &[3, 6],
-        &[4, 5],
-        &[9],
-    ],
-    &[
-        &[2, 2, 2, 2, 2],
-        &[2, 2, 2, 4],
-        &[2, 2, 3, 3],
-        &[2, 2, 6],
-        &[2, 3, 5],
-        &[2, 4, 4],
-        &[2, 8],
-        &[3, 3, 4],
-        &[3, 7],
-        &[4, 6],
-        &[5, 5],
-        &[10],
-    ],
-];
-
 #[cfg(test)]
 mod test {
 
     use crate::latin_square::generate_minimize_rows_lookup;
 
     use super::*;
-
-    #[test]
-    fn cycle_structures() {
-        assert_eq!(generate_cycle_structures(3), vec![vec![3]]);
-        assert_eq!(generate_cycle_structures(4), vec![vec![2, 2], vec![4]]);
-        assert_eq!(generate_cycle_structures(5), vec![vec![2, 3], vec![5]]);
-        assert_eq!(
-            generate_cycle_structures(6),
-            vec![vec![2, 2, 2], vec![2, 4], vec![3, 3], vec![6]]
-        );
-        assert_eq!(
-            generate_cycle_structures(7),
-            vec![vec![2, 2, 3], vec![2, 5], vec![3, 4], vec![7]]
-        );
-        assert_eq!(
-            generate_cycle_structures(8),
-            vec![
-                vec![2, 2, 2, 2],
-                vec![2, 2, 4],
-                vec![2, 3, 3],
-                vec![2, 6],
-                vec![3, 5],
-                vec![4, 4],
-                vec![8]
-            ]
-        );
-    }
-
-    #[test]
-    fn check_table() {
-        for i in 0..CYCLE_STRUCTURES.len() {
-            assert_eq!(generate_cycle_structures(i), CYCLE_STRUCTURES[i]);
-        }
-    }
 
     #[test]
     fn isotopy_class_count() {

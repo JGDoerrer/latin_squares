@@ -6,11 +6,13 @@ use std::{
 
 use crate::{
     bitset::{BitSet128, BitSet16},
-    isotopy_class_generator::{generate_cycle_structures, CYCLE_STRUCTURES},
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     oa_generator::OAGenerator,
     partial_latin_square::PartialLatinSquare,
-    permutation::{Permutation, PermutationDyn, PermutationDynIter, PermutationIter},
+    permutation::{
+        generate_cycle_structures, Permutation, PermutationDyn, PermutationDynIter,
+        PermutationIter, CYCLE_STRUCTURES,
+    },
     tuple_iterator::TupleIterator,
 };
 
@@ -698,11 +700,11 @@ impl<const N: usize> LatinSquare<N> {
                 let permutations = &lookup[cycle_index];
 
                 let mut sq = sq.clone();
-                sq.permute_cols_vals_simd(column_permutation, symbol_permutation);
+                sq.permute_cols_vals_simd(column_permutation.inverse(), symbol_permutation);
 
-                for (s, c) in permutations {
+                for (s, inverse_c) in permutations {
                     let mut new_sq = sq;
-                    new_sq.permute_cols_vals_simd(c.clone(), s.clone());
+                    new_sq.permute_cols_vals_simd(inverse_c.clone(), s.clone());
 
                     let mut new_rows = [[0; N]; N];
                     for i in 0..N {
@@ -1191,7 +1193,7 @@ impl<const N: usize> LatinSquare<N> {
 
     pub fn permute_cols_vals_simd(
         &mut self,
-        col_permutation: Permutation<N>,
+        inverse_col_permutation: Permutation<N>,
         val_permutation: Permutation<N>,
     ) {
         use std::simd::Simd;
@@ -1200,9 +1202,8 @@ impl<const N: usize> LatinSquare<N> {
 
         let mut col_permutation_simd = [0; 16];
         col_permutation_simd[0..N].copy_from_slice(
-            &col_permutation
+            &inverse_col_permutation
                 .clone()
-                .inverse()
                 .into_array()
                 .map(|v| v as u8),
         );
@@ -1534,7 +1535,8 @@ impl<const N: usize> Iterator for CyclePermutations<N> {
         };
 
         let column_permutation =
-            Permutation::from_array(self.rows[0].map(|i| symbol_permutation.apply(i.into())));
+            Permutation::from_array(self.rows[0].map(|i| symbol_permutation.apply(i.into())))
+                .inverse();
 
         Some((symbol_permutation, column_permutation))
     }

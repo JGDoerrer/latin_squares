@@ -9,11 +9,15 @@ pub fn factorial(n: usize) -> usize {
 pub struct Permutation<const N: usize>([usize; N]);
 
 impl<const N: usize> Permutation<N> {
-    pub fn identity() -> Self {
+    pub const fn identity() -> Self {
         let mut elements = [0; N];
-        for (i, element) in elements.iter_mut().enumerate() {
-            *element = i;
+
+        let mut i = 0;
+        while i < N {
+            elements[i] = i;
+            i += 1;
         }
+
         Permutation(elements)
     }
 
@@ -133,6 +137,31 @@ impl<const N: usize> Permutation<N> {
             }
 
             cycles.push(cycle_len);
+        }
+
+        cycles
+    }
+
+    pub fn cycle_lengths_index(&self) -> usize {
+        let mut cycles = 1;
+        let mut used = [false; N];
+
+        for start in self.0 {
+            if used[start] {
+                continue;
+            }
+
+            used[start] = true;
+            let mut cycle_len = 1;
+            let mut current = self.0[start];
+
+            while current != start {
+                used[current] = true;
+                cycle_len += 1;
+                current = self.0[current];
+            }
+
+            cycles *= factorial(cycle_len);
         }
 
         cycles
@@ -418,10 +447,108 @@ impl ExactSizeIterator for PermutationDynIter {
     }
 }
 
+/// Generates all possible cycle structures of a permutation with no fixed points
+pub fn generate_cycle_structures(n: usize) -> Vec<Vec<usize>> {
+    let mut cycles = Vec::new();
+    cycles.push(vec![n]);
+
+    for i in 2..=n / 2 {
+        let left = n - i;
+
+        for mut cycle in generate_cycle_structures(left) {
+            cycle.push(i);
+            cycle.sort();
+            cycles.push(cycle);
+        }
+    }
+
+    cycles.sort();
+    cycles.dedup();
+    cycles
+}
+
+pub const CYCLE_STRUCTURES: [&[&[usize]]; 11] = [
+    &[&[0]],
+    &[&[1]],
+    &[&[2]],
+    &[&[3]],
+    &[&[2, 2], &[4]],
+    &[&[2, 3], &[5]],
+    &[&[2, 2, 2], &[2, 4], &[3, 3], &[6]],
+    &[&[2, 2, 3], &[2, 5], &[3, 4], &[7]],
+    &[
+        &[2, 2, 2, 2],
+        &[2, 2, 4],
+        &[2, 3, 3],
+        &[2, 6],
+        &[3, 5],
+        &[4, 4],
+        &[8],
+    ],
+    &[
+        &[2, 2, 2, 3],
+        &[2, 2, 5],
+        &[2, 3, 4],
+        &[2, 7],
+        &[3, 3, 3],
+        &[3, 6],
+        &[4, 5],
+        &[9],
+    ],
+    &[
+        &[2, 2, 2, 2, 2],
+        &[2, 2, 2, 4],
+        &[2, 2, 3, 3],
+        &[2, 2, 6],
+        &[2, 3, 5],
+        &[2, 4, 4],
+        &[2, 8],
+        &[3, 3, 4],
+        &[3, 7],
+        &[4, 6],
+        &[5, 5],
+        &[10],
+    ],
+];
+
 #[cfg(test)]
 mod test {
 
     use super::*;
+
+    #[test]
+    fn cycle_structures() {
+        assert_eq!(generate_cycle_structures(3), vec![vec![3]]);
+        assert_eq!(generate_cycle_structures(4), vec![vec![2, 2], vec![4]]);
+        assert_eq!(generate_cycle_structures(5), vec![vec![2, 3], vec![5]]);
+        assert_eq!(
+            generate_cycle_structures(6),
+            vec![vec![2, 2, 2], vec![2, 4], vec![3, 3], vec![6]]
+        );
+        assert_eq!(
+            generate_cycle_structures(7),
+            vec![vec![2, 2, 3], vec![2, 5], vec![3, 4], vec![7]]
+        );
+        assert_eq!(
+            generate_cycle_structures(8),
+            vec![
+                vec![2, 2, 2, 2],
+                vec![2, 2, 4],
+                vec![2, 3, 3],
+                vec![2, 6],
+                vec![3, 5],
+                vec![4, 4],
+                vec![8]
+            ]
+        );
+    }
+
+    #[test]
+    fn check_table() {
+        for i in 0..CYCLE_STRUCTURES.len() {
+            assert_eq!(generate_cycle_structures(i), CYCLE_STRUCTURES[i]);
+        }
+    }
 
     #[test]
     fn inverse_test() {

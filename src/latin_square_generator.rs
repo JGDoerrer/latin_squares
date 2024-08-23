@@ -75,12 +75,13 @@ pub struct LatinSquareGeneratorDyn {
 impl LatinSquareGeneratorDyn {
     pub fn new(n: usize) -> Self {
         LatinSquareGeneratorDyn {
-            stack: vec![(ConstraintsDyn::new_reduced(n), 1, 1, 0)],
+            stack: vec![(ConstraintsDyn::new(n), 1, 1, 0)],
         }
     }
 
     pub fn from_partial_sq(sq: &PartialLatinSquareDyn) -> Self {
-        let constraints = ConstraintsDyn::new_partial(sq);
+        let mut constraints = ConstraintsDyn::new_partial(sq);
+        constraints.find_singles();
         let index = constraints.first_empty().unwrap_or((0, 0));
         LatinSquareGeneratorDyn {
             stack: vec![(constraints, index.0, index.1, 0)],
