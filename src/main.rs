@@ -72,6 +72,7 @@ enum Mode {
     GenerateMainClasses {
         n: usize,
     },
+    FindAllCS,
     FindSCS {
         #[arg(short, long)]
         reverse: bool,
@@ -141,10 +142,11 @@ fn main() {
         Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
         Mode::GenerateIsotopyClasses { n } => match_n!(n, generate_isotopy_classes),
         Mode::GenerateMainClasses { n } => match_n!(n, generate_main_classes),
-        Mode::FindSCS { reverse } => find_scs(reverse),
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
+        Mode::FindAllCS => find_all_cs(),
         Mode::FindLCS => find_lcs(),
+        Mode::FindSCS { reverse } => find_scs(reverse),
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
@@ -453,7 +455,63 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
     'h: for hitting_set in hitting_sets {
         let partial_sq = sq.mask(hitting_set);
 
+        // dbg!(partial_sq.to_string());
+        let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
+        let first_solution = solutions.next();
+        let second_solution = solutions.next();
+
+        if second_solution.is_some()
+            || first_solution.is_none()
+            || first_solution.is_some_and(|solution| solution != sq)
         {
+            continue;
+        }
+
+        // check if removing one entry results in >= 2 solutions
+        for i in 0..sq.n() {
+            for j in 0..sq.n() {
+                if partial_sq.get_partial(i, j).is_none() {
+                    continue;
+                }
+                let mut sq = partial_sq.clone();
+                sq.set(i, j, None);
+
+                let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
+                solutions.next();
+                let second_solution = solutions.next();
+                if second_solution.is_none() {
+                    continue 'h;
+                }
+            }
+        }
+
+        // println!("{}", partial_sq.to_string());
+
+        if lcs.num_entries() < partial_sq.num_entries() {
+            lcs = partial_sq;
+        }
+    }
+
+    let mut stdout = stdout().lock();
+
+    writeln!(stdout, "{}", sq).unwrap();
+    writeln!(stdout, "{lcs}").unwrap();
+    writeln!(stdout,).unwrap();
+}
+
+fn find_all_cs() {
+    while let Some(sq) = read_sq_from_stdin() {
+        println!("{sq}");
+        let unavoidable_sets = sq.unavoidable_sets();
+        unavoidable_sets.iter().for_each(|sets| {
+            dbg!(sets.len());
+        });
+
+        let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+
+        for hitting_set in hitting_sets {
+            let partial_sq = sq.mask(hitting_set);
+
             // dbg!(partial_sq.to_string());
             let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
             let first_solution = solutions.next();
@@ -463,40 +521,16 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
                 || first_solution.is_none()
                 || first_solution.is_some_and(|solution| solution != sq)
             {
+                dbg!(partial_sq);
+                unreachable!();
                 continue;
             }
 
-            // check if removing one entry results in >= 2 solutions
-            for i in 0..sq.n() {
-                for j in 0..sq.n() {
-                    if partial_sq.get_partial(i, j).is_none() {
-                        continue;
-                    }
-                    let mut sq = partial_sq.clone();
-                    sq.set(i, j, None);
-
-                    let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
-                    solutions.next();
-                    let second_solution = solutions.next();
-                    if second_solution.is_none() {
-                        continue 'h;
-                    }
-                }
-            }
-
-            // println!("{}", partial_sq.to_string());
-
-            if lcs.num_entries() < partial_sq.num_entries() {
-                lcs = partial_sq;
-            }
+            println!("{partial_sq}");
         }
+
+        println!();
     }
-
-    let mut stdout = stdout().lock();
-
-    writeln!(stdout, "{}", sq).unwrap();
-    writeln!(stdout, "{lcs}").unwrap();
-    writeln!(stdout,).unwrap();
 }
 
 fn find_mols<const N: usize>(mols: usize) {

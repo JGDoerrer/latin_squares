@@ -68,32 +68,38 @@ impl LatinSquareDyn {
     }
 
     pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
-        let mut sets = Vec::new();
-        let max_size = self.n * 3;
+        let mut sets: Vec<BitSet128> = Vec::new();
 
-        let triple_iter = TupleIterator::<3>::new(self.n);
+        if false {
+            for tuple in TupleIterator::<3>::new(self.n) {
+                for partial in [
+                    self.without_rows(&tuple),
+                    self.without_cols(&tuple),
+                    self.without_vals(&tuple),
+                ] {
+                    let solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial);
 
-        for triple in triple_iter {
-            for partial in [
-                self.without_rows(&triple),
-                self.without_cols(&triple),
-                self.without_vals(&triple),
-            ] {
-                let solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial);
+                    for solution in solutions {
+                        let difference = self.difference_mask(&solution);
 
-                for solution in solutions {
-                    let difference = self.difference_mask(&solution);
-
-                    if !difference.is_empty()
-                        && difference.len() <= max_size
-                        && !sets.contains(&difference)
-                    {
-                        sets.push(difference);
-                        // if sets.len() > 10000 {
-                        //     max_size -= 1;
-                        //     sets.retain(|s| s.len() <= max_size);
-                        // }
+                        if !difference.is_empty()
+                            && !sets.iter().any(|s| s.is_subset_of(difference))
+                        {
+                            sets.retain(|s| !difference.is_subset_of(*s));
+                            sets.push(difference);
+                        }
                     }
+                }
+            }
+        } else {
+            let solutions = LatinSquareGeneratorDyn::new(self.n);
+
+            for solution in solutions {
+                let difference = self.difference_mask(&solution);
+
+                if !difference.is_empty() && !sets.iter().any(|s| s.is_subset_of(difference)) {
+                    sets.retain(|s| !difference.is_subset_of(*s));
+                    sets.push(difference);
                 }
             }
         }
