@@ -74,6 +74,8 @@ enum Mode {
     },
     GenerateMainClasses {
         n: usize,
+        #[arg(long)]
+        max_threads: usize,
     },
     FindAllCS,
     FindSCS {
@@ -144,7 +146,9 @@ fn main() {
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
         Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
         Mode::GenerateIsotopyClasses { n } => match_n!(n, generate_isotopy_classes),
-        Mode::GenerateMainClasses { n } => match_n!(n, generate_main_classes),
+        Mode::GenerateMainClasses { n, max_threads } => {
+            match_n!(n, generate_main_classes, max_threads)
+        }
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindAllCS => find_all_cs(),
@@ -306,7 +310,7 @@ fn generate_isotopy_classes<const N: usize>() {
     }
 }
 
-fn generate_main_classes<const N: usize>() {
+fn generate_main_classes<const N: usize>(max_threads: usize) {
     let lookup = generate_minimize_rows_lookup();
     // for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup)
     //     .filter(|sq| *sq == sq.main_class_lookup(&lookup))
@@ -319,7 +323,7 @@ fn generate_main_classes<const N: usize>() {
     //     }
     // }
 
-    ThreadedMainClassGenerator::<N>::new(&lookup).run();
+    ThreadedMainClassGenerator::<N>::new(&lookup).run(max_threads);
 }
 
 const KNOWN_SCS: [usize; 9] = [0, 0, 1, 2, 4, 6, 9, 12, 16];

@@ -29,11 +29,7 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
         }
     }
 
-    pub fn run(mut self) {
-        let max_threads = thread::available_parallelism()
-            .unwrap_or(1.try_into().unwrap())
-            .into();
-
+    pub fn run(mut self, max_threads: usize) {
         while let Some(generator) = self.row_generators.last_mut() {
             let Some(sq) = generator.next() else {
                 self.row_generators.pop();
