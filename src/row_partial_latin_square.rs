@@ -3,7 +3,7 @@ use std::{cmp::Ordering, fmt::Debug};
 use crate::{
     bitset::BitSet16,
     latin_square::LatinSquare,
-    permutation::{Permutation, CYCLE_STRUCTURES},
+    permutation::Permutation,
     tuple_iterator::TupleIterator,
 };
 

@@ -38,7 +38,7 @@ impl<'a, const N: usize> Iterator for IsotopyClassGenerator<'a, N> {
             if sq.is_complete() {
                 let sq: LatinSquare<N> = sq.try_into().unwrap();
 
-                debug_assert_eq!(sq, sq.isotopy_class_lookup(&self.lookup));
+                debug_assert_eq!(sq, sq.isotopy_class_lookup(self.lookup));
 
                 return Some(sq);
             }
@@ -51,14 +51,14 @@ impl<'a, const N: usize> Iterator for IsotopyClassGenerator<'a, N> {
 }
 
 /// fills a row in all (minimal) possible ways
-struct RowGenerator<'a, const N: usize> {
+pub struct RowGenerator<'a, const N: usize> {
     indices: [usize; N],
     lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
     sq: RowPartialLatinSquare<N>,
 }
 
 impl<'a, const N: usize> RowGenerator<'a, N> {
-    fn new(
+    pub fn new(
         sq: RowPartialLatinSquare<N>,
         lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
     ) -> Self {

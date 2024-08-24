@@ -484,9 +484,9 @@ impl<const N: usize> LatinSquare<N> {
         self.isotopy_class_permutation().0
     }
 
-    pub fn isotopy_class_lookup<'a>(
+    pub fn isotopy_class_lookup(
         &self,
-        lookup: &'a [Vec<(Permutation<N>, Permutation<N>)>],
+        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
     ) -> Self {
         let mut isotopy_class = *self;
         let mut min_cycles = vec![N];
@@ -691,7 +691,7 @@ impl<const N: usize> LatinSquare<N> {
 
                 let permutations = &lookup[min_cycle_index];
 
-                let mut sq = sq.clone();
+                let mut sq = sq;
                 sq.permute_cols_vals_simd(column_permutation.inverse(), symbol_permutation);
 
                 for (s, inverse_c) in permutations {
