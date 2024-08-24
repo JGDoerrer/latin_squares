@@ -144,13 +144,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                 Permutation::from_array(permutation)
             };
 
-            let mut cycle_lens = row_permutation.cycle_lengths();
-            cycle_lens.sort();
-
-            let cycle_index = CYCLE_STRUCTURES[N]
-                .iter()
-                .position(|c| c == &cycle_lens)
-                .unwrap();
+            let cycle_index = row_permutation.cycle_lengths_index();
 
             self.min_row_cycle_index = cycle_index;
             self.min_row_cycles[0][1] = true;
@@ -173,13 +167,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                         Permutation::from_array(permutation)
                     };
 
-                    let mut cycle_lens = row_permutation.cycle_lengths();
-                    cycle_lens.sort();
-
-                    let cycle_index = CYCLE_STRUCTURES[N]
-                        .iter()
-                        .position(|c| *c == cycle_lens.as_slice())
-                        .unwrap();
+                    let cycle_index = row_permutation.cycle_lengths_index();
 
                     if cycle_index < self.min_row_cycle_index {
                         return false;
@@ -194,7 +182,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         }
     }
 
-    pub fn first_cycle_index(&self) -> usize {
+    pub fn min_cycle_index(&self) -> usize {
         self.min_row_cycle_index
     }
 
@@ -267,8 +255,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                 };
 
                 let mut cycles = row_permutation.cycles();
-                cycles.sort();
-                cycles.sort_by_key(|c| c.len());
+                cycles.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
 
                 let symbol_permutation = {
                     let mut permutation = [0; N];
@@ -308,10 +295,10 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                     }
 
                     for i in 0..self.full_rows {
-                        if self.rows[i] > rows[i] {
-                            return false;
-                        } else if self.rows[i] < rows[i] {
-                            break;
+                        match self.rows[i].cmp(&rows[i]) {
+                            Ordering::Less => break,
+                            Ordering::Equal => {}
+                            Ordering::Greater => return false,
                         }
                     }
                 }
@@ -333,17 +320,12 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         assert!(N <= 16);
 
         let mut col_permutation_simd = [0xff; 16];
-        col_permutation_simd[0..N].copy_from_slice(
-            &inverse_column_permutation
-                .clone()
-                .into_array()
-                .map(|v| v as u8),
-        );
+        col_permutation_simd[0..N]
+            .copy_from_slice(&inverse_column_permutation.as_array().map(|v| v as u8));
         let col_permutation = Simd::from_array(col_permutation_simd);
 
         let mut val_permutation_simd = [0xff; 16];
-        val_permutation_simd[0..N]
-            .copy_from_slice(&val_permutation.clone().into_array().map(|v| v as u8));
+        val_permutation_simd[0..N].copy_from_slice(&val_permutation.as_array().map(|v| v as u8));
         let val_permutation = Simd::from_array(val_permutation_simd);
 
         let mut new_rows = [[0; 16]; N];

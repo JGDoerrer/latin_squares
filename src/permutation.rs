@@ -118,7 +118,7 @@ impl<const N: usize> Permutation<N> {
     }
 
     pub fn cycle_lengths(&self) -> Vec<usize> {
-        let mut cycles = Vec::new();
+        let mut cycles = Vec::with_capacity(N / 2);
         let mut used = [false; N];
 
         for start in self.0 {
@@ -143,7 +143,8 @@ impl<const N: usize> Permutation<N> {
     }
 
     pub fn cycle_lengths_index(&self) -> usize {
-        let mut cycles = 1;
+        let mut cycles = [0; N];
+        let mut cycle_count = 0;
         let mut used = [false; N];
 
         for start in self.0 {
@@ -161,10 +162,16 @@ impl<const N: usize> Permutation<N> {
                 current = self.0[current];
             }
 
-            cycles *= factorial(cycle_len);
+            cycles[cycle_count] = cycle_len;
+            cycle_count += 1
         }
 
-        cycles
+        cycles[0..cycle_count].sort();
+
+        CYCLE_STRUCTURES[N]
+            .iter()
+            .position(|c| c == &&cycles[0..cycle_count])
+            .unwrap()
     }
 
     #[inline]

@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Write},
     thread::{self, available_parallelism},
+    time::Duration,
     vec,
 };
 
@@ -25,6 +26,7 @@ use partial_oa_generator::PartialOAGenerator;
 use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use random_latin_square_generator::RandomLatinSquareGenerator;
+use threaded_main_class_generator::ThreadedMainClassGenerator;
 
 mod bitset;
 mod bitvec;
@@ -50,6 +52,7 @@ mod random_latin_square_generator;
 mod rc_generator;
 mod rcs_generator;
 mod row_partial_latin_square;
+mod threaded_main_class_generator;
 mod tuple_iterator;
 
 #[derive(Subcommand, Clone)]
@@ -305,17 +308,18 @@ fn generate_isotopy_classes<const N: usize>() {
 
 fn generate_main_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
-    for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup)
-        .filter(|sq| *sq == sq.main_class_lookup(&lookup))
-        .enumerate()
-    // for (i, sq) in MainClassGenerator::<N>::new(&lookup).enumerate()
-    {
-        dbg!(i + 1);
+    // for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup)
+    //     .filter(|sq| *sq == sq.main_class_lookup(&lookup))
+    //     .enumerate()
+    // {
+    //     dbg!(i + 1);
 
-        if writeln!(stdout(), "{sq}").is_err() {
-            return;
-        }
-    }
+    //     if writeln!(stdout(), "{sq}").is_err() {
+    //         return;
+    //     }
+    // }
+
+    ThreadedMainClassGenerator::<N>::new(&lookup).run();
 }
 
 const KNOWN_SCS: [usize; 9] = [0, 0, 1, 2, 4, 6, 9, 12, 16];
@@ -430,6 +434,7 @@ fn find_lcs() {
                 .unwrap_or(1.try_into().unwrap())
                 .into()
         {
+            thread::sleep(Duration::from_millis(10));
             for i in 0..threads.len() {
                 if !threads[i].is_finished() {
                     continue;

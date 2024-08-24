@@ -1,33 +1,38 @@
+use std::{
+    io::{stdout, Write},
+    thread::{self, JoinHandle},
+};
+
 use crate::{
-    bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation,
+    bitset::BitSet16,
+    latin_square::{generate_minimize_rows_lookup, LatinSquare},
+    permutation::Permutation,
     row_partial_latin_square::RowPartialLatinSquare,
 };
 
 /// Generates latin squares by filling them one row at a time
-pub struct IsotopyClassGenerator<'a, const N: usize> {
+pub struct ThreadedMainClassGenerator<'a, const N: usize> {
     row_generators: Vec<RowGenerator<'a, N>>,
     lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
+    threads: Vec<JoinHandle<()>>,
 }
 
-impl<'a, const N: usize> IsotopyClassGenerator<'a, N> {
+impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
     pub fn new(lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>) -> Self {
-        IsotopyClassGenerator {
+        ThreadedMainClassGenerator {
             row_generators: vec![RowGenerator::new(
                 RowPartialLatinSquare::new_first_row(),
                 lookup,
             )],
             lookup,
+            threads: Vec::new(),
         }
     }
-}
 
-impl<'a, const N: usize> Iterator for IsotopyClassGenerator<'a, N> {
-    type Item = LatinSquare<N>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.row_generators.is_empty() {
-            return None;
-        }
+    pub fn run(mut self) {
+        let max_threads = thread::available_parallelism()
+            .unwrap_or(1.try_into().unwrap())
+            .into();
 
         while let Some(generator) = self.row_generators.last_mut() {
             let Some(sq) = generator.next() else {
@@ -36,17 +41,69 @@ impl<'a, const N: usize> Iterator for IsotopyClassGenerator<'a, N> {
             };
 
             if sq.is_complete() {
-                let sq: LatinSquare<N> = sq.try_into().unwrap();
-
-                debug_assert_eq!(sq, sq.isotopy_class_lookup(&self.lookup));
-
-                return Some(sq);
+                unreachable!();
             }
 
-            self.row_generators.push(RowGenerator::new(sq, self.lookup));
+            if self.row_generators.len() <= 2 {
+                self.row_generators.push(RowGenerator::new(sq, self.lookup));
+            } else {
+                while self.threads.len() >= max_threads {
+                    for i in 0..self.threads.len() {
+                        if !self.threads[i].is_finished() {
+                            continue;
+                        }
+
+                        let thread = self.threads.swap_remove(i);
+                        thread.join().unwrap();
+                        break;
+                    }
+                }
+
+                let thread = thread::spawn(|| Self::run_thread(sq));
+                self.threads.push(thread);
+            }
         }
 
-        None
+        for thread in self.threads {
+            thread.join().unwrap();
+        }
+    }
+
+    fn run_thread(sq: RowPartialLatinSquare<N>) {
+        let lookup = &generate_minimize_rows_lookup::<N>();
+
+        let mut row_generators = vec![RowGenerator::new(sq, lookup)];
+        let mut sqs = Vec::with_capacity(1000);
+
+        while let Some(generator) = row_generators.last_mut() {
+            let Some(sq) = generator.next() else {
+                row_generators.pop();
+                continue;
+            };
+
+            if sq.is_complete() {
+                let sq: LatinSquare<N> = sq.try_into().unwrap();
+
+                if sq == sq.main_class_lookup(&lookup) {
+                    sqs.push(sq);
+
+                    if sqs.len() >= 1000 {
+                        let mut stdout = stdout().lock();
+                        for sq in sqs.drain(..) {
+                            writeln!(stdout, "{sq}").unwrap();
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            row_generators.push(RowGenerator::new(sq, lookup));
+        }
+
+        for sq in sqs.drain(..) {
+            writeln!(stdout().lock(), "{sq}").unwrap();
+        }
     }
 }
 
@@ -116,28 +173,5 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
 
             return Some(sq);
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use crate::latin_square::generate_minimize_rows_lookup;
-
-    use super::*;
-
-    #[test]
-    fn isotopy_class_count() {
-        let lookup4 = generate_minimize_rows_lookup::<4>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup4).count(), 2);
-
-        let lookup5 = generate_minimize_rows_lookup::<5>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup5).count(), 2);
-
-        let lookup6 = generate_minimize_rows_lookup::<6>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup6).count(), 22);
-
-        let lookup7 = generate_minimize_rows_lookup::<7>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup7).count(), 564);
     }
 }

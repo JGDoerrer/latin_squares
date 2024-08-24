@@ -635,7 +635,7 @@ impl<const N: usize> LatinSquare<N> {
         debug_assert!(self.is_reduced());
 
         let mut main_class = *self;
-        let mut min_cycles = vec![N];
+        let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
 
         for sq in self.conjugates() {
             let mut candidates = Vec::new();
@@ -655,14 +655,13 @@ impl<const N: usize> LatinSquare<N> {
                     Permutation::from_array(permutation)
                 };
 
-                let mut cycles: Vec<_> = row_permutation.cycle_lengths();
-                cycles.sort();
+                let cycles = row_permutation.cycle_lengths_index();
 
-                if cycles < min_cycles {
-                    min_cycles = cycles.clone();
+                if cycles < min_cycle_index {
+                    min_cycle_index = cycles;
                     candidates.clear();
                 }
-                if cycles == min_cycles {
+                if cycles == min_cycle_index {
                     candidates.push((rows, row_permutation));
                 }
             }
@@ -670,8 +669,6 @@ impl<const N: usize> LatinSquare<N> {
             for (rows, row_permutation) in candidates {
                 let mut cycles = row_permutation.cycles();
                 cycles.sort_by_key(|c| c.len());
-
-                let cycle_lens: Vec<_> = cycles.iter().map(|c| c.len()).collect();
 
                 let symbol_permutation = {
                     let mut permutation = [0; N];
@@ -692,12 +689,7 @@ impl<const N: usize> LatinSquare<N> {
                 let column_permutation =
                     Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
 
-                let cycle_index = CYCLE_STRUCTURES[N]
-                    .iter()
-                    .position(|c| c == &cycle_lens)
-                    .unwrap();
-
-                let permutations = &lookup[cycle_index];
+                let permutations = &lookup[min_cycle_index];
 
                 let mut sq = sq.clone();
                 sq.permute_cols_vals_simd(column_permutation.inverse(), symbol_permutation);
@@ -1201,17 +1193,12 @@ impl<const N: usize> LatinSquare<N> {
         assert!(N <= 16);
 
         let mut col_permutation_simd = [0; 16];
-        col_permutation_simd[0..N].copy_from_slice(
-            &inverse_col_permutation
-                .clone()
-                .into_array()
-                .map(|v| v as u8),
-        );
+        col_permutation_simd[0..N]
+            .copy_from_slice(&inverse_col_permutation.as_array().map(|v| v as u8));
         let col_permutation = Simd::from_array(col_permutation_simd);
 
         let mut val_permutation_simd = [0; 16];
-        val_permutation_simd[0..N]
-            .copy_from_slice(&val_permutation.clone().into_array().map(|v| v as u8));
+        val_permutation_simd[0..N].copy_from_slice(&val_permutation.as_array().map(|v| v as u8));
         let val_permutation = Simd::from_array(val_permutation_simd);
 
         for i in 0..N {
