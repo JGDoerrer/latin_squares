@@ -6,7 +6,8 @@ use std::{
 
 use crate::{
     bitset::BitSet16,
-    latin_square::{minimize_rows_with_lookup, LatinSquare},
+    cycles::minimize_rows_with_lookup,
+    latin_square::LatinSquare,
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     permutation::{Permutation, PermutationIter},
     tuple_iterator::TupleIterator,

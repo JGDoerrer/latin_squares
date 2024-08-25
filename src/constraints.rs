@@ -82,7 +82,6 @@ impl<const N: usize> Constraints<N> {
         self.sq.set(i, j, Some(value));
         self.rows[i].remove(value);
         self.cols[j].remove(value);
-        // self.propagate_value(i, j, value);
     }
 
     pub fn get_possibilities(&self, i: usize, j: usize) -> BitSet16 {
@@ -170,33 +169,6 @@ impl<const N: usize> Constraints<N> {
                 }
             }
         }
-    }
-
-    pub fn make_orthogonal_to_sq(&mut self, _sq: &LatinSquare<N>) {
-        // let mut known_values = [BitSet16::empty(); N];
-        // for i in 0..N {
-        //     for j in 0..N {
-        //         if self.get(i, j).is_single() {
-        //             let value = sq.get(i, j);
-        //             known_values[value].insert(self.get(i, j).into_iter().next().unwrap());
-        //         }
-        //     }
-        // }
-
-        // for i in 0..N {
-        //     for j in 0..N {
-        //         let value = sq.get(i, j);
-        //         if !self.get(i, j).is_single() {
-        //             let new = self.get(i, j).intersect(known_values[value].complement());
-        //             self.constraints[i][j] = new;
-
-        //             if new.is_single() {
-        //                 let value = new.into_iter().next().unwrap();
-        //                 self.propagate_value(i, j, value);
-        //             }
-        //         }
-        //     }
-        // }
     }
 }
 

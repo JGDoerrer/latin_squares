@@ -1,16 +1,16 @@
 use crate::{
-    bitset::BitSet16, latin_square::LatinSquare, permutation::Permutation,
+    bitset::BitSet16, cycles::PermutationSimdLookup, latin_square::LatinSquare,
     row_partial_latin_square::RowPartialLatinSquare,
 };
 
 /// Generates latin squares by filling them one row at a time
 pub struct IsotopyClassGenerator<'a, const N: usize> {
     row_generators: Vec<RowGenerator<'a, N>>,
-    lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
+    lookup: &'a PermutationSimdLookup,
 }
 
 impl<'a, const N: usize> IsotopyClassGenerator<'a, N> {
-    pub fn new(lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>) -> Self {
+    pub fn new(lookup: &'a PermutationSimdLookup) -> Self {
         IsotopyClassGenerator {
             row_generators: vec![RowGenerator::new(
                 RowPartialLatinSquare::new_first_row(),
@@ -38,7 +38,7 @@ impl<'a, const N: usize> Iterator for IsotopyClassGenerator<'a, N> {
             if sq.is_complete() {
                 let sq: LatinSquare<N> = sq.try_into().unwrap();
 
-                debug_assert_eq!(sq, sq.isotopy_class_lookup(self.lookup));
+                debug_assert_eq!(sq, sq.isotopy_class());
 
                 return Some(sq);
             }
@@ -53,15 +53,12 @@ impl<'a, const N: usize> Iterator for IsotopyClassGenerator<'a, N> {
 /// fills a row in all (minimal) possible ways
 pub struct RowGenerator<'a, const N: usize> {
     indices: [usize; N],
-    lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
+    lookup: &'a PermutationSimdLookup,
     sq: RowPartialLatinSquare<N>,
 }
 
 impl<'a, const N: usize> RowGenerator<'a, N> {
-    pub fn new(
-        sq: RowPartialLatinSquare<N>,
-        lookup: &'a Vec<Vec<(Permutation<N>, Permutation<N>)>>,
-    ) -> Self {
+    pub fn new(sq: RowPartialLatinSquare<N>, lookup: &'a PermutationSimdLookup) -> Self {
         RowGenerator {
             sq,
             indices: [0; N],
@@ -77,7 +74,7 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
         'l: loop {
             let mut sq = self.sq.clone();
             let row_index = sq.full_rows();
-            let mut new_row = [0; N];
+            let mut new_row = [0; 16];
 
             let mut values = BitSet16::all_less_than(N);
 
@@ -122,22 +119,22 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
 #[cfg(test)]
 mod test {
 
-    use crate::latin_square::generate_minimize_rows_lookup;
+    use crate::cycles::generate_minimize_rows_lookup_simd;
 
     use super::*;
 
     #[test]
     fn isotopy_class_count() {
-        let lookup4 = generate_minimize_rows_lookup::<4>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup4).count(), 2);
+        let lookup4 = generate_minimize_rows_lookup_simd::<4>();
+        assert_eq!(IsotopyClassGenerator::<4>::new(&lookup4).count(), 2);
 
-        let lookup5 = generate_minimize_rows_lookup::<5>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup5).count(), 2);
+        let lookup5 = generate_minimize_rows_lookup_simd::<5>();
+        assert_eq!(IsotopyClassGenerator::<5>::new(&lookup5).count(), 2);
 
-        let lookup6 = generate_minimize_rows_lookup::<6>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup6).count(), 22);
+        let lookup6 = generate_minimize_rows_lookup_simd::<6>();
+        assert_eq!(IsotopyClassGenerator::<6>::new(&lookup6).count(), 22);
 
-        let lookup7 = generate_minimize_rows_lookup::<7>();
-        assert_eq!(IsotopyClassGenerator::new(&lookup7).count(), 564);
+        let lookup7 = generate_minimize_rows_lookup_simd::<7>();
+        assert_eq!(IsotopyClassGenerator::<7>::new(&lookup7).count(), 564);
     }
 }

@@ -1,11 +1,9 @@
 use std::cmp::Ordering;
 
 use crate::{
-    bitset::BitSet16,
-    constraints::Constraints,
-    latin_square_trait::PartialLatinSquareTrait,
-    partial_latin_square::PartialLatinSquare,
-    permutation::{Permutation, PermutationDynIter},
+    bitset::BitSet16, constraints::Constraints, latin_square_trait::PartialLatinSquareTrait,
+    partial_latin_square::PartialLatinSquare, permutation::Permutation,
+    permutation_dyn::PermutationDynIter,
 };
 
 #[derive(Debug)]

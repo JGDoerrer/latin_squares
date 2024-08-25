@@ -10,8 +10,9 @@ use std::{
 
 use clap::{self, Parser, Subcommand};
 
+use cycles::generate_minimize_rows_lookup_simd;
 use isotopy_class_generator::IsotopyClassGenerator;
-use latin_square::{generate_minimize_rows_lookup, LatinSquare};
+use latin_square::LatinSquare;
 
 use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::LatinSquareGeneratorDyn;
@@ -32,6 +33,7 @@ mod bitset;
 mod bitvec;
 mod constants;
 mod constraints;
+mod cycles;
 mod hitting_set_generator;
 mod isotopy_class_generator;
 mod latin_square;
@@ -48,6 +50,8 @@ mod partial_oa_generator;
 mod partial_orthogonal_array;
 mod partial_square_generator;
 mod permutation;
+mod permutation_dyn;
+mod permutation_simd;
 mod random_latin_square_generator;
 mod rc_generator;
 mod rcs_generator;
@@ -300,7 +304,7 @@ fn normalize_main_class<const N: usize>() {
 }
 
 fn generate_isotopy_classes<const N: usize>() {
-    let lookup = generate_minimize_rows_lookup();
+    let lookup = generate_minimize_rows_lookup_simd::<N>();
     for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup).enumerate() {
         dbg!(i + 1);
 
@@ -311,7 +315,7 @@ fn generate_isotopy_classes<const N: usize>() {
 }
 
 fn generate_main_classes<const N: usize>(max_threads: usize) {
-    let lookup = generate_minimize_rows_lookup();
+    let lookup = generate_minimize_rows_lookup_simd::<N>();
     // for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup)
     //     .filter(|sq| *sq == sq.main_class_lookup(&lookup))
     //     .enumerate()

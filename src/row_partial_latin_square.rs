@@ -2,8 +2,10 @@ use std::{cmp::Ordering, fmt::Debug};
 
 use crate::{
     bitset::BitSet16,
+    cycles::CYCLE_STRUCTURES,
     latin_square::LatinSquare,
-    permutation::Permutation,
+    permutation::{Permutation, PermutationIter},
+    permutation_simd::PermutationSimd,
     tuple_iterator::TupleIterator,
 };
 
@@ -105,6 +107,104 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         }
     }
 
+    fn from_rows(
+        in_rows: [[u8; 16]; N],
+        lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
+    ) -> Self {
+        let full_rows = N;
+
+        let mut min_row_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
+        let mut min_rows = in_rows;
+        let mut min_row_cycles = [[false; N]; N];
+
+        for rows in TupleIterator::<2>::new(full_rows) {
+            for row_indices in [[rows[0], rows[1]], [rows[1], rows[0]]] {
+                let rows = row_indices.map(|i| Self::shrink_row(in_rows[i]));
+
+                let row_permutation = {
+                    let mut permutation = [0; N];
+
+                    for i in 0..N {
+                        let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                        permutation[i] = rows[1][position].into();
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let cycle_index = row_permutation.cycle_lengths_index();
+                match cycle_index.cmp(&min_row_cycle_index) {
+                    Ordering::Less => {
+                        min_row_cycle_index = cycle_index;
+                        min_row_cycles = [[false; N]; N];
+                    }
+                    Ordering::Equal => {}
+                    Ordering::Greater => break,
+                }
+                min_row_cycles[row_indices[0]][row_indices[1]] = true;
+
+                let mut cycles = row_permutation.cycles();
+                cycles.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+
+                let symbol_permutation = {
+                    let mut permutation = [0; N];
+
+                    let mut index = 0;
+                    for cycle in cycles {
+                        let cycle_len = cycle.len();
+                        let start_index = index;
+                        index += cycle_len;
+                        for (i, j) in cycle.into_iter().enumerate() {
+                            permutation[j] = start_index + (i + 1) % cycle_len;
+                        }
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let inverse_column_permutation =
+                    Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v as usize)))
+                        .inverse();
+
+                let (rows, _) = Self::permuted_cols_vals_simd(
+                    &in_rows[0..full_rows],
+                    &inverse_column_permutation.to_simd(),
+                    &symbol_permutation.to_simd(),
+                    false,
+                );
+
+                let permutations = &lookup[min_row_cycle_index];
+
+                for (s, inverse_c) in permutations {
+                    let (rows, new_full_rows) =
+                        Self::permuted_cols_vals_simd(&rows[0..full_rows], inverse_c, s, true);
+
+                    if new_full_rows != full_rows {
+                        continue;
+                    }
+
+                    for i in 0..full_rows {
+                        match min_rows[i][0..N].cmp(&rows[i][0..N]) {
+                            Ordering::Less => break,
+                            Ordering::Equal => {}
+                            Ordering::Greater => min_rows = rows,
+                        }
+                    }
+                }
+            }
+        }
+
+        let col_masks = [BitSet16::empty(); N];
+
+        Self {
+            rows: min_rows,
+            min_row_cycles,
+            min_row_cycle_index,
+            col_masks,
+            full_rows: N,
+        }
+    }
+
     pub fn get_col_mask(&self, col_index: usize) -> BitSet16 {
         self.col_masks[col_index]
     }
@@ -122,8 +222,8 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     }
 
     /// returns true if minimal, false if not
-    pub fn add_row(&mut self, row: [u8; N]) -> bool {
-        let padded_row = Self::pad_row(row);
+    pub fn add_row(&mut self, padded_row: [u8; 16]) -> bool {
+        let row: [u8; N] = Self::shrink_row(padded_row);
 
         for i in 0..N {
             self.col_masks[i].remove(padded_row[i] as usize);
@@ -231,16 +331,13 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     //     true
     // }
 
-    pub fn is_minimal(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> bool {
+    pub fn is_minimal(&self, lookup: &[Vec<(PermutationSimd, PermutationSimd)>]) -> bool {
         for rows in TupleIterator::<2>::new(self.full_rows) {
             if !self.min_row_cycles[rows[0]][rows[1]] {
                 continue;
             }
 
             for rows in [[rows[0], rows[1]], [rows[1], rows[0]]] {
-                // let (inverse_column_permutation, symbol_permutation) =
-                //     &self.permutations[rows[0]][rows[1]];
-
                 let rows = rows.map(|i| Self::shrink_row(self.rows[i]));
 
                 let row_permutation = {
@@ -274,13 +371,13 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                 };
 
                 let inverse_column_permutation =
-                    Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())))
+                    Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v as usize)))
                         .inverse();
 
                 let (rows, _) = Self::permuted_cols_vals_simd(
                     &self.rows[0..self.full_rows],
-                    &inverse_column_permutation,
-                    &symbol_permutation,
+                    &inverse_column_permutation.to_simd(),
+                    &symbol_permutation.to_simd(),
                     false,
                 );
 
@@ -295,7 +392,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                     }
 
                     for i in 0..self.full_rows {
-                        match self.rows[i].cmp(&rows[i]) {
+                        match self.rows[i][0..N].cmp(&rows[i][0..N]) {
                             Ordering::Less => break,
                             Ordering::Equal => {}
                             Ordering::Greater => return false,
@@ -311,21 +408,18 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     /// does not fix col_masks
     fn permuted_cols_vals_simd(
         rows: &[[u8; 16]],
-        inverse_column_permutation: &Permutation<N>,
-        val_permutation: &Permutation<N>,
+        inverse_column_permutation: &PermutationSimd,
+        val_permutation: &PermutationSimd,
         sort_rows: bool,
     ) -> ([[u8; 16]; N], usize) {
         use std::simd::Simd;
 
         assert!(N <= 16);
 
-        let mut col_permutation_simd = [0xff; 16];
-        col_permutation_simd[0..N]
-            .copy_from_slice(&inverse_column_permutation.as_array().map(|v| v as u8));
+        let col_permutation_simd = inverse_column_permutation.clone().into_array();
         let col_permutation = Simd::from_array(col_permutation_simd);
 
-        let mut val_permutation_simd = [0xff; 16];
-        val_permutation_simd[0..N].copy_from_slice(&val_permutation.as_array().map(|v| v as u8));
+        let val_permutation_simd = val_permutation.clone().into_array();
         let val_permutation = Simd::from_array(val_permutation_simd);
 
         let mut new_rows = [[0; 16]; N];
@@ -352,15 +446,69 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         (new_rows, full_rows)
     }
 
-    pub fn cmp_rows(&self, other: &Self) -> Ordering {
-        for i in 0..self.full_rows.min(other.full_rows) {
-            match self.rows[i][0..N].cmp(&other.rows[i][0..N]) {
-                Ordering::Equal => {}
-                o => return o,
+    fn from_rcv(
+        rows: [[u8; N]; N],
+        cols: [[u8; N]; N],
+        vals: [[u8; N]; N],
+        lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
+    ) -> Self {
+        let mut new_values = [[0; 16]; N];
+
+        for i in 0..N {
+            for j in 0..N {
+                let row = rows[i][j] as usize;
+                let col = cols[i][j] as usize;
+                let val = vals[i][j];
+
+                new_values[row][col] = val;
             }
         }
 
-        Ordering::Equal
+        Self::from_rows(new_values, lookup)
+    }
+
+    fn permuted_rcv(
+        &self,
+        permutation: &Permutation<3>,
+        lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
+    ) -> Self {
+        let mut rows = [[0; N]; N];
+        for (i, row) in rows.iter_mut().enumerate() {
+            *row = [i as u8; N];
+        }
+
+        let mut col = [0; N];
+
+        for (i, val) in col.iter_mut().enumerate() {
+            *val = i as u8;
+        }
+
+        let cols = [col; N];
+        let vals = self.rows.map(|row| Self::shrink_row(row));
+
+        let [rows, cols, vals] = permutation.apply_array([rows, cols, vals]);
+        Self::from_rcv(rows, cols, vals, lookup)
+    }
+
+    pub fn is_minimal_main_class(
+        &self,
+        lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
+    ) -> bool {
+        debug_assert!(self.is_complete());
+
+        for conjugate in PermutationIter::new().map(|perm| self.permuted_rcv(&perm, lookup)) {
+            for i in 0..N {
+                for j in 0..N {
+                    match self.rows[i][j].cmp(&conjugate.rows[i][j]) {
+                        Ordering::Less => break,
+                        Ordering::Equal => {}
+                        Ordering::Greater => return false,
+                    }
+                }
+            }
+        }
+
+        true
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{bitset::BitSet16, permutation::PermutationDyn, tuple_iterator::TupleIteratorDyn};
+use crate::{bitset::BitSet16, permutation_dyn::PermutationDyn, tuple_iterator::TupleIteratorDyn};
 
 pub trait LatinSquareTrait: PartialLatinSquareTrait {
     fn get(&self, row: usize, col: usize) -> usize;
