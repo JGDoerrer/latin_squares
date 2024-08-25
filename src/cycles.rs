@@ -213,38 +213,6 @@ impl<const N: usize> Iterator for CyclePermutations<N> {
     }
 }
 
-pub fn generate_minimize_rows_lookup<const N: usize>() -> Vec<Vec<(Permutation<N>, Permutation<N>)>>
-{
-    generate_cycle_structures(N)
-        .into_iter()
-        .map(|cycle| {
-            let mut rows = [[0; N]; 2];
-
-            for i in 0..N {
-                rows[0][i] = i as u8;
-            }
-
-            let mut index = 0;
-            for cycle in cycle {
-                let start_index = index;
-                index += cycle;
-                for j in 0..cycle {
-                    rows[1][start_index + j] = (start_index + (j + 1) % cycle) as u8;
-                }
-            }
-
-            let cycle_permutations = CyclePermutations::new(rows);
-            let mut permutations: Vec<_> = cycle_permutations.collect();
-
-            permutations.sort_unstable();
-            permutations.dedup();
-            permutations.shrink_to_fit();
-
-            permutations
-        })
-        .collect()
-}
-
 pub type PermutationSimdLookup = Vec<Vec<(PermutationSimd, PermutationSimd)>>;
 
 pub fn generate_minimize_rows_lookup_simd<const N: usize>() -> PermutationSimdLookup {
@@ -330,12 +298,6 @@ pub fn minimize_rows_with_lookup<'a, const N: usize>(
     let column_permutation =
         Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
 
-    // dbg!(
-    //     rows,
-    //     rows.map(|row| row.map(|v| symbol_permutation.apply_u8(v))),
-    //     rows.map(|row| column_permutation.apply_array(row.map(|v| symbol_permutation.apply_u8(v))))
-    // );
-
     // lookup
     let cycle_index = CYCLE_STRUCTURES[N]
         .iter()
@@ -354,16 +316,6 @@ pub fn minimize_rows_with_lookup<'a, const N: usize>(
             Permutation::from_array(column_permutation.apply_array(c.clone().into_array())),
         )
     });
-
-    // for (s, c) in permutations.clone() {
-    //     // dbg!(rows.map(|row| c.apply_array(row.map(|v| s.apply_u8(v)))));
-    //     assert_eq!(
-    //         rows.map(
-    //             |row| column_permutation.apply_array(row.map(|v| symbol_permutation.apply_u8(v)))
-    //         ),
-    //         rows.map(|row| c.apply_array(row.map(|v| s.apply_u8(v)))),
-    //     )
-    // }
 
     Box::new(permutations)
 }

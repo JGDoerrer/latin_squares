@@ -5,9 +5,7 @@ use std::{
 };
 
 use crate::{
-    cycles::{
-        generate_minimize_rows_lookup, generate_minimize_rows_lookup_simd, PermutationSimdLookup,
-    },
+    cycles::{generate_minimize_rows_lookup_simd, PermutationSimdLookup},
     isotopy_class_generator::RowGenerator,
     latin_square::LatinSquare,
     row_partial_latin_square::RowPartialLatinSquare,
@@ -43,7 +41,7 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
                 unreachable!();
             }
 
-            if self.row_generators.len() <= 1 {
+            if self.row_generators.len() <= 2 {
                 self.row_generators.push(RowGenerator::new(sq, self.lookup));
             } else {
                 while self.threads.len() >= max_threads {

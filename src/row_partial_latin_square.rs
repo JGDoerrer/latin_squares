@@ -31,6 +31,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         row
     };
 
+    #[inline]
     fn pad_row(row: [u8; N]) -> [u8; 16] {
         assert!(N <= 16);
         let mut new_row = [0; 16];
@@ -38,52 +39,13 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         new_row
     }
 
+    #[inline]
     fn shrink_row(row: [u8; 16]) -> [u8; N] {
         assert!(N <= 16);
         let mut new_row = [0; N];
         new_row.copy_from_slice(&row[..N]);
         new_row
     }
-
-    // pub fn new_first_cycle(first_cycle_index: usize) -> Self {
-    //     let row_cycle = CYCLE_STRUCTURES[N][first_cycle_index];
-
-    //     let mut rows = [[0; 16]; N];
-
-    //     rows[0] = Self::FIRST_ROW;
-
-    //     let mut index = 0;
-    //     for cycle in row_cycle {
-    //         let start_index = index;
-    //         index += cycle;
-    //         for j in 0..*cycle {
-    //             rows[1][start_index + j] = (start_index + (j + 1) % cycle) as u8;
-    //         }
-    //     }
-
-    //     let mut col_masks = [BitSet16::all_less_than(N); N];
-
-    //     for i in 0..N {
-    //         col_masks[i].remove(i);
-    //         col_masks[i].remove(rows[1][i] as usize);
-    //     }
-
-    //     let mut min_row_cycles = [[false; N]; N];
-    //     min_row_cycles[0][1] = true;
-
-    //     let mut permutations = array::from_fn(|_| {
-    //         array::from_fn(|_| (Permutation::<N>::identity(), Permutation::<N>::identity()))
-    //     });
-
-    //     Self {
-    //         rows,
-    //         full_rows: 2,
-    //         col_masks,
-    //         min_row_cycles,
-    //         min_row_cycle_index: first_cycle_index,
-    //         permutations,
-    //     }
-    // }
 
     pub fn new_first_row() -> Self {
         let mut rows = [[0; 16]; N];
@@ -286,51 +248,6 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         self.min_row_cycle_index
     }
 
-    // fn from_rows(rows: [[u8; 16]; N], full_rows: usize, col_masks: [BitSet16; N]) -> Self {
-    //     debug_assert_eq!(rows[0], Self::FIRST_ROW);
-
-    //     let first_cycle_index = CYCLE_STRUCTURES[N]
-    //         .iter()
-    //         .position(|c| c == &Permutation::<N>::from_slice(&rows[1][0..N]).cycle_lengths())
-    //         .unwrap();
-
-    //     Self {
-    //         rows,
-    //         full_rows,
-    //         first_cycle_index,
-    //         col_masks,
-    //     }
-    // }
-
-    // pub fn is_valid_next_row(&self, row: [u8; N]) -> bool {
-    //     for i in 0..self.full_rows {
-    //         for rows in [
-    //             [Self::shrink_row(*self.get_row(i)), row],
-    //             [row, Self::shrink_row(*self.get_row(i))],
-    //         ] {
-    //             let row_permutation = {
-    //                 let mut permutation = [0; N];
-
-    //                 for i in 0..N {
-    //                     let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
-    //                     permutation[i] = rows[1][position].into();
-    //                 }
-
-    //                 Permutation::from_array(permutation)
-    //             };
-
-    //             let mut cycles = row_permutation.cycle_lengths();
-    //             cycles.sort();
-
-    //             if cycles.as_slice() < CYCLE_STRUCTURES[N][self.min_row_cycle_index] {
-    //                 return false;
-    //             }
-    //         }
-    //     }
-
-    //     true
-    // }
-
     pub fn is_minimal(&self, lookup: &[Vec<(PermutationSimd, PermutationSimd)>]) -> bool {
         for rows in TupleIterator::<2>::new(self.full_rows) {
             if !self.min_row_cycles[rows[0]][rows[1]] {
@@ -497,10 +414,10 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         debug_assert!(self.is_complete());
 
         for conjugate in PermutationIter::new().map(|perm| self.permuted_rcv(&perm, lookup)) {
-            for i in 0..N {
+            'i: for i in 0..N {
                 for j in 0..N {
                     match self.rows[i][j].cmp(&conjugate.rows[i][j]) {
-                        Ordering::Less => break,
+                        Ordering::Less => break 'i,
                         Ordering::Equal => {}
                         Ordering::Greater => return false,
                     }

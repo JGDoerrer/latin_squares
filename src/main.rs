@@ -53,8 +53,6 @@ mod permutation;
 mod permutation_dyn;
 mod permutation_simd;
 mod random_latin_square_generator;
-mod rc_generator;
-mod rcs_generator;
 mod row_partial_latin_square;
 mod threaded_main_class_generator;
 mod tuple_iterator;
