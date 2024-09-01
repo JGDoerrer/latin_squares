@@ -376,6 +376,19 @@ impl<const N: usize> LatinSquare<N> {
         })
     }
 
+    /// Counts how many rows are the same until a differing row is found
+    pub fn num_same_rows(&self, other: &Self) -> usize {
+        for i in 0..N {
+            for j in 0..N {
+                if self.get(i, j) != other.get(i, j) {
+                    return i;
+                }
+            }
+        }
+
+        N
+    }
+
     pub fn reduced(&self) -> Self {
         let first_row = self.get_row(0).map(|i| i as usize);
         let row_reduced = self.permuted_cols(&Permutation::from_array(first_row));

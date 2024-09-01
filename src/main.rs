@@ -2,13 +2,14 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    io::{stdin, stdout, Write},
+    io::{stdin, stdout, Read, Write},
     thread::{self},
     time::Duration,
     vec,
 };
 
-use clap::{self, Parser, Subcommand};
+use bitset::BitSet16;
+use clap::{self, Parser, Subcommand, ValueEnum};
 
 use cycles::generate_minimize_rows_lookup_simd;
 use isotopy_class_generator::IsotopyClassGenerator;
@@ -117,6 +118,12 @@ enum Mode {
         mols: usize,
     },
     ToTex,
+    Encode {
+        n: usize,
+    },
+    Decode {
+        n: usize,
+    },
 }
 
 #[derive(Parser)]
@@ -164,6 +171,8 @@ fn main() {
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
         Mode::ToTex => to_tex(),
+        Mode::Encode { n } => match_n!(n, encode),
+        Mode::Decode { n } => match_n!(n, decode),
         _ => unimplemented!(),
     }
 }
@@ -732,6 +741,144 @@ fn to_tex() {
     }
 }
 
+fn encode<const N: usize>() {
+    let mut prev_sq = None;
+    let mut buffer = Vec::new();
+    let mut stdout = stdout();
+
+    while let Some(sq) = read_sq_n_from_stdin::<N>() {
+        encode_sq::<N>(sq, prev_sq, &mut buffer);
+
+        stdout.write(&buffer).unwrap();
+
+        prev_sq = Some(sq);
+        buffer.clear();
+    }
+}
+
+const fn row_size<const N: usize>() -> usize {
+    let row_size_bits = (N - 1).pow(N as u32 - 2).next_power_of_two().ilog2();
+    row_size_bits.div_ceil(8) as usize
+}
+
+fn decode<const N: usize>() {
+    let row_size_bytes = row_size::<N>();
+    let mut stdin = stdin();
+
+    let mut prev_sq = None;
+
+    loop {
+        let mut same_rows = [0u8];
+        stdin.read(&mut same_rows).unwrap();
+        let same_rows = same_rows[0];
+        assert!(same_rows <= N as u8);
+
+        let mut buffer = [[0u8; 8]; N];
+
+        for i in 0..N - 1 - same_rows as usize {
+            stdin.read_exact(&mut buffer[i][0..row_size_bytes]).unwrap();
+        }
+
+        let sq = decode_sq(prev_sq.as_ref(), same_rows.into(), &buffer);
+        prev_sq = Some(sq);
+
+        println!("{}", sq);
+    }
+}
+
+fn encode_sq<const N: usize>(
+    sq: LatinSquare<N>,
+    prev_sq: Option<LatinSquare<N>>,
+    buffer: &mut Vec<u8>,
+) {
+    debug_assert!(sq.is_reduced());
+    debug_assert!(prev_sq.is_none_or(|s| s.is_reduced()));
+
+    let row_size_bytes = row_size::<N>();
+
+    let same_rows = if let Some(prev_sq) = prev_sq {
+        sq.num_same_rows(&prev_sq)
+    } else {
+        0
+    };
+
+    buffer.push(same_rows as u8);
+
+    for row_index in same_rows..N - 1 {
+        let row = sq.get_row(row_index);
+
+        let mut coded = 0u64;
+        for i in 1..N - 1 {
+            coded *= N as u64 - 1;
+
+            let value = if row[i] > row[0] { row[i] - 1 } else { row[i] };
+
+            coded += value as u64;
+        }
+
+        buffer.extend(&coded.to_le_bytes()[0..row_size_bytes]);
+    }
+}
+
+fn decode_sq<const N: usize>(
+    prev_sq: Option<&LatinSquare<N>>,
+    same_rows: usize,
+    buffer: &[[u8; 8]; N],
+) -> LatinSquare<N> {
+    let mut rows = [[0; N]; N];
+    let mut cols = [BitSet16::all_less_than(N); N];
+
+    assert!(prev_sq.is_some() || same_rows == 0);
+
+    if let Some(prev_sq) = prev_sq {
+        for i in 0..same_rows {
+            rows[i] = prev_sq.get_row(i).clone();
+            for j in 0..N {
+                cols[j].remove(rows[i][j].into());
+            }
+        }
+    }
+
+    for i in same_rows as usize..N - 1 {
+        let mut coded = u64::from_le_bytes(buffer[i - same_rows]);
+
+        let mut row = [0; N];
+        row[0] = i as u8;
+        cols[0].remove(i);
+
+        let mut values = BitSet16::all_less_than(N);
+        values.remove(i);
+
+        for j in (1..N - 1).rev() {
+            let value = (coded % (N - 1) as u64) as u8;
+            coded /= (N - 1) as u64;
+
+            let value = if value >= i as u8 { value + 1 } else { value };
+
+            row[j] = value;
+            values.remove(value.into());
+            cols[j].remove(value.into());
+        }
+        assert!(values.is_single());
+        let value = values.into_iter().next().unwrap() as u8;
+        row[N - 1] = value;
+        cols[N - 1].remove(value.into());
+
+        rows[i] = row;
+    }
+
+    let last_row = cols.map(|c| {
+        assert!(c.is_single());
+        c.into_iter().next().unwrap() as u8
+    });
+
+    rows[N - 1] = last_row;
+
+    let sq = LatinSquare::try_from(rows).unwrap();
+
+    sq
+}
+
 fn solve_mols_n<const N: usize>(mols: usize) {
     assert!(mols > 0);
     assert!(mols < N);
@@ -795,6 +942,25 @@ fn read_sq_from_stdin() -> Option<LatinSquareDyn> {
     while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
         line = line.trim().into(); // remove newline
         match LatinSquareDyn::try_from(line.as_str()) {
+            Ok(sq) => {
+                line.clear();
+                return Some(sq);
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                line.clear();
+                continue;
+            }
+        }
+    }
+    None
+}
+
+fn read_sq_n_from_stdin<const N: usize>() -> Option<LatinSquare<N>> {
+    let mut line = String::new();
+    while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+        line = line.trim().into(); // remove newline
+        match LatinSquare::try_from(line.as_str()) {
             Ok(sq) => {
                 line.clear();
                 return Some(sq);
