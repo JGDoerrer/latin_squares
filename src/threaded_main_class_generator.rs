@@ -79,7 +79,7 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
                 continue;
             };
 
-            if sq.is_complete() && sq.is_minimal_main_class(&lookup_simd) {
+            if sq.is_complete() && sq.is_minimal_main_class(lookup_simd) {
                 let sq: LatinSquare<N> = sq.try_into().unwrap();
 
                 sqs.push(sq);

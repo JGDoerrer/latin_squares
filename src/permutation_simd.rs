@@ -10,7 +10,7 @@ impl PermutationSimd {
 
         let mut i = 0;
         while i < n {
-            elements[i as usize] = i as u8;
+            elements[i as usize] = i;
             i += 1;
         }
 
@@ -31,7 +31,7 @@ impl PermutationSimd {
 
     pub fn from_array(n: u8, elements: [u8; 16]) -> Self {
         for i in 0..n {
-            debug_assert!(elements.contains(&(i as u8)));
+            debug_assert!(elements.contains(&i));
         }
 
         PermutationSimd(n, elements)
@@ -53,7 +53,7 @@ impl PermutationSimd {
         let mut inverse = [0; 16];
 
         for i in 0..self.0 {
-            inverse[self.1[i as usize] as usize] = i as u8;
+            inverse[self.1[i as usize] as usize] = i;
         }
 
         dbg!(self);

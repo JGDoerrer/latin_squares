@@ -1,10 +1,9 @@
 #![feature(portable_simd)]
 
-use core::num;
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Write},
-    thread::{self, available_parallelism},
+    thread::{self},
     time::Duration,
     vec,
 };
@@ -396,7 +395,7 @@ fn find_scs(reverse: bool) {
 
                 let mut found = false;
                 let mut scs = HashSet::new();
-                'h: while let Some(hitting_set) = hitting_sets.next() {
+                'h: for hitting_set in hitting_sets.by_ref() {
                     let partial_sq = sq.mask(hitting_set);
 
                     for partial_sq in
