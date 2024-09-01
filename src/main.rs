@@ -1,5 +1,6 @@
 #![feature(portable_simd)]
 
+use core::num;
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Write},
@@ -84,7 +85,10 @@ enum Mode {
         #[arg(short, long)]
         reverse: bool,
     },
-    FindLCS,
+    FindLCS {
+        #[arg(long)]
+        max_threads: usize,
+    },
     FindMOLSSCS {
         mols: usize,
         #[arg(short, long, default_value_t = 0)]
@@ -113,6 +117,7 @@ enum Mode {
     SolveMOLS {
         mols: usize,
     },
+    ToTex,
 }
 
 #[derive(Parser)]
@@ -137,7 +142,7 @@ fn main() {
                 8 => $f::<8>($($args),*),
                 9 => $f::<9>($($args),*),
                 10 => $f::<10>($($args),*),
-                _ => todo!(),
+                _ => unimplemented!(),
             }
         };
     }
@@ -154,12 +159,13 @@ fn main() {
         Mode::Solve => solve(),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindAllCS => find_all_cs(),
-        Mode::FindLCS => find_lcs(),
+        Mode::FindLCS { max_threads } => find_lcs(max_threads),
         Mode::FindSCS { reverse } => find_scs(reverse),
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
-        _ => todo!(),
+        Mode::ToTex => to_tex(),
+        _ => unimplemented!(),
     }
 }
 
@@ -427,7 +433,7 @@ fn find_scs(reverse: bool) {
     // println!("min: {min}");
 }
 
-fn find_lcs() {
+fn find_lcs(max_threads: usize) {
     let mut threads = Vec::new();
 
     while let Some(sq) = read_sq_from_stdin() {
@@ -435,12 +441,8 @@ fn find_lcs() {
 
         threads.push(thread);
 
-        while threads.len()
-            >= available_parallelism()
-                .unwrap_or(1.try_into().unwrap())
-                .into()
-        {
-            thread::sleep(Duration::from_millis(10));
+        while threads.len() >= max_threads {
+            thread::sleep(Duration::from_millis(1));
             for i in 0..threads.len() {
                 if !threads[i].is_finished() {
                     continue;
@@ -463,40 +465,30 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
     let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
 
     let mut lcs = PartialLatinSquareDyn::empty(sq.n());
-    'h: for hitting_set in hitting_sets {
+    for hitting_set in hitting_sets {
         let partial_sq = sq.mask(hitting_set);
 
-        // dbg!(partial_sq.to_string());
-        let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
-        let first_solution = solutions.next();
-        let second_solution = solutions.next();
+        if !partial_sq.is_critical_set_of(&sq) {
+            let num_entries = partial_sq.num_entries();
 
-        if second_solution.is_some()
-            || first_solution.is_none()
-            || first_solution.is_some_and(|solution| solution != sq)
-        {
+            'l: loop {
+                for partial_sq in PartialSquareGeneratorDyn::new_partial(
+                    sq.clone(),
+                    partial_sq.clone(),
+                    dbg!((lcs.num_entries() + 1).max(num_entries + 1)),
+                )
+                .filter(|s| s.is_critical_set_of(&sq))
+                {
+                    if lcs.num_entries() < partial_sq.num_entries() {
+                        lcs = partial_sq;
+                        continue 'l;
+                    }
+                }
+                break;
+            }
+
             continue;
         }
-
-        // check if removing one entry results in >= 2 solutions
-        for i in 0..sq.n() {
-            for j in 0..sq.n() {
-                if partial_sq.get_partial(i, j).is_none() {
-                    continue;
-                }
-                let mut sq = partial_sq.clone();
-                sq.set(i, j, None);
-
-                let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
-                solutions.next();
-                let second_solution = solutions.next();
-                if second_solution.is_none() {
-                    continue 'h;
-                }
-            }
-        }
-
-        // println!("{}", partial_sq.to_string());
 
         if lcs.num_entries() < partial_sq.num_entries() {
             lcs = partial_sq;
@@ -523,18 +515,9 @@ fn find_all_cs() {
         for hitting_set in hitting_sets {
             let partial_sq = sq.mask(hitting_set);
 
-            // dbg!(partial_sq.to_string());
-            let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
-            let first_solution = solutions.next();
-            let second_solution = solutions.next();
-
-            if second_solution.is_some()
-                || first_solution.is_none()
-                || first_solution.is_some_and(|solution| solution != sq)
-            {
+            if !partial_sq.is_critical_set_of(&sq) {
                 dbg!(partial_sq);
                 unreachable!();
-                continue;
             }
 
             println!("{partial_sq}");
@@ -708,6 +691,48 @@ fn solve() {
     }
 }
 
+fn to_tex() {
+    while let Some(sq) = read_partial_sq_from_stdin() {
+        let n = sq.n();
+
+        let args = (1..=n)
+            .map(|i| format!("#{i}"))
+            .reduce(|a, b| format!("{a}, {b}"))
+            .unwrap();
+        println!("% {}", sq);
+        println!(
+            "\\begin{{tikzpicture}}[scale=0.5]
+    \\begin{{scope}}
+        \\newcommand{{\\makerow}}[{n}]{{
+        \\setcounter{{col}}{{0}};
+        \\foreach \\n in {{{args}}} {{
+            \\edef\\x{{\\value{{col}} + 0.5}}
+                \\edef\\y{{{}.5 - \\value{{row}}}}
+                \\node[anchor=center] at (\\x, \\y) {{\\n}};
+                \\stepcounter{{col}}
+            }}
+            \\stepcounter{{row}}
+        }}
+        \\draw (0, 0) grid ({n}, {n});
+        \\setcounter{{row}}{{0}};",
+            n - 1
+        );
+        for i in 0..n {
+            print!("        \\makerow");
+            for j in 0..n {
+                if let Some(v) = sq.get_partial(i, j) {
+                    print!("{{{}}}", v + 1);
+                } else {
+                    print!("{{}}");
+                }
+            }
+            println!();
+        }
+        println!("    \\end{{scope}}");
+        println!("\\end{{tikzpicture}}");
+    }
+}
+
 fn solve_mols_n<const N: usize>(mols: usize) {
     assert!(mols > 0);
     assert!(mols < N);
@@ -789,26 +814,27 @@ fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
     (0..).map_while(|_| read_sq_from_stdin())
 }
 
-fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> {
-    (0..).map_while(|_| {
-        let mut line = String::new();
-        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
-            line = line.trim().into(); // remove newline
-            match PartialLatinSquareDyn::try_from(line.as_str()) {
-                Ok(sq) => {
-                    line.clear();
-
-                    return Some(sq);
-                }
-                Err(err) => {
-                    line.clear();
-                    eprintln!("{}", err);
-                    continue;
-                }
+fn read_partial_sq_from_stdin() -> Option<PartialLatinSquareDyn> {
+    let mut line = String::new();
+    while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+        line = line.trim().into(); // remove newline
+        match PartialLatinSquareDyn::try_from(line.as_str()) {
+            Ok(sq) => {
+                line.clear();
+                return Some(sq);
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                line.clear();
+                continue;
             }
         }
-        None
-    })
+    }
+    None
+}
+
+fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> {
+    (0..).map_while(|_| read_partial_sq_from_stdin())
 }
 
 fn read_mols_from_stdin<const N: usize, const MOLS: usize>(

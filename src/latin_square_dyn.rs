@@ -71,7 +71,7 @@ impl LatinSquareDyn {
         let mut sets: Vec<BitSet128> = Vec::new();
 
         if false {
-            for tuple in TupleIterator::<3>::new(self.n) {
+            for tuple in TupleIterator::<5>::new(self.n) {
                 for partial in [
                     self.without_rows(&tuple),
                     self.without_cols(&tuple),
@@ -94,6 +94,7 @@ impl LatinSquareDyn {
         } else {
             let solutions = LatinSquareGeneratorDyn::new(self.n);
 
+            // TODO: nur quadrate die sich in vorhandenen regionen unterscheiden generieren?
             for solution in solutions {
                 let difference = self.difference_mask(&solution);
 

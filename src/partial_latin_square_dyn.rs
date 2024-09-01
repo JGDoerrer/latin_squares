@@ -1,11 +1,12 @@
-use std::fmt::{Display, Write};
+use std::fmt::{Debug, Display, Write};
 
 use crate::{
     latin_square_dyn::{isqrt, LatinSquareDyn},
+    latin_square_generator::LatinSquareGeneratorDyn,
     latin_square_trait::PartialLatinSquareTrait,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PartialLatinSquareDyn {
     n: usize,
     values: Box<[Option<u8>]>,
@@ -50,6 +51,47 @@ impl PartialLatinSquareDyn {
             .position(|entry| entry.is_none())
             .map(|index| index + start)
     }
+
+    pub fn is_uniquely_completable(&self) -> bool {
+        let mut generator = LatinSquareGeneratorDyn::from_partial_sq(self);
+        let first_solution = generator.next();
+        let second_solution = generator.next();
+
+        first_solution.is_some() && second_solution.is_none()
+    }
+
+    pub fn is_uniquely_completable_to(&self, sq: &LatinSquareDyn) -> bool {
+        debug_assert_eq!(self.n(), sq.n());
+
+        let mut generator = LatinSquareGeneratorDyn::from_partial_sq(self);
+        let first_solution = generator.next();
+        let second_solution = generator.next();
+
+        second_solution.is_none() && first_solution.is_some_and(|s| s == *sq)
+    }
+
+    pub fn is_critical_set_of(&self, sq: &LatinSquareDyn) -> bool {
+        if !self.is_uniquely_completable_to(sq) {
+            return false;
+        }
+
+        for i in 0..self.n() {
+            for j in 0..self.n() {
+                if self.get_partial(i, j).is_none() {
+                    continue;
+                }
+
+                let mut copy = self.clone();
+                copy.set(i, j, None);
+
+                if copy.is_uniquely_completable() {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
 }
 
 impl Display for PartialLatinSquareDyn {
@@ -63,6 +105,29 @@ impl Display for PartialLatinSquareDyn {
                 }
             }
         }
+        Ok(())
+    }
+}
+
+impl Debug for PartialLatinSquareDyn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let n = self.n();
+
+        writeln!(f)?;
+        for i in 0..n {
+            writeln!(f, "+{}", "---+".repeat(n))?;
+            write!(f, "|")?;
+            for j in 0..n {
+                if let Some(value) = self.get_partial(i, j) {
+                    write!(f, " {} |", value)?;
+                } else {
+                    write!(f, "   |")?;
+                }
+            }
+            writeln!(f)?;
+        }
+        write!(f, "+{}", "---+".repeat(n))?;
+
         Ok(())
     }
 }

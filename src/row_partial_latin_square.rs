@@ -364,9 +364,9 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     }
 
     fn from_rcv(
-        rows: [[u8; N]; N],
-        cols: [[u8; N]; N],
-        vals: [[u8; N]; N],
+        rows: &[[u8; 16]],
+        cols: &[[u8; 16]],
+        vals: &[[u8; 16]],
         lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
     ) -> Self {
         let mut new_values = [[0; 16]; N];
@@ -389,19 +389,29 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         permutation: &Permutation<3>,
         lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
     ) -> Self {
-        let mut rows = [[0; N]; N];
-        for (i, row) in rows.iter_mut().enumerate() {
-            *row = [i as u8; N];
-        }
+        assert!(N <= 16);
+        const ROWS: [[u8; 16]; 16] = {
+            let mut rows = [[0; 16]; 16];
+            let mut i = 0;
+            while i < 16 {
+                rows[i] = [i as u8; 16];
+                i += 1;
+            }
+            rows
+        };
+        const COLS: [[u8; 16]; 16] = {
+            let mut row = [0; 16];
+            let mut i = 0;
+            while i < 16 {
+                row[i] = i as u8;
+                i += 1;
+            }
+            [row; 16]
+        };
 
-        let mut col = [0; N];
-
-        for (i, val) in col.iter_mut().enumerate() {
-            *val = i as u8;
-        }
-
-        let cols = [col; N];
-        let vals = self.rows.map(|row| Self::shrink_row(row));
+        let rows = &ROWS[0..N];
+        let cols = &COLS[0..N];
+        let vals = &self.rows[0..N];
 
         let [rows, cols, vals] = permutation.apply_array([rows, cols, vals]);
         Self::from_rcv(rows, cols, vals, lookup)
@@ -413,7 +423,10 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     ) -> bool {
         debug_assert!(self.is_complete());
 
-        for conjugate in PermutationIter::new().map(|perm| self.permuted_rcv(&perm, lookup)) {
+        for conjugate in PermutationIter::new()
+            .skip(1)
+            .map(|perm| self.permuted_rcv(&perm, lookup))
+        {
             'i: for i in 0..N {
                 for j in 0..N {
                     match self.rows[i][j].cmp(&conjugate.rows[i][j]) {
