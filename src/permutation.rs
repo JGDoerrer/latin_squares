@@ -2,9 +2,27 @@ use std::mem::MaybeUninit;
 
 use crate::{cycles::CYCLE_STRUCTURES, permutation_simd::PermutationSimd};
 
-pub fn factorial(n: usize) -> usize {
-    (2..=n).product()
+pub const fn factorial(n: usize) -> usize {
+    let mut i = 2;
+    let mut f = 1;
+    while i <= n {
+        f *= i;
+        i += 1;
+    }
+    f
 }
+
+pub const FACTORIAL: [usize; 16] = {
+    let mut factorials = [0; 16];
+
+    let mut i = 0;
+    while i < 16 {
+        factorials[i] = factorial(i);
+        i += 1;
+    }
+
+    factorials
+};
 
 /// A permutation of N elements
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]

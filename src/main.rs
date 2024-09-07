@@ -9,7 +9,7 @@ use std::{
 };
 
 use bitset::BitSet16;
-use clap::{self, Parser, Subcommand, ValueEnum};
+use clap::{self, Parser, Subcommand};
 
 use cycles::generate_minimize_rows_lookup_simd;
 use isotopy_class_generator::IsotopyClassGenerator;
@@ -27,6 +27,8 @@ use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_oa_generator::PartialOAGenerator;
 use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
+use permutation::factorial;
+use permutation_dyn::PermutationDyn;
 use random_latin_square_generator::RandomLatinSquareGenerator;
 use threaded_main_class_generator::ThreadedMainClassGenerator;
 
@@ -63,6 +65,7 @@ enum Mode {
     PrettyPrint,
     /// Prints all solutions for a partial latin square
     Solve,
+    Shuffle,
     Analyse {
         n: usize,
     },
@@ -163,6 +166,7 @@ fn main() {
             match_n!(n, generate_main_classes, max_threads)
         }
         Mode::Solve => solve(),
+        Mode::Shuffle => shuffle(),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindAllCS => find_all_cs(),
         Mode::FindLCS { max_threads } => find_lcs(max_threads),
@@ -696,6 +700,35 @@ fn solve() {
         for solution in solutions {
             println!("{}", solution);
         }
+    }
+}
+
+fn shuffle() {
+    fn xoshiro(state: &mut [u64; 4]) -> u64 {
+        let result = state[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
+
+        let new_state = [
+            state[0] ^ state[1] ^ state[3],
+            state[0] ^ state[1] ^ state[2],
+            state[2] ^ state[0] ^ (state[1] << 17),
+            (state[3] ^ state[1]).rotate_left(45),
+        ];
+
+        *state = new_state;
+        result
+    }
+
+    let mut state = [1, 2, 3, 4];
+
+    for mut sq in read_partial_sqs_from_stdin() {
+        let n = sq.n();
+        let rank = xoshiro(&mut state) as usize % factorial(n);
+
+        let permutations = PermutationDyn::from_rank(rank, n);
+
+        sq.permute_vals(&permutations);
+
+        println!("{sq}");
     }
 }
 

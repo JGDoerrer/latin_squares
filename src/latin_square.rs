@@ -103,8 +103,12 @@ impl<const N: usize> LatinSquare<N> {
         val
     }
 
-    pub fn values(self) -> [[u8; N]; N] {
+    pub fn to_values(self) -> [[u8; N]; N] {
         self.rows
+    }
+
+    pub fn values(&self) -> &[[u8; N]; N] {
+        &self.rows
     }
 
     pub fn is_valid(values: &[[u8; N]; N]) -> bool {

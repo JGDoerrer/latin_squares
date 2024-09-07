@@ -1,6 +1,6 @@
 use std::mem::MaybeUninit;
 
-use crate::permutation::{factorial, Permutation};
+use crate::permutation::{factorial, Permutation, FACTORIAL};
 
 /// A permutation of elements
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -13,6 +13,30 @@ impl PermutationDyn {
             *element = i;
         }
         PermutationDyn(elements)
+    }
+
+    pub fn from_rank(mut rank: usize, n: usize) -> Self {
+        let mut permutation = vec![0; n];
+        let mut elements_left = vec![None; n];
+
+        for i in 0..n {
+            elements_left[i] = Some(i);
+        }
+
+        for k in 0..n {
+            let fac = FACTORIAL[n - k - 1];
+            let d = rank / fac;
+            permutation[k] = elements_left
+                .iter_mut()
+                .filter(|i| i.is_some())
+                .nth(d)
+                .unwrap()
+                .take()
+                .unwrap();
+            rank %= fac;
+        }
+
+        PermutationDyn(permutation)
     }
 
     pub fn from_array<const N: usize>(elements: [usize; N]) -> Self {

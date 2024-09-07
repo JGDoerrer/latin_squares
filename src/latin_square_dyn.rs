@@ -195,7 +195,7 @@ impl LatinSquareDyn {
 impl<const N: usize> From<LatinSquare<N>> for LatinSquareDyn {
     fn from(sq: LatinSquare<N>) -> Self {
         let values = sq
-            .values()
+            .to_values()
             .into_iter()
             .flat_map(|row| row.into_iter())
             .collect::<Vec<_>>()

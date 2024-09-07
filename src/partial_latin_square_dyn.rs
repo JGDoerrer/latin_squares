@@ -4,6 +4,7 @@ use crate::{
     latin_square_dyn::{isqrt, LatinSquareDyn},
     latin_square_generator::LatinSquareGeneratorDyn,
     latin_square_trait::PartialLatinSquareTrait,
+    permutation_dyn::PermutationDyn,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -91,6 +92,12 @@ impl PartialLatinSquareDyn {
         }
 
         true
+    }
+
+    pub fn permute_vals(&mut self, permutation: &PermutationDyn) {
+        for val in self.values.iter_mut().flatten() {
+            *val = permutation.apply(*val as usize) as u8;
+        }
     }
 }
 
