@@ -74,38 +74,50 @@ impl LatinSquareDyn {
     pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
         let mut sets: Vec<BitSet128> = Vec::new();
 
-        if false {
-            for tuple in TupleIterator::<5>::new(self.n) {
-                for partial in [
-                    self.without_rows(&tuple),
-                    self.without_cols(&tuple),
-                    self.without_vals(&tuple),
-                ] {
-                    let solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial);
+        for tuple in TupleIterator::<5>::new(self.n) {
+            for partial in [
+                self.without_rows(&tuple),
+                self.without_cols(&tuple),
+                self.without_vals(&tuple),
+            ] {
+                let solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial);
 
-                    for solution in solutions {
-                        let difference = self.difference_mask(&solution);
+                for solution in solutions {
+                    let difference = self.difference_mask(&solution);
 
-                        if !difference.is_empty()
-                            && !sets.iter().any(|s| s.is_subset_of(difference))
-                        {
-                            sets.retain(|s| !difference.is_subset_of(*s));
-                            sets.push(difference);
-                        }
+                    if !difference.is_empty() && !sets.iter().any(|s| s.is_subset_of(difference)) {
+                        sets.retain(|s| !difference.is_subset_of(*s));
+                        sets.push(difference);
                     }
                 }
             }
-        } else {
-            let solutions = LatinSquareGeneratorDyn::new(self.n);
+        }
+        sets = sets
+            .iter()
+            .filter(|set| {
+                sets.iter()
+                    .all(|other| other == *set || !other.is_subset_of(**set))
+            })
+            .copied()
+            .collect();
 
-            // TODO: nur quadrate die sich in vorhandenen regionen unterscheiden generieren?
-            for solution in solutions {
-                let difference = self.difference_mask(&solution);
+        sets.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        sets.dedup();
 
-                if !difference.is_empty() && !sets.iter().any(|s| s.is_subset_of(difference)) {
-                    sets.retain(|s| !difference.is_subset_of(*s));
-                    sets.push(difference);
-                }
+        sets
+    }
+
+    pub fn all_unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
+        let mut sets: Vec<BitSet128> = Vec::new();
+
+        let solutions = LatinSquareGeneratorDyn::new(self.n);
+
+        for solution in solutions {
+            let difference = self.difference_mask(&solution);
+
+            if !difference.is_empty() && !sets.iter().any(|s| s.is_subset_of(difference)) {
+                sets.retain(|s| !difference.is_subset_of(*s));
+                sets.push(difference);
             }
         }
 
@@ -189,7 +201,6 @@ impl LatinSquareDyn {
 
         partial_sq
     }
-
 }
 
 impl<const N: usize> From<LatinSquare<N>> for LatinSquareDyn {

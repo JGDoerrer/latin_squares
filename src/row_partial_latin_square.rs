@@ -384,7 +384,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         Self::from_rows(new_values, lookup)
     }
 
-    fn permuted_rcv(
+    fn permuted_rcs(
         &self,
         permutation: &Permutation<3>,
         lookup: &[Vec<(PermutationSimd, PermutationSimd)>],
@@ -425,7 +425,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
 
         for conjugate in PermutationIter::new()
             .skip(1)
-            .map(|perm| self.permuted_rcv(&perm, lookup))
+            .map(|perm| self.permuted_rcs(&perm, lookup))
         {
             'i: for i in 0..N {
                 for j in 0..N {

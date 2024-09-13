@@ -17,15 +17,12 @@ use latin_square::LatinSquare;
 
 use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::LatinSquareGeneratorDyn;
-use oa_generator::OAGenerator;
+use mols::MOLS;
 
 use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
-use orthogonal_array::{OrthogonalArray, SEPARATOR};
 
 use partial_latin_square_dyn::PartialLatinSquareDyn;
-use partial_oa_generator::PartialOAGenerator;
-use partial_orthogonal_array::PartialOrthogonalArray;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::factorial;
 use permutation_dyn::PermutationDyn;
@@ -44,6 +41,7 @@ mod latin_square_dyn;
 mod latin_square_generator;
 mod latin_square_trait;
 mod mmcs_hitting_set_generator;
+mod mols;
 mod oa_constraints;
 mod oa_generator;
 mod orthogonal_array;
@@ -92,15 +90,6 @@ enum Mode {
         #[arg(long)]
         max_threads: usize,
     },
-    FindMOLSSCS {
-        mols: usize,
-        #[arg(short, long, default_value_t = 0)]
-        start: usize,
-        #[arg(short, long, default_value_t = usize::MAX)]
-        end: usize,
-        #[arg(short, long)]
-        all: bool,
-    },
     Random {
         n: usize,
         seed: u64,
@@ -115,9 +104,6 @@ enum Mode {
     },
     FindMOLS {
         n: usize,
-        mols: usize,
-    },
-    SolveMOLS {
         mols: usize,
     },
     ToTex,
@@ -177,7 +163,6 @@ fn main() {
         Mode::ToTex => to_tex(),
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
-        _ => unimplemented!(),
     }
 }
 
@@ -223,8 +208,8 @@ fn analyse<const N: usize>() {
         println!("Symmetries: ");
         let symmetries = sq.symmetries();
         for symmetry in symmetries {
-            let rcv: String = symmetry.apply_array(['R', 'C', 'V']).into_iter().collect();
-            println!("{rcv}");
+            let rcs: String = symmetry.apply_array(['R', 'C', 'S']).into_iter().collect();
+            println!("{rcs}");
         }
         println!();
 
@@ -262,19 +247,33 @@ fn analyse<const N: usize>() {
             println!();
         }
 
-        let (isotopy_class, _) = sq.isotopy_class_permutation();
+        let (isotopy_class, perm) = sq.isotopy_class_permutation();
         if isotopy_class != sq {
             println!("Isotopy class: ");
             println!("{}", isotopy_class);
+            println!("Row permutation: {:?}", perm[0].as_array());
+            println!("Col permutation: {:?}", perm[1].as_array());
+            println!("Sym permutation: {:?}", perm[2].as_array());
+
             pretty_print_sq(isotopy_class);
         } else {
             println!("Is isotopy class reduced");
         }
 
-        let main_class = sq.main_class();
+        let (main_class, rcs, perm) = sq.main_class_permutation();
         if main_class != sq {
             println!("Main class: ");
             println!("{}", main_class);
+            println!(
+                "Conjugate: {}",
+                rcs.apply_array(['R', 'C', 'S'])
+                    .into_iter()
+                    .collect::<String>()
+            );
+            println!("Row permutation: {:?}", perm[0].as_array());
+            println!("Col permutation: {:?}", perm[1].as_array());
+            println!("Sym permutation: {:?}", perm[2].as_array());
+
             pretty_print_sq(main_class);
         } else {
             println!("Is main class reduced");
@@ -517,12 +516,10 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
 fn find_all_cs() {
     while let Some(sq) = read_sq_from_stdin() {
         println!("{sq}");
-        let unavoidable_sets = sq.unavoidable_sets();
-        unavoidable_sets.iter().for_each(|sets| {
-            dbg!(sets.len());
-        });
+        let unavoidable_sets = sq.all_unavoidable_sets_order_1();
+        dbg!(unavoidable_sets.len());
 
-        let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+        let hitting_sets = MMCSHittingSetGenerator::new(vec![unavoidable_sets], sq.n() * sq.n());
 
         for hitting_set in hitting_sets {
             let partial_sq = sq.mask(hitting_set);
@@ -540,6 +537,8 @@ fn find_all_cs() {
 }
 
 fn find_mols<const N: usize>(mols: usize) {
+    let mut found = HashSet::new();
+
     for sq in read_sqs_from_stdin_n::<N>() {
         let has_orthogonal = sq
             .full_disjoint_transversals()
@@ -564,14 +563,21 @@ fn find_mols<const N: usize>(mols: usize) {
                     current_mols.push(*orthogonal);
 
                     if current_mols.len() == mols {
-                        println!(
-                            "{}",
-                            current_mols
-                                .iter()
-                                .map(|sq| sq.to_string())
-                                .reduce(|a, b| format!("{a}{}{b}", SEPARATOR))
-                                .unwrap()
-                        );
+                        let mols = MOLS::new(&current_mols).unwrap();
+                        let normalized_mols = mols.normalize_main_class_set();
+
+                        if found.insert(normalized_mols.clone()) {
+                            println!("{normalized_mols}");
+                        }
+
+                        // println!(
+                        //     "{}",
+                        //     current_mols
+                        //         .iter()
+                        //         .map(|sq| sq.to_string())
+                        //         .reduce(|a, b| format!("{a}{}{b}", SEPARATOR))
+                        //         .unwrap()
+                        // );
 
                         current_mols.pop();
                     } else {
@@ -585,110 +591,6 @@ fn find_mols<const N: usize>(mols: usize) {
 
             current_mols.pop();
             indices.pop();
-        }
-    }
-}
-
-fn find_mols_scs_n<const N: usize>(mols: usize, start: usize, end: usize, all: bool) {
-    assert!(mols > 0);
-    assert!(mols < N);
-
-    macro_rules! match_mols {
-        ($( $i : literal),+) => {
-            match mols {
-                $(
-                    $i => find_mols_scs::<N, $i>(start,end, all),
-                )*
-                _ => unreachable!(),
-            }
-        };
-    }
-
-    match N {
-        3 => match_mols!(2),
-        4 => match_mols!(2, 3),
-        5 => match_mols!(2, 3, 4),
-        _ => todo!(),
-    }
-}
-
-fn find_mols_scs<const N: usize, const MOLS: usize>(start: usize, end: usize, all: bool) {
-    for oa in read_mols_from_stdin::<N, MOLS>() {
-        dbg!(&oa);
-
-        let unavoidable_sets = oa.unavoidable_sets();
-        unavoidable_sets.iter().for_each(|sets| {
-            dbg!(sets.len());
-        });
-
-        let end = end.min(MOLS * N * N);
-
-        if start <= end {
-            for i in start..=end {
-                dbg!(i);
-                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
-
-                let mut found = false;
-                let mut scs = HashSet::new();
-                'h: for hitting_set in hitting_sets {
-                    let partial_sq = oa.mask(hitting_set);
-
-                    for partial_oa in PartialOAGenerator::new_partial(oa.clone(), partial_sq, i) {
-                        let mut solutions = OAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
-                        let first_solution = solutions.next();
-                        let second_solution = solutions.next();
-
-                        if second_solution.is_none()
-                            && first_solution.is_some_and(|solution| solution == oa)
-                        {
-                            found = true;
-                            if scs.insert(partial_oa.clone()) {
-                                println!("{}", partial_oa);
-                            }
-                            if !all {
-                                break 'h;
-                            }
-                        }
-                    }
-                }
-
-                if found {
-                    break;
-                }
-            }
-        } else {
-            for i in (end..=start).rev() {
-                dbg!(i);
-                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
-
-                let mut found = false;
-                let mut scs = HashSet::new();
-                'h: for hitting_set in hitting_sets {
-                    let partial_sq = oa.mask(hitting_set);
-
-                    for partial_oa in PartialOAGenerator::new_partial(oa.clone(), partial_sq, i) {
-                        let mut solutions = OAGenerator::<N, MOLS>::from_partial_oa(&partial_oa);
-                        let first_solution = solutions.next();
-                        let second_solution = solutions.next();
-
-                        if second_solution.is_none()
-                            && first_solution.is_some_and(|solution| solution == oa)
-                        {
-                            found = true;
-                            if scs.insert(partial_oa.clone()) {
-                                println!("{}", partial_oa);
-                            }
-                            if !all {
-                                break 'h;
-                            }
-                        }
-                    }
-                }
-
-                if !found {
-                    break;
-                }
-            }
         }
     }
 }
@@ -912,42 +814,6 @@ fn decode_sq<const N: usize>(
     sq
 }
 
-fn solve_mols_n<const N: usize>(mols: usize) {
-    assert!(mols > 0);
-    assert!(mols < N);
-
-    macro_rules! match_mols {
-        ($( $i : literal),+) => {
-            match mols {
-                $(
-                    $i => solve_mols::<N, $i>(),
-                )*
-                _ => unreachable!(),
-            }
-        };
-    }
-
-    match N {
-        3 => match_mols!(2),
-        4 => match_mols!(2, 3),
-        5 => match_mols!(2, 3, 4),
-        10 => match_mols!(2, 3),
-        _ => todo!(),
-    }
-}
-
-fn solve_mols<const N: usize, const MOLS: usize>() {
-    for oa in read_partial_mols_from_stdin() {
-        let solutions = OAGenerator::<N, MOLS>::from_partial_oa(&oa);
-
-        for solution in solutions {
-            if writeln!(stdout(), "{}", solution).is_err() {
-                return;
-            }
-        }
-    }
-}
-
 fn read_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = LatinSquare<N>> {
     let mut line = String::new();
 
@@ -1033,50 +899,4 @@ fn read_partial_sq_from_stdin() -> Option<PartialLatinSquareDyn> {
 
 fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> {
     (0..).map_while(|_| read_partial_sq_from_stdin())
-}
-
-fn read_mols_from_stdin<const N: usize, const MOLS: usize>(
-) -> impl Iterator<Item = OrthogonalArray<N, MOLS>> {
-    (0..).map_while(|_| {
-        let mut line: String = String::new();
-        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
-            line = line.trim().into(); // remove newline
-            match OrthogonalArray::try_from(line.as_str()) {
-                Ok(oa) => {
-                    line.clear();
-
-                    return Some(oa);
-                }
-                Err(err) => {
-                    line.clear();
-                    eprintln!("{}", err);
-                    continue;
-                }
-            }
-        }
-        None
-    })
-}
-
-fn read_partial_mols_from_stdin<const N: usize, const MOLS: usize>(
-) -> impl Iterator<Item = PartialOrthogonalArray<N, MOLS>> {
-    (0..).map_while(|_| {
-        let mut line = String::new();
-        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
-            line = line.trim().into(); // remove newline
-            match PartialOrthogonalArray::try_from(line.as_str()) {
-                Ok(oa) => {
-                    line.clear();
-
-                    return Some(oa);
-                }
-                Err(err) => {
-                    line.clear();
-                    eprintln!("{}", err);
-                    continue;
-                }
-            }
-        }
-        None
-    })
 }

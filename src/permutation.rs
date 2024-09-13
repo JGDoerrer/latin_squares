@@ -75,7 +75,7 @@ impl<const N: usize> Permutation<N> {
         self.0.swap(i, j);
     }
 
-    pub fn inverse(self) -> Self {
+    pub fn inverse(&self) -> Self {
         let mut inverse = Self::identity().into_array();
 
         for i in 0..N {
