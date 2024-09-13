@@ -63,10 +63,6 @@ impl LatinSquareDyn {
         })
     }
 
-    pub fn get_row(&self, row: usize) -> &[u8] {
-        &self.values[row * self.n..(row + 1) * self.n]
-    }
-
     pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
         vec![self.unavoidable_sets_order_1()]
     }

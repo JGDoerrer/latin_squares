@@ -196,19 +196,6 @@ impl ConstraintsDyn {
         }
     }
 
-    pub fn new_reduced(n: usize) -> Self {
-        let mut constraints = Self::new(n);
-
-        for i in 0..n {
-            constraints.set(0, i, i);
-            if i != 0 {
-                constraints.set(i, 0, i);
-            }
-        }
-
-        constraints
-    }
-
     pub fn new_partial(sq: &PartialLatinSquareDyn) -> Self {
         let n = sq.n();
         let mut constraints = Self::new(n);
@@ -365,13 +352,5 @@ impl ConstraintsDyn {
         }
 
         (min_values < n * n + 1).then_some(index)
-    }
-
-    pub fn most_constrained_cell(&self) -> Option<Cell> {
-        let n = self.sq.n();
-        (0..n * n)
-            .map(|index| Cell(index / n, index % n))
-            .filter(|cell| self.get_possibilities(cell.0, cell.1).len() >= 2)
-            .min_by_key(|cell| self.get_possibilities(cell.0, cell.1).len() >= 2)
     }
 }
