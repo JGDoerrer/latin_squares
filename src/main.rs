@@ -11,7 +11,7 @@ use std::{
 use bitset::BitSet16;
 use clap::{self, Parser, Subcommand};
 
-use cycles::generate_minimize_rows_lookup_simd;
+use cycles::{generate_minimize_rows_lookup, generate_minimize_rows_lookup_simd};
 use isotopy_class_generator::IsotopyClassGenerator;
 use latin_square::LatinSquare;
 
@@ -539,6 +539,8 @@ fn find_all_cs() {
 fn find_mols<const N: usize>(mols: usize) {
     let mut found = HashSet::new();
 
+    let lookup = generate_minimize_rows_lookup();
+
     for sq in read_sqs_from_stdin_n::<N>() {
         let has_orthogonal = sq
             .full_disjoint_transversals()
@@ -563,8 +565,8 @@ fn find_mols<const N: usize>(mols: usize) {
                     current_mols.push(*orthogonal);
 
                     if current_mols.len() == mols {
-                        let mols = MOLS::new(&current_mols).unwrap();
-                        let normalized_mols = mols.normalize_main_class_set();
+                        let mols = MOLS::new_unchecked(&current_mols);
+                        let normalized_mols = mols.normalize_main_class_set(&lookup);
 
                         if found.insert(normalized_mols.clone()) {
                             println!("{normalized_mols}");

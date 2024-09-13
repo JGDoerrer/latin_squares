@@ -492,9 +492,12 @@ impl<const N: usize> LatinSquare<N> {
         (isotopic, isotopic_permutation)
     }
 
-    pub fn isotopy_class_permutations(&self) -> (Self, Vec<[Permutation<N>; 3]>) {
+    pub fn isotopy_class_permutations(
+        &self,
+        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
+    ) -> (Self, Vec<[Permutation<N>; 3]>) {
         let mut candidates = Vec::new();
-        let mut min_cycles = vec![N];
+        let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
 
         for [row0, row1] in
             TupleIterator::<2>::new(N).flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
@@ -511,21 +514,21 @@ impl<const N: usize> LatinSquare<N> {
                 Permutation::from_array(permutation)
             };
 
-            let mut cycles = row_permutation.cycle_lengths();
-            cycles.sort();
+            let cycles = row_permutation.cycle_lengths_index();
 
-            match cycles.cmp(&min_cycles) {
+            match cycles.cmp(&min_cycle_index) {
                 Ordering::Less => {
-                    min_cycles = cycles;
+                    min_cycle_index = cycles;
                     candidates.clear();
-                    candidates.push(rows.map(|r| r.clone()));
+                    candidates.push((rows.map(|r| r.clone()), row_permutation));
                 }
                 Ordering::Equal => {
-                    candidates.push(rows.map(|r| r.clone()));
+                    candidates.push((rows.map(|r| r.clone()), row_permutation));
                 }
                 Ordering::Greater => {}
             }
         }
+
         let mut isotopic = *self;
         let mut isotopic_permutations = vec![[
             Permutation::identity(),
@@ -533,15 +536,54 @@ impl<const N: usize> LatinSquare<N> {
             Permutation::identity(),
         ]];
 
-        for rows in candidates {
-            let permutations = minimize_rows(&rows);
+        for (rows, row_permutation) in candidates {
+            let mut cycles = row_permutation.cycles();
+            cycles.sort_by_key(|c| c.len());
 
-            for (s, c) in permutations {
-                let c = c.inverse();
-                let mut new_sq = self.permuted_vals(&s).permuted_cols(&c);
+            let symbol_permutation = {
+                let mut permutation = [0; N];
+
+                let mut index = 0;
+                for cycle in cycles {
+                    let cycle_len = cycle.len();
+                    let start_index = index;
+                    index += cycle_len;
+                    for (i, j) in cycle.into_iter().enumerate() {
+                        permutation[j] = start_index + (i + 1) % cycle_len;
+                    }
+                }
+
+                Permutation::from_array(permutation)
+            };
+
+            let column_permutation =
+                Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
+
+            let permutations = &lookup[min_cycle_index];
+
+            let mut sq = *self;
+            sq.permute_cols_vals_simd(column_permutation.inverse(), symbol_permutation.clone());
+
+            for (s, inverse_c) in permutations {
+                let mut new_sq = sq;
+                new_sq.permute_cols_vals_simd(inverse_c.clone(), s.clone());
+
                 let r = Permutation::from_array(new_sq.get_col(0).map(|i| i as usize));
 
-                new_sq = new_sq.permuted_rows(&r);
+                let mut new_rows = [[0; N]; N];
+                for i in 0..N {
+                    new_rows[new_sq.rows[i][0] as usize] = new_sq.rows[i];
+                }
+                let new_sq = LatinSquare::new(new_rows);
+
+                let c = column_permutation
+                    .inverse()
+                    .apply_array(inverse_c.clone().inverse().into_array())
+                    .into();
+                let s = symbol_permutation
+                    .inverse()
+                    .apply_array(s.clone().into_array())
+                    .into();
 
                 match new_sq.cmp_rows(&isotopic) {
                     Ordering::Less => {

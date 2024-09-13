@@ -26,11 +26,18 @@ impl<const N: usize> MOLS<N> {
         Ok(MOLS { sqs: sqs.to_vec() })
     }
 
+    pub fn new_unchecked(sqs: &[LatinSquare<N>]) -> Self {
+        MOLS { sqs: sqs.to_vec() }
+    }
+
     pub fn sqs(&self) -> &[LatinSquare<N>] {
         &self.sqs
     }
 
-    pub fn normalize_main_class_set(&self) -> Self {
+    pub fn normalize_main_class_set(
+        &self,
+        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
+    ) -> Self {
         let mut rows = [[0; N]; N];
         for (i, row) in rows.iter_mut().enumerate() {
             *row = [i as u8; N];
@@ -63,8 +70,8 @@ impl<const N: usize> MOLS<N> {
         for [r, c, s] in TupleIterator::<3>::new(values.len())
             .flat_map(|rcs| PermutationIter::new().map(move |p| p.apply_array(rcs)))
         {
-            let (sq, permutations) =
-                LatinSquare::from_rcs(values[r], values[c], values[s]).isotopy_class_permutations();
+            let (sq, permutations) = LatinSquare::from_rcs(values[r], values[c], values[s])
+                .isotopy_class_permutations(lookup);
 
             match sq.cmp(&min_sq) {
                 Ordering::Less => {
@@ -76,7 +83,7 @@ impl<const N: usize> MOLS<N> {
             }
         }
 
-        assert!(min_sq == min_sq.main_class());
+        debug_assert!(min_sq == min_sq.main_class());
 
         let mut min_mols = self.clone();
         for (rcs, perms) in min_perms {
@@ -93,22 +100,14 @@ impl<const N: usize> MOLS<N> {
 
                     let sq = LatinSquare::from_rcs(rows, cols, *vals)
                         .permuted_rows(&perm[0])
-                        .permuted_cols(&perm[1])
-                        .permuted_vals(&perm[2]);
-
-                    if i == rcs[2] {
-                        assert_eq!(sq, min_sq);
-                    }
+                        .permuted_cols(&perm[1]);
 
                     sqs.push(sq);
                 }
 
-                let mut mols = MOLS::new(&sqs).unwrap();
-                // dbg!(&mols);
+                let mut mols = MOLS { sqs };
                 mols.reduce_all_sqs();
                 mols.sqs.sort();
-                // dbg!(&mols);
-                // dbg!(&mols);
 
                 if mols < min_mols {
                     min_mols = mols;

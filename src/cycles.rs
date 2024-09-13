@@ -248,6 +248,39 @@ pub fn generate_minimize_rows_lookup_simd<const N: usize>() -> PermutationSimdLo
         .collect()
 }
 
+pub type PermutationLookup<const N: usize> = Vec<Vec<(Permutation<N>, Permutation<N>)>>;
+
+pub fn generate_minimize_rows_lookup<const N: usize>() -> PermutationLookup<N> {
+    generate_cycle_structures(N)
+        .into_iter()
+        .map(|cycle| {
+            let mut rows = [[0; N]; 2];
+
+            for i in 0..N {
+                rows[0][i] = i as u8;
+            }
+
+            let mut index = 0;
+            for cycle in cycle {
+                let start_index = index;
+                index += cycle;
+                for j in 0..cycle {
+                    rows[1][start_index + j] = (start_index + (j + 1) % cycle) as u8;
+                }
+            }
+
+            let cycle_permutations = CyclePermutations::new(rows);
+            let mut permutations: Vec<_> = cycle_permutations.collect();
+
+            permutations.sort_unstable();
+            permutations.dedup();
+            permutations.shrink_to_fit();
+
+            permutations
+        })
+        .collect()
+}
+
 pub fn minimize_rows<const N: usize>(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>, Permutation<N>)> {
     let cycle_permutations = CyclePermutations::new(*rows);
     let mut permutations: Vec<_> = cycle_permutations.collect();
@@ -308,7 +341,7 @@ pub fn minimize_rows_with_lookup<'a, const N: usize>(
 
     // fix lookup by (s,c)
     let symbol_permutation = symbol_permutation.inverse();
-    let column_permutation = column_permutation.inverse();
+    let column_permutation = column_permutation;
 
     let permutations = permutations.iter().map(move |(s, c)| {
         (
