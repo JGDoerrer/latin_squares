@@ -7,8 +7,8 @@ use std::{
 use crate::{
     bitset::{BitSet128, BitSet16},
     cycles::{minimize_rows, minimize_rows_with_lookup, CYCLE_STRUCTURES},
+    latin_square_generator::LatinSquareGenerator,
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
-    oa_generator::OAGenerator,
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationIter},
     permutation_dyn::PermutationDyn,
@@ -934,8 +934,7 @@ impl<const N: usize> LatinSquare<N> {
                 self.without_cols(triple),
                 self.without_vals(triple),
             ] {
-                let solutions =
-                    OAGenerator::<N, 1>::from_partial_sq(partial).map(|s| s.squares()[0]);
+                let solutions = LatinSquareGenerator::<N>::from_partial_sq(&partial);
 
                 for solution in solutions {
                     let difference = self.difference_mask(&solution);

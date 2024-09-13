@@ -32,14 +32,6 @@ impl<const N: usize> RowPartialLatinSquare<N> {
     };
 
     #[inline]
-    fn pad_row(row: [u8; N]) -> [u8; 16] {
-        assert!(N <= 16);
-        let mut new_row = [0; 16];
-        new_row[..N].copy_from_slice(&row);
-        new_row
-    }
-
-    #[inline]
     fn shrink_row(row: [u8; 16]) -> [u8; N] {
         assert!(N <= 16);
         let mut new_row = [0; N];
