@@ -3,17 +3,16 @@ use std::{cmp::Ordering, fmt::Display};
 use crate::{
     latin_square::{self, LatinSquare},
     permutation::{Permutation, PermutationIter},
-    permutation_dyn::{PermutationDyn, PermutationDynIter},
+    permutation_dyn::PermutationDyn,
     tuple_iterator::TupleIterator,
-    Mode,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MOLS<const N: usize> {
+pub struct Mols<const N: usize> {
     sqs: Vec<LatinSquare<N>>,
 }
 
-impl<const N: usize> MOLS<N> {
+impl<const N: usize> Mols<N> {
     pub fn new(sqs: &[LatinSquare<N>]) -> Result<Self, (usize, usize)> {
         for i in 0..sqs.len() {
             for j in (i + 1)..sqs.len() {
@@ -23,11 +22,11 @@ impl<const N: usize> MOLS<N> {
             }
         }
 
-        Ok(MOLS { sqs: sqs.to_vec() })
+        Ok(Mols { sqs: sqs.to_vec() })
     }
 
     pub fn new_unchecked(sqs: &[LatinSquare<N>]) -> Self {
-        MOLS { sqs: sqs.to_vec() }
+        Mols { sqs: sqs.to_vec() }
     }
 
     pub fn sqs(&self) -> &[LatinSquare<N>] {
@@ -53,7 +52,7 @@ impl<const N: usize> MOLS<N> {
 
         let values: Vec<_> = [rows, cols]
             .into_iter()
-            .chain(self.sqs.iter().map(|sq| sq.clone().to_values()))
+            .chain(self.sqs.iter().map(|sq| (*sq).to_values()))
             .map(|v| v.map(|v| v.map(|v| v as usize)))
             .collect();
 
@@ -105,7 +104,7 @@ impl<const N: usize> MOLS<N> {
                     sqs.push(sq);
                 }
 
-                let mut mols = MOLS { sqs };
+                let mut mols = Mols { sqs };
                 mols.reduce_all_sqs();
                 mols.sqs.sort();
 
@@ -129,13 +128,13 @@ impl<const N: usize> MOLS<N> {
 
     pub fn permute_rows(&mut self, permutation: &Permutation<N>) {
         for sq in self.sqs.iter_mut() {
-            sq.permuted_rows(&permutation);
+            sq.permuted_rows(permutation);
         }
     }
 
     pub fn permute_cols(&mut self, permutation: &Permutation<N>) {
         for sq in self.sqs.iter_mut() {
-            sq.permuted_cols(&permutation);
+            sq.permuted_cols(permutation);
         }
     }
 
@@ -153,7 +152,7 @@ impl<const N: usize> MOLS<N> {
     }
 }
 
-impl<const N: usize> Display for MOLS<N> {
+impl<const N: usize> Display for Mols<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -167,12 +166,12 @@ impl<const N: usize> Display for MOLS<N> {
     }
 }
 
-impl<const N: usize> Ord for MOLS<N> {
+impl<const N: usize> Ord for Mols<N> {
     fn cmp(&self, other: &Self) -> Ordering {
         assert_eq!(self.sqs.len(), other.sqs.len());
 
         for (a, b) in self.sqs.iter().zip(&other.sqs) {
-            match a.cmp_rows(&b) {
+            match a.cmp_rows(b) {
                 Ordering::Equal => {}
                 o => return o,
             }
@@ -182,7 +181,7 @@ impl<const N: usize> Ord for MOLS<N> {
     }
 }
 
-impl<const N: usize> PartialOrd for MOLS<N> {
+impl<const N: usize> PartialOrd for Mols<N> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -233,7 +232,7 @@ impl Display for Error {
     }
 }
 
-impl<const N: usize> TryFrom<&str> for MOLS<N> {
+impl<const N: usize> TryFrom<&str> for Mols<N> {
     type Error = Error;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let separator_count = value.chars().filter(|c| *c == SEPARATOR).count();
@@ -268,7 +267,7 @@ impl<const N: usize> TryFrom<&str> for MOLS<N> {
             sqs.push(sq?);
         }
 
-        let mols = MOLS::new(&sqs).map_err(|indices| Error::NotOrthogonal { indices })?;
+        let mols = Mols::new(&sqs).map_err(|indices| Error::NotOrthogonal { indices })?;
 
         Ok(mols)
     }

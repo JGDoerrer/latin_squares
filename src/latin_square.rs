@@ -520,10 +520,10 @@ impl<const N: usize> LatinSquare<N> {
                 Ordering::Less => {
                     min_cycle_index = cycles;
                     candidates.clear();
-                    candidates.push((rows.map(|r| r.clone()), row_permutation));
+                    candidates.push((rows.map(|r| *r), row_permutation));
                 }
                 Ordering::Equal => {
-                    candidates.push((rows.map(|r| r.clone()), row_permutation));
+                    candidates.push((rows.map(|r| *r), row_permutation));
                 }
                 Ordering::Greater => {}
             }

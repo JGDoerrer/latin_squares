@@ -429,7 +429,7 @@ impl<const N: usize> PartialLatinSquare<N> {
         false
     }
 
-    pub fn minimize_rows(&self, lookup: &Vec<Vec<(Permutation<N>, Permutation<N>)>>) -> Self {
+    pub fn minimize_rows(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Self {
         let full_rows: Vec<_> = self
             .rows
             .iter()

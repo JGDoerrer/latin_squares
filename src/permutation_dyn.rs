@@ -68,9 +68,7 @@ impl PermutationDyn {
             self.into()
         } else if self.0.len() < N {
             let mut new = [0; N];
-            for i in 0..self.0.len() {
-                new[i] = self.0[i];
-            }
+            new[..self.0.len()].copy_from_slice(&self.0[..]);
             Permutation::from_array(new)
         } else {
             todo!()

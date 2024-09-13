@@ -17,7 +17,7 @@ use latin_square::LatinSquare;
 
 use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::LatinSquareGeneratorDyn;
-use mols::MOLS;
+use mols::Mols;
 
 use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
@@ -565,7 +565,7 @@ fn find_mols<const N: usize>(mols: usize) {
                     current_mols.push(*orthogonal);
 
                     if current_mols.len() == mols {
-                        let mols = MOLS::new_unchecked(&current_mols);
+                        let mols = Mols::new_unchecked(&current_mols);
                         let normalized_mols = mols.normalize_main_class_set(&lookup);
 
                         if found.insert(normalized_mols.clone()) {
@@ -686,7 +686,7 @@ fn encode<const N: usize>() {
     while let Some(sq) = read_sq_n_from_stdin::<N>() {
         encode_sq::<N>(sq, prev_sq, &mut buffer);
 
-        stdout.write(&buffer).unwrap();
+        stdout.write_all(&buffer).unwrap();
 
         prev_sq = Some(sq);
         buffer.clear();
@@ -706,7 +706,7 @@ fn decode<const N: usize>() {
 
     loop {
         let mut same_rows = [0u8];
-        stdin.read(&mut same_rows).unwrap();
+        stdin.read_exact(&mut same_rows).unwrap();
         let same_rows = same_rows[0];
         assert!(same_rows <= N as u8);
 
@@ -769,14 +769,14 @@ fn decode_sq<const N: usize>(
 
     if let Some(prev_sq) = prev_sq {
         for i in 0..same_rows {
-            rows[i] = prev_sq.get_row(i).clone();
+            rows[i] = *prev_sq.get_row(i);
             for j in 0..N {
                 cols[j].remove(rows[i][j].into());
             }
         }
     }
 
-    for i in same_rows as usize..N - 1 {
+    for i in same_rows..N - 1 {
         let mut coded = u64::from_le_bytes(buffer[i - same_rows]);
 
         let mut row = [0; N];
@@ -811,9 +811,7 @@ fn decode_sq<const N: usize>(
 
     rows[N - 1] = last_row;
 
-    let sq = LatinSquare::try_from(rows).unwrap();
-
-    sq
+    LatinSquare::try_from(rows).unwrap()
 }
 
 fn read_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = LatinSquare<N>> {

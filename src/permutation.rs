@@ -67,7 +67,7 @@ impl<const N: usize> Permutation<N> {
         &self.0
     }
 
-    pub fn to_simd(self) -> PermutationSimd {
+    pub fn into_simd(self) -> PermutationSimd {
         PermutationSimd::from_slice(&self.0.map(|v| v as u8))
     }
 

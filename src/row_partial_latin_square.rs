@@ -130,8 +130,8 @@ impl<const N: usize> RowPartialLatinSquare<N> {
 
                 let (rows, _) = Self::permuted_cols_vals_simd(
                     &in_rows[0..full_rows],
-                    &inverse_column_permutation.to_simd(),
-                    &symbol_permutation.to_simd(),
+                    &inverse_column_permutation.into_simd(),
+                    &symbol_permutation.into_simd(),
                     false,
                 );
 
@@ -293,8 +293,8 @@ impl<const N: usize> RowPartialLatinSquare<N> {
 
                 let (rows, _) = Self::permuted_cols_vals_simd(
                     &self.rows[0..self.full_rows],
-                    &inverse_column_permutation.to_simd(),
-                    &symbol_permutation.to_simd(),
+                    &inverse_column_permutation.into_simd(),
+                    &symbol_permutation.into_simd(),
                     false,
                 );
 

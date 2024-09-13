@@ -236,7 +236,7 @@ pub fn generate_minimize_rows_lookup_simd<const N: usize>() -> PermutationSimdLo
 
             let cycle_permutations = CyclePermutations::new(rows);
             let mut permutations: Vec<_> = cycle_permutations
-                .map(|(s, c)| (s.to_simd(), c.to_simd()))
+                .map(|(s, c)| (s.into_simd(), c.into_simd()))
                 .collect();
 
             permutations.sort_unstable();
@@ -341,7 +341,6 @@ pub fn minimize_rows_with_lookup<'a, const N: usize>(
 
     // fix lookup by (s,c)
     let symbol_permutation = symbol_permutation.inverse();
-    let column_permutation = column_permutation;
 
     let permutations = permutations.iter().map(move |(s, c)| {
         (
