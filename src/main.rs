@@ -8,7 +8,7 @@ use std::{
     vec,
 };
 
-use bitset::BitSet16;
+use bitset::{BitSet128, BitSet16};
 use clap::{self, Parser, Subcommand};
 
 use cycles::{generate_minimize_rows_lookup, generate_minimize_rows_lookup_simd};
@@ -55,13 +55,17 @@ mod tuple_iterator;
 
 #[derive(Subcommand, Clone)]
 enum Mode {
+    /// Prints a latin square in a 2D grid
     PrettyPrint,
     /// Prints all solutions for a partial latin square
     Solve,
+    /// Permutes the symbols of a latin square randomly
     Shuffle,
+    /// Prints information about a latin square
     Analyse {
         n: usize,
     },
+    /// Prints the main class representative of a latin square
     NormalizeMainClass {
         n: usize,
     },
@@ -73,7 +77,7 @@ enum Mode {
     },
     GenerateMainClasses {
         n: usize,
-        #[arg(long)]
+        #[arg(long, default_value_t = 1)]
         max_threads: usize,
     },
     FindAllCS,
@@ -101,6 +105,9 @@ enum Mode {
         n: usize,
         mols: usize,
     },
+    FindAllMOLS {
+        n: usize,
+    },
     ToTex,
     Encode {
         n: usize,
@@ -108,6 +115,7 @@ enum Mode {
     Decode {
         n: usize,
     },
+    DecodeCS,
 }
 
 #[derive(Parser)]
@@ -155,9 +163,11 @@ fn main() {
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
+        Mode::FindAllMOLS { n } => match_n!(n, find_all_mols),
         Mode::ToTex => to_tex(),
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
+        Mode::DecodeCS => decode_cs(),
     }
 }
 
@@ -308,8 +318,12 @@ fn pretty_print_sq(sq: impl PartialLatinSquareTrait) {
 }
 
 fn normalize_main_class<const N: usize>() {
+    let lookup = generate_minimize_rows_lookup();
+
     for sq in read_sqs_from_stdin_n::<N>() {
-        println!("{}", sq.main_class());
+        if writeln!(stdout(), "{}", sq.main_class_lookup(&lookup)).is_err() {
+            return;
+        }
     }
 }
 
@@ -464,9 +478,6 @@ fn find_lcs(max_threads: usize) {
 
 fn find_lcs_sq(sq: LatinSquareDyn) {
     let unavoidable_sets = sq.unavoidable_sets();
-    unavoidable_sets.iter().for_each(|sets| {
-        dbg!(sets.len());
-    });
 
     let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
 
@@ -510,24 +521,69 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
 
 fn find_all_cs() {
     while let Some(sq) = read_sq_from_stdin() {
-        println!("{sq}");
-        let unavoidable_sets = sq.all_unavoidable_sets_order_1();
+        let mut unavoidable_sets = sq.unavoidable_sets();
         dbg!(unavoidable_sets.len());
 
-        let hitting_sets = MMCSHittingSetGenerator::new(vec![unavoidable_sets], sq.n() * sq.n());
+        let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
 
         for hitting_set in hitting_sets {
             let partial_sq = sq.mask(hitting_set);
+
+            if !partial_sq.is_critical_set_of(&sq) {
+                // dbg!(&partial_sq);
+                for solution in LatinSquareGeneratorDyn::from_partial_sq(&partial_sq) {
+                    let difference = sq.difference_mask(&solution);
+
+                    if !difference.is_empty()
+                        && !unavoidable_sets.iter().any(|s| s.is_subset_of(difference))
+                    {
+                        unavoidable_sets.retain(|s| !difference.is_subset_of(*s));
+                        unavoidable_sets.push(difference);
+                        dbg!(unavoidable_sets.len());
+                    }
+                }
+            }
+        }
+
+        let critical_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+
+        let bytes_needed = (sq.n() * sq.n()).div_ceil(8);
+
+        let mut stdout = stdout();
+
+        for set in critical_sets {
+            let partial_sq = sq.mask(set);
 
             if !partial_sq.is_critical_set_of(&sq) {
                 dbg!(partial_sq);
                 unreachable!();
             }
 
-            println!("{partial_sq}");
+            stdout
+                .write_all(&set.bits().to_le_bytes()[0..bytes_needed])
+                .unwrap();
         }
+    }
+}
 
-        println!();
+fn decode_cs() {
+    let Some(sq) = read_sq_from_stdin() else {
+        eprintln!("No square provided");
+        return;
+    };
+
+    let bytes_needed = (sq.n() * sq.n()).div_ceil(8);
+
+    let mut stdin = stdin();
+
+    let mut buffer = [0; 16];
+
+    while stdin.read_exact(&mut buffer[0..bytes_needed]).is_ok() {
+        let bitset = BitSet128::from_bits(u128::from_le_bytes(buffer));
+
+        let partial_sq = sq.mask(bitset);
+
+        println!("{partial_sq}");
     }
 }
 
@@ -581,6 +637,45 @@ fn find_mols<const N: usize>(mols: usize) {
                         let next_index = *index;
                         indices.push(next_index);
                     }
+
+                    continue 'i;
+                }
+            }
+
+            current_mols.pop();
+            indices.pop();
+        }
+    }
+}
+
+fn find_all_mols<const N: usize>() {
+    let mut found = HashSet::new();
+
+    let lookup = generate_minimize_rows_lookup();
+
+    while let Some(sq) = read_sq_n_from_stdin::<N>() {
+        let mut current_mols = vec![sq];
+        let mut indices = vec![0];
+        let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
+
+        'i: while let Some(index) = indices.last_mut() {
+            for orthogonal in orthogonal.iter().skip(*index) {
+                *index += 1;
+                if current_mols
+                    .iter()
+                    .all(|sq| sq.is_orthogonal_to(orthogonal))
+                {
+                    current_mols.push(*orthogonal);
+
+                    let mols = Mols::new_unchecked(&current_mols);
+                    let normalized_mols = mols.normalize_main_class_set(&lookup);
+
+                    if found.insert(normalized_mols.clone()) {
+                        println!("{normalized_mols}");
+                    }
+
+                    let next_index = *index;
+                    indices.push(next_index);
 
                     continue 'i;
                 }

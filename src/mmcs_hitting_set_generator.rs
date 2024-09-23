@@ -35,8 +35,7 @@ struct StackEntry {
 }
 
 impl MMCSHittingSetGenerator {
-    pub fn new(mut sets: Vec<Vec<BitSet>>, max_entries: usize) -> Self {
-        let sets = sets.remove(0);
+    pub fn new(sets: Vec<BitSet>, max_entries: usize) -> Self {
         let largest_entry = sets
             .iter()
             .map(|set| set.into_iter().last().unwrap())

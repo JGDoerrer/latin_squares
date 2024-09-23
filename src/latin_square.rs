@@ -1259,9 +1259,13 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn permuted_rows(&self, permutation: &Permutation<N>) -> Self {
-        let new_values = permutation.apply_array(self.rows);
+        let mut new = *self;
+        new.permute_rows(permutation);
+        new
+    }
 
-        Self::new(new_values)
+    pub fn permute_rows(&mut self, permutation: &Permutation<N>) {
+        self.rows = permutation.apply_array(self.rows);
     }
 
     pub fn permuted_cols(&self, permutation: &Permutation<N>) -> Self {

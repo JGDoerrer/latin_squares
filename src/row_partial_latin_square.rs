@@ -314,7 +314,8 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         true
     }
 
-    /// does not fix col_masks
+    /// does not fix col_masks.
+    /// assumes first two rows stay the same.
     fn permuted_cols_vals_simd(
         rows: &[[u8; 16]],
         inverse_column_permutation: &PermutationSimd,
@@ -332,6 +333,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         let val_permutation = Simd::from_array(val_permutation_simd);
 
         let mut new_rows = [[0; 16]; N];
+
         let mut full_rows = rows.len();
 
         for i in 0..rows.len() {
@@ -346,6 +348,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                     new_rows[new_row[0] as usize] = new_row;
                 } else {
                     full_rows -= 1;
+                    break;
                 }
             } else {
                 new_rows[i] = new_row;
@@ -355,7 +358,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         (new_rows, full_rows)
     }
 
-    fn from_rcv(
+    fn from_rcs(
         rows: &[[u8; 16]],
         cols: &[[u8; 16]],
         vals: &[[u8; 16]],
@@ -406,7 +409,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         let vals = &self.rows[0..N];
 
         let [rows, cols, vals] = permutation.apply_array([rows, cols, vals]);
-        Self::from_rcv(rows, cols, vals, lookup)
+        Self::from_rcs(rows, cols, vals, lookup)
     }
 
     pub fn is_minimal_main_class(
@@ -419,6 +422,12 @@ impl<const N: usize> RowPartialLatinSquare<N> {
             .skip(1)
             .map(|perm| self.permuted_rcs(&perm, lookup))
         {
+            match conjugate.min_row_cycle_index.cmp(&self.min_row_cycle_index) {
+                Ordering::Less => return false,
+                Ordering::Equal => {}
+                Ordering::Greater => continue,
+            }
+
             'i: for i in 0..N {
                 for j in 0..N {
                     match self.rows[i][j].cmp(&conjugate.rows[i][j]) {

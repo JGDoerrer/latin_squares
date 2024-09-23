@@ -89,22 +89,17 @@ impl<const N: usize> Mols<N> {
             let rows = values[rcs[0]];
             let cols = values[rcs[1]];
 
+            let sqs: Vec<_> = values
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != rcs[0] && *i != rcs[1])
+                .map(|(_, vals)| LatinSquare::from_rcs(rows, cols, *vals))
+                .collect();
+
             for perm in perms {
-                let mut sqs = Vec::new();
-
-                for (i, vals) in values.iter().enumerate() {
-                    if i == rcs[0] || i == rcs[1] {
-                        continue;
-                    }
-
-                    let sq = LatinSquare::from_rcs(rows, cols, *vals)
-                        .permuted_rows(&perm[0])
-                        .permuted_cols(&perm[1]);
-
-                    sqs.push(sq);
-                }
-
-                let mut mols = Mols { sqs };
+                let mut mols = Mols { sqs: sqs.clone() };
+                mols.permute_rows(&perm[0]);
+                mols.permute_cols(&perm[1]);
                 mols.reduce_all_sqs();
                 mols.sqs.sort();
 
@@ -128,13 +123,13 @@ impl<const N: usize> Mols<N> {
 
     pub fn permute_rows(&mut self, permutation: &Permutation<N>) {
         for sq in self.sqs.iter_mut() {
-            sq.permuted_rows(permutation);
+            sq.permute_rows(permutation);
         }
     }
 
     pub fn permute_cols(&mut self, permutation: &Permutation<N>) {
         for sq in self.sqs.iter_mut() {
-            sq.permuted_cols(permutation);
+            sq.permute_cols_simd(permutation);
         }
     }
 
@@ -145,9 +140,14 @@ impl<const N: usize> Mols<N> {
     fn reduce_all_sqs(&mut self) {
         for sq in self.sqs.iter_mut() {
             let first_row = sq.get_row(0);
-            let symbol_permutation =
-                Permutation::from_array(first_row.map(|s| s as usize)).inverse();
-            *sq = sq.permuted_vals(&symbol_permutation);
+
+            let mut permutation = [0; N];
+            for i in 0..N {
+                permutation[first_row[i] as usize] = i;
+            }
+
+            let symbol_permutation = Permutation::from_array(permutation);
+            sq.permute_vals_simd(&symbol_permutation);
         }
     }
 }

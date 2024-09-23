@@ -37,11 +37,16 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
                 continue;
             };
 
-            if sq.is_complete() {
-                unreachable!();
+            if sq.is_complete() && sq.is_minimal_main_class(&self.lookup) {
+                let sq: LatinSquare<N> = sq.try_into().unwrap();
+
+                let mut stdout = stdout();
+                writeln!(stdout, "{sq}").unwrap();
+
+                continue;
             }
 
-            if self.row_generators.len() <= 2 {
+            if self.row_generators.len() <= 2 || max_threads == 1 {
                 self.row_generators.push(RowGenerator::new(sq, self.lookup));
             } else {
                 while self.threads.len() >= max_threads {

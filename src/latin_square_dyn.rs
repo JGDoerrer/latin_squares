@@ -63,14 +63,14 @@ impl LatinSquareDyn {
         })
     }
 
-    pub fn unavoidable_sets(&self) -> Vec<Vec<BitSet128>> {
-        vec![self.unavoidable_sets_order_1()]
+    pub fn unavoidable_sets(&self) -> Vec<BitSet128> {
+        self.unavoidable_sets_order_1()
     }
 
     pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
         let mut sets: Vec<BitSet128> = Vec::new();
 
-        for tuple in TupleIterator::<5>::new(self.n) {
+        for tuple in TupleIterator::<3>::new(self.n) {
             for partial in [
                 self.without_rows(&tuple),
                 self.without_cols(&tuple),
@@ -88,14 +88,15 @@ impl LatinSquareDyn {
                 }
             }
         }
-        sets = sets
-            .iter()
-            .filter(|set| {
-                sets.iter()
-                    .all(|other| other == *set || !other.is_subset_of(**set))
-            })
-            .copied()
-            .collect();
+
+        // sets = sets
+        //     .iter()
+        //     .filter(|set| {
+        //         sets.iter()
+        //             .all(|other| other == *set || !other.is_subset_of(**set))
+        //     })
+        //     .copied()
+        //     .collect();
 
         sets.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         sets.dedup();
