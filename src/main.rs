@@ -110,6 +110,8 @@ enum Mode {
         n: usize,
         #[arg(long, default_value_t = 1)]
         max_threads: usize,
+        #[arg(long, default_value_t = 10)]
+        buffer_size: usize,
     },
     ToTex,
     Encode {
@@ -166,7 +168,11 @@ fn main() {
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
-        Mode::FindAllMOLS { n, max_threads } => match_n!(n, find_all_mols, max_threads),
+        Mode::FindAllMOLS {
+            n,
+            max_threads,
+            buffer_size,
+        } => match_n!(n, find_all_mols, max_threads, buffer_size),
         Mode::ToTex => to_tex(),
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
@@ -642,7 +648,7 @@ fn find_mols<const N: usize>(mols: usize) {
     }
 }
 
-fn find_all_mols<const N: usize>(max_threads: usize) {
+fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
     let found: Arc<RwLock<HashSet<Mols<N>>>> = Arc::new(RwLock::new(HashSet::new()));
     let lookup = Arc::new(generate_minimize_rows_lookup());
 
@@ -655,10 +661,24 @@ fn find_all_mols<const N: usize>(max_threads: usize) {
 
     let mut threads = Vec::new();
 
+    let mut buffer: Vec<LatinSquare<N>> = Vec::new();
+
     while let Some(sq) = read_sq_n_from_stdin() {
+        buffer.push(sq);
+
+        if buffer.len() < buffer_size {
+            continue;
+        }
+
         let found = found.clone();
         let lookup = lookup.clone();
-        let thread = thread::spawn(move || find_all_mols_for_sq(sq, found, lookup));
+        let move_buffer = buffer.drain(..).collect::<Vec<_>>();
+
+        let thread = thread::spawn(move || {
+            for sq in move_buffer {
+                find_all_mols_for_sq(sq, found.clone(), lookup.clone())
+            }
+        });
 
         threads.push(thread);
 
