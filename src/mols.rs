@@ -3,7 +3,6 @@ use std::{cmp::Ordering, fmt::Display};
 use crate::{
     latin_square::{self, LatinSquare},
     permutation::{Permutation, PermutationIter},
-    permutation_dyn::PermutationDyn,
     tuple_iterator::TupleIterator,
 };
 
@@ -27,10 +26,6 @@ impl<const N: usize> Mols<N> {
 
     pub fn new_unchecked(sqs: &[LatinSquare<N>]) -> Self {
         Mols { sqs: sqs.to_vec() }
-    }
-
-    pub fn sqs(&self) -> &[LatinSquare<N>] {
-        &self.sqs
     }
 
     pub fn normalize_main_class_set(
@@ -112,15 +107,6 @@ impl<const N: usize> Mols<N> {
         min_mols
     }
 
-    /// No swapping squares
-    pub fn normalize_isotopy_class(&mut self) {
-        let (_, permutation) = self.sqs[0].isotopy_class_permutation();
-
-        self.permute_rows(&permutation[0]);
-        self.permute_cols(&permutation[1]);
-        self.reduce_all_sqs();
-    }
-
     pub fn permute_rows(&mut self, permutation: &Permutation<N>) {
         for sq in self.sqs.iter_mut() {
             sq.permute_rows(permutation);
@@ -131,10 +117,6 @@ impl<const N: usize> Mols<N> {
         for sq in self.sqs.iter_mut() {
             sq.permute_cols_simd(permutation);
         }
-    }
-
-    pub fn permute_sqs(&mut self, permutation: &PermutationDyn) {
-        self.sqs = permutation.apply_vec(self.sqs.clone());
     }
 
     fn reduce_all_sqs(&mut self) {

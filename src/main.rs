@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Read, Write},
+    sync::{Arc, RwLock},
     thread::{self},
     time::Duration,
     vec,
@@ -24,7 +25,7 @@ use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 
 use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_square_generator::PartialSquareGeneratorDyn;
-use permutation::factorial;
+use permutation::{factorial, Permutation};
 use permutation_dyn::PermutationDyn;
 use random_latin_square_generator::RandomLatinSquareGenerator;
 use threaded_main_class_generator::ThreadedMainClassGenerator;
@@ -107,6 +108,8 @@ enum Mode {
     },
     FindAllMOLS {
         n: usize,
+        #[arg(long, default_value_t = 1)]
+        max_threads: usize,
     },
     ToTex,
     Encode {
@@ -163,7 +166,7 @@ fn main() {
         Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
-        Mode::FindAllMOLS { n } => match_n!(n, find_all_mols),
+        Mode::FindAllMOLS { n, max_threads } => match_n!(n, find_all_mols, max_threads),
         Mode::ToTex => to_tex(),
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
@@ -360,15 +363,10 @@ fn find_scs(reverse: bool) {
     for sq in read_sqs_from_stdin() {
         println!("{}", sq);
 
-        let unavoidable_sets = sq.unavoidable_sets();
-        unavoidable_sets.iter().for_each(|sets| {
+        let differences = sq.differences();
+        differences.iter().for_each(|sets| {
             dbg!(sets.len());
         });
-
-        // for set in &unavoidable_sets[0] {
-        //     set.print_sq(sq.n());
-        // }
-        // println!();
 
         let start = *KNOWN_SCS.get(sq.n()).unwrap_or(&sq.n());
         let end = sq.n().pow(2);
@@ -376,7 +374,7 @@ fn find_scs(reverse: bool) {
         if !reverse {
             for i in start..=end {
                 dbg!(i);
-                let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), i);
+                let hitting_sets = MMCSHittingSetGenerator::new(differences.clone(), i);
 
                 let mut found = false;
                 let mut scs = HashSet::new();
@@ -386,7 +384,6 @@ fn find_scs(reverse: bool) {
                     for partial_sq in
                         PartialSquareGeneratorDyn::new_partial(sq.clone(), partial_sq.clone(), i)
                     {
-                        // dbg!(partial_sq);
                         let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
                         let first_solution = solutions.next();
                         let second_solution = solutions.next();
@@ -394,8 +391,6 @@ fn find_scs(reverse: bool) {
                         if second_solution.is_none()
                             && first_solution.is_some_and(|solution| solution == sq)
                         {
-                            // println!("{}", partial_sq.to_string());
-
                             found = true;
                             if scs.insert(partial_sq.clone()) {
                                 println!("{}", partial_sq);
@@ -410,7 +405,7 @@ fn find_scs(reverse: bool) {
                 }
             }
         } else {
-            let mut hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), end);
+            let mut hitting_sets = MMCSHittingSetGenerator::new(differences, end);
             for i in (start..=end).rev() {
                 dbg!(i);
 
@@ -422,7 +417,6 @@ fn find_scs(reverse: bool) {
                     for partial_sq in
                         PartialSquareGeneratorDyn::new_partial(sq.clone(), partial_sq, i)
                     {
-                        // dbg!(partial_sq);
                         let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
                         let first_solution = solutions.next();
                         let second_solution = solutions.next();
@@ -430,8 +424,6 @@ fn find_scs(reverse: bool) {
                         if second_solution.is_none()
                             && first_solution.is_some_and(|solution| solution == sq)
                         {
-                            // println!("{}", partial_sq.to_string());
-
                             found = true;
                             if scs.insert(partial_sq.clone()) {
                                 println!("{}", partial_sq);
@@ -449,8 +441,6 @@ fn find_scs(reverse: bool) {
         }
         println!();
     }
-
-    // println!("min: {min}");
 }
 
 fn find_lcs(max_threads: usize) {
@@ -474,12 +464,16 @@ fn find_lcs(max_threads: usize) {
             }
         }
     }
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
 }
 
 fn find_lcs_sq(sq: LatinSquareDyn) {
-    let unavoidable_sets = sq.unavoidable_sets();
+    let differences = sq.differences();
 
-    let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+    let hitting_sets = MMCSHittingSetGenerator::new(differences, sq.n() * sq.n());
 
     let mut lcs = PartialLatinSquareDyn::empty(sq.n());
     for hitting_set in hitting_sets {
@@ -521,10 +515,10 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
 
 fn find_all_cs() {
     while let Some(sq) = read_sq_from_stdin() {
-        let mut unavoidable_sets = sq.unavoidable_sets();
-        dbg!(unavoidable_sets.len());
+        let mut differences = sq.differences();
+        dbg!(differences.len());
 
-        let hitting_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+        let hitting_sets = MMCSHittingSetGenerator::new(differences.clone(), sq.n() * sq.n());
 
         for hitting_set in hitting_sets {
             let partial_sq = sq.mask(hitting_set);
@@ -535,17 +529,17 @@ fn find_all_cs() {
                     let difference = sq.difference_mask(&solution);
 
                     if !difference.is_empty()
-                        && !unavoidable_sets.iter().any(|s| s.is_subset_of(difference))
+                        && !differences.iter().any(|s| s.is_subset_of(difference))
                     {
-                        unavoidable_sets.retain(|s| !difference.is_subset_of(*s));
-                        unavoidable_sets.push(difference);
-                        dbg!(unavoidable_sets.len());
+                        differences.retain(|s| !difference.is_subset_of(*s));
+                        differences.push(difference);
+                        dbg!(differences.len());
                     }
                 }
             }
         }
 
-        let critical_sets = MMCSHittingSetGenerator::new(unavoidable_sets.clone(), sq.n() * sq.n());
+        let critical_sets = MMCSHittingSetGenerator::new(differences.clone(), sq.n() * sq.n());
 
         let bytes_needed = (sq.n() * sq.n()).div_ceil(8);
 
@@ -648,42 +642,80 @@ fn find_mols<const N: usize>(mols: usize) {
     }
 }
 
-fn find_all_mols<const N: usize>() {
-    let mut found = HashSet::new();
+fn find_all_mols<const N: usize>(max_threads: usize) {
+    let found: Arc<RwLock<HashSet<Mols<N>>>> = Arc::new(RwLock::new(HashSet::new()));
+    let lookup = Arc::new(generate_minimize_rows_lookup());
 
-    let lookup = generate_minimize_rows_lookup();
-
-    while let Some(sq) = read_sq_n_from_stdin::<N>() {
-        let mut current_mols = vec![sq];
-        let mut indices = vec![0];
-        let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
-
-        'i: while let Some(index) = indices.last_mut() {
-            for orthogonal in orthogonal.iter().skip(*index) {
-                *index += 1;
-                if current_mols
-                    .iter()
-                    .all(|sq| sq.is_orthogonal_to(orthogonal))
-                {
-                    current_mols.push(*orthogonal);
-
-                    let mols = Mols::new_unchecked(&current_mols);
-                    let normalized_mols = mols.normalize_main_class_set(&lookup);
-
-                    if found.insert(normalized_mols.clone()) {
-                        println!("{normalized_mols}");
-                    }
-
-                    let next_index = *index;
-                    indices.push(next_index);
-
-                    continue 'i;
-                }
-            }
-
-            current_mols.pop();
-            indices.pop();
+    if max_threads == 1 {
+        while let Some(sq) = read_sq_n_from_stdin() {
+            find_all_mols_for_sq(sq, found.clone(), lookup.clone());
         }
+        return;
+    }
+
+    let mut threads = Vec::new();
+
+    while let Some(sq) = read_sq_n_from_stdin() {
+        let found = found.clone();
+        let lookup = lookup.clone();
+        let thread = thread::spawn(move || find_all_mols_for_sq(sq, found, lookup));
+
+        threads.push(thread);
+
+        while threads.len() >= max_threads {
+            thread::sleep(Duration::from_millis(1));
+            for i in 0..threads.len() {
+                if !threads[i].is_finished() {
+                    continue;
+                }
+
+                let thread = threads.swap_remove(i);
+                thread.join().unwrap();
+                break;
+            }
+        }
+    }
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+}
+
+fn find_all_mols_for_sq<const N: usize>(
+    sq: LatinSquare<N>,
+    found: Arc<RwLock<HashSet<Mols<N>>>>,
+    lookup: Arc<Vec<Vec<(Permutation<N>, Permutation<N>)>>>,
+) {
+    let mut current_mols = vec![sq];
+    let mut indices = vec![0];
+    let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
+
+    'i: while let Some(index) = indices.last_mut() {
+        for orthogonal in orthogonal.iter().skip(*index) {
+            *index += 1;
+            if current_mols
+                .iter()
+                .all(|sq| sq.is_orthogonal_to(orthogonal))
+            {
+                current_mols.push(*orthogonal);
+
+                let mols = Mols::new_unchecked(&current_mols);
+                let normalized_mols = mols.normalize_main_class_set(&lookup);
+
+                if found.write().unwrap().insert(normalized_mols.clone()) {
+                    let mut stdout = stdout().lock();
+                    writeln!(stdout, "{normalized_mols}").unwrap();
+                }
+
+                let next_index = *index;
+                indices.push(next_index);
+
+                continue 'i;
+            }
+        }
+
+        current_mols.pop();
+        indices.pop();
     }
 }
 

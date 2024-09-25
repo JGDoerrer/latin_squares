@@ -63,11 +63,7 @@ impl LatinSquareDyn {
         })
     }
 
-    pub fn unavoidable_sets(&self) -> Vec<BitSet128> {
-        self.unavoidable_sets_order_1()
-    }
-
-    pub fn unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
+    pub fn differences(&self) -> Vec<BitSet128> {
         let mut sets: Vec<BitSet128> = Vec::new();
 
         for tuple in TupleIterator::<3>::new(self.n) {
@@ -88,44 +84,6 @@ impl LatinSquareDyn {
                 }
             }
         }
-
-        // sets = sets
-        //     .iter()
-        //     .filter(|set| {
-        //         sets.iter()
-        //             .all(|other| other == *set || !other.is_subset_of(**set))
-        //     })
-        //     .copied()
-        //     .collect();
-
-        sets.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-        sets.dedup();
-
-        sets
-    }
-
-    pub fn all_unavoidable_sets_order_1(&self) -> Vec<BitSet128> {
-        let mut sets: Vec<BitSet128> = Vec::new();
-
-        let solutions = LatinSquareGeneratorDyn::new(self.n);
-
-        for solution in solutions {
-            let difference = self.difference_mask(&solution);
-
-            if !difference.is_empty() && !sets.iter().any(|s| s.is_subset_of(difference)) {
-                sets.retain(|s| !difference.is_subset_of(*s));
-                sets.push(difference);
-            }
-        }
-
-        sets = sets
-            .iter()
-            .filter(|set| {
-                sets.iter()
-                    .all(|other| other == *set || !other.is_subset_of(**set))
-            })
-            .copied()
-            .collect();
 
         sets.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
         sets.dedup();

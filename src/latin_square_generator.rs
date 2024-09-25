@@ -13,7 +13,7 @@ pub struct LatinSquareGenerator<const N: usize> {
 impl<const N: usize> LatinSquareGenerator<N> {
     pub fn new() -> Self {
         LatinSquareGenerator {
-            stack: vec![(Constraints::new_reduced(), 1, 1, 0)],
+            stack: vec![(Constraints::new(), 1, 1, 0)],
         }
     }
 
