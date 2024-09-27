@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{stdin, stdout, Read, Write},
-    sync::{Arc, RwLock},
+    sync::Arc,
     thread::{self},
     time::Duration,
     vec,
@@ -70,17 +70,22 @@ enum Mode {
     NormalizeMainClass {
         n: usize,
     },
+    /// Generates all latin squares of an order n
     GenerateLatinSquares {
         n: usize,
     },
+    /// Generates a representative of each isotopy class of an order n
     GenerateIsotopyClasses {
         n: usize,
     },
+    /// Generates a representative of each main class of an order n
     GenerateMainClasses {
         n: usize,
         #[arg(long, default_value_t = 1)]
         max_threads: usize,
     },
+    /// Generates all critical sets for a latin square in a binary format.
+    /// The resulting data can be decoded with `decode-cs`
     FindAllCS,
     FindSCS {
         #[arg(short, long)]
@@ -616,11 +621,11 @@ fn find_mols<const N: usize>(mols: usize) {
                     current_mols.push(*orthogonal);
 
                     if current_mols.len() == mols {
-                        let mols = Mols::new_unchecked(&current_mols);
-                        let normalized_mols = mols.normalize_main_class_set(&lookup);
-
-                        if found.insert(normalized_mols.clone()) {
-                            println!("{normalized_mols}");
+                        let mols = Mols::new_unchecked(current_mols.clone());
+                        if let Some(normalized_mols) = mols.normalize_main_class_set(&lookup, &sq) {
+                            if found.insert(normalized_mols.clone()) {
+                                println!("{normalized_mols}");
+                            }
                         }
 
                         // println!(
@@ -649,12 +654,11 @@ fn find_mols<const N: usize>(mols: usize) {
 }
 
 fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
-    let found: Arc<RwLock<HashSet<Mols<N>>>> = Arc::new(RwLock::new(HashSet::new()));
     let lookup = Arc::new(generate_minimize_rows_lookup());
 
     if max_threads == 1 {
         while let Some(sq) = read_sq_n_from_stdin() {
-            find_all_mols_for_sq(sq, found.clone(), lookup.clone());
+            find_all_mols_for_sq(sq, lookup.clone());
         }
         return;
     }
@@ -670,13 +674,12 @@ fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
             continue;
         }
 
-        let found = found.clone();
         let lookup = lookup.clone();
         let move_buffer = buffer.drain(..).collect::<Vec<_>>();
 
         let thread = thread::spawn(move || {
             for sq in move_buffer {
-                find_all_mols_for_sq(sq, found.clone(), lookup.clone())
+                find_all_mols_for_sq(sq, lookup.clone())
             }
         });
 
@@ -703,12 +706,20 @@ fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
 
 fn find_all_mols_for_sq<const N: usize>(
     sq: LatinSquare<N>,
-    found: Arc<RwLock<HashSet<Mols<N>>>>,
     lookup: Arc<Vec<Vec<(Permutation<N>, Permutation<N>)>>>,
 ) {
+    let mols = sq.mols(lookup.as_slice());
+    let mut stdout = stdout().lock();
+    for mols in mols {
+        writeln!(stdout, "{mols}").unwrap();
+    }
+    return;
+
     let mut current_mols = vec![sq];
     let mut indices = vec![0];
     let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
+
+    let mut found = HashSet::new();
 
     'i: while let Some(index) = indices.last_mut() {
         for orthogonal in orthogonal.iter().skip(*index) {
@@ -719,12 +730,12 @@ fn find_all_mols_for_sq<const N: usize>(
             {
                 current_mols.push(*orthogonal);
 
-                let mols = Mols::new_unchecked(&current_mols);
-                let normalized_mols = mols.normalize_main_class_set(&lookup);
-
-                if found.write().unwrap().insert(normalized_mols.clone()) {
-                    let mut stdout = stdout().lock();
-                    writeln!(stdout, "{normalized_mols}").unwrap();
+                let mols = Mols::new_unchecked(current_mols.clone());
+                if let Some(normalized_mols) = mols.normalize_main_class_set(&lookup, &sq) {
+                    if found.insert(normalized_mols.clone()) {
+                        // let mut stdout = stdout().lock();
+                        // writeln!(stdout, "{normalized_mols}").unwrap();
+                    }
                 }
 
                 let next_index = *index;

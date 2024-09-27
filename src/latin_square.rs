@@ -1,13 +1,13 @@
 use std::{
     cmp::Ordering,
     fmt::{Debug, Display, Write},
-    mem::MaybeUninit,
 };
 
 use crate::{
     bitset::{BitSet128, BitSet16},
-    cycles::{minimize_rows, minimize_rows_with_lookup, CYCLE_STRUCTURES},
+    cycles::{minimize_rows, CYCLE_STRUCTURES},
     latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
+    mols::Mols,
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationIter},
     permutation_dyn::PermutationDyn,
@@ -241,6 +241,42 @@ impl<const N: usize> LatinSquare<N> {
         })
     }
 
+    pub fn transversals_bitset(&self) -> impl Iterator<Item = BitSet128> + '_ {
+        assert!(N * N <= 128);
+        // TODO: not use permutations?
+        PermutationIter::<N>::new().filter_map(|permutation| {
+            let mut used_cols = [false; N];
+
+            for i in 0..N {
+                let val = permutation.as_array()[i];
+
+                let col = self
+                    .get_row(i)
+                    .iter()
+                    .position(|v| *v as usize == val)
+                    .unwrap();
+
+                if used_cols[col] {
+                    return None;
+                } else {
+                    used_cols[col] = true;
+                }
+            }
+
+            let mut bitset = BitSet128::empty();
+            for (row, v) in permutation.into_array().into_iter().enumerate() {
+                let col = self
+                    .get_row(row)
+                    .iter()
+                    .position(|a| *a as usize == v)
+                    .unwrap();
+                bitset.insert(row * N + col);
+            }
+
+            Some(bitset)
+        })
+    }
+
     // pub fn max_disjoint_transversals(&self) -> usize {
     //     let mut max = 0;
 
@@ -362,21 +398,150 @@ impl<const N: usize> LatinSquare<N> {
             })
     }
 
-    pub fn orthogonal_squares(&self) -> impl Iterator<Item = LatinSquare<N>> + '_ {
-        self.full_disjoint_transversals().map(move |transversals| {
-            let mut rows = [[0; N]; N];
+    pub fn full_disjoint_transversals_bitset(&self) -> impl Iterator<Item = [BitSet128; N]> {
+        let mut transversals_by_start = [(); N].map(|_| Vec::new());
 
-            for (i, t) in transversals.into_iter().enumerate() {
-                for (row, col) in t.into_iter().enumerate() {
-                    rows[row][col as usize] = i as u8;
+        for t in self.transversals_bitset() {
+            let first = t
+                .intersect(BitSet128::all_less_than(N))
+                .into_iter()
+                .next()
+                .unwrap();
+            transversals_by_start[first].push(t);
+        }
+
+        transversals_by_start[0]
+            .clone()
+            .into_iter()
+            .flat_map(move |transversal| {
+                let mut disjoint = [BitSet128::empty(); N];
+                disjoint[0] = transversal;
+                let mut all = vec![];
+
+                let mut indices = vec![0];
+
+                'i: while !indices.is_empty() {
+                    let i = indices.len();
+                    let index = indices.last_mut().unwrap();
+
+                    for other in transversals_by_start[i].iter().skip(*index) {
+                        *index += 1;
+
+                        let is_disjoint = disjoint.iter().take(i).all(|t| other.is_disjoint(*t));
+
+                        if is_disjoint {
+                            disjoint[i] = *other;
+
+                            if i == N - 1 {
+                                all.push(disjoint);
+                            } else {
+                                indices.push(0);
+                            }
+                            continue 'i;
+                        }
+                    }
+
+                    indices.pop();
                 }
-            }
 
-            let sq = LatinSquare::new(rows);
+                all
+            })
+    }
+
+    pub fn orthogonal_squares(&self) -> impl Iterator<Item = LatinSquare<N>> + '_ {
+        self.full_disjoint_transversals().map(|transversals| {
+            let sq = Self::transversals_to_sq(&transversals);
             debug_assert!(self.is_orthogonal_to(&sq));
 
             sq
         })
+    }
+
+    fn transversals_to_sq(transversals: &[[u8; N]; N]) -> LatinSquare<N> {
+        let mut rows = [[0; N]; N];
+
+        for (i, t) in transversals.into_iter().enumerate() {
+            for (row, col) in t.into_iter().enumerate() {
+                rows[row][*col as usize] = i as u8;
+            }
+        }
+
+        let sq = LatinSquare::new(rows);
+
+        sq
+    }
+
+    fn bitset_transversals_to_sq(transversals: &[BitSet128; N]) -> LatinSquare<N> {
+        let mut rows = [[0; N]; N];
+
+        for (i, t) in transversals.into_iter().enumerate() {
+            for index in t.into_iter() {
+                let row = index / N;
+                let col = index % N;
+                rows[row][col] = i as u8;
+            }
+        }
+
+        let sq = LatinSquare::new(rows);
+
+        sq
+    }
+
+    pub fn mols(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Vec<Mols<N>> {
+        let transversals: Vec<_> = self.full_disjoint_transversals_bitset().collect();
+        if !transversals.is_empty() {
+            dbg!(transversals.len());
+        }
+
+        let mut indices = vec![0];
+        let mut current_mols = Vec::new();
+        let mut mols = Vec::new();
+
+        'i: while let Some(index) = indices.last_mut() {
+            for t in transversals.iter().skip(*index) {
+                *index += 1;
+
+                if current_mols.iter().all(|transversal: &[BitSet128; N]| {
+                    for other in transversal {
+                        for t in t {
+                            if !other.intersect(*t).is_single() {
+                                return false;
+                            }
+                        }
+                    }
+                    true
+                }) {
+                    current_mols.push(*t);
+
+                    let new_mols = Mols::new(
+                        [*self]
+                            .into_iter()
+                            .chain(
+                                current_mols
+                                    .iter()
+                                    .map(|t| Self::bitset_transversals_to_sq(t)),
+                            )
+                            .collect::<Vec<_>>(),
+                    )
+                    .unwrap();
+                    if let Some(new_mols) = new_mols.normalize_main_class_set(lookup, self) {
+                        if !mols.contains(&new_mols) {
+                            mols.push(new_mols);
+                        }
+                    }
+
+                    let next_index = *index;
+                    indices.push(next_index);
+
+                    continue 'i;
+                }
+            }
+
+            current_mols.pop();
+            indices.pop();
+        }
+
+        mols
     }
 
     /// Counts how many rows are the same until a differing row is found
@@ -495,7 +660,7 @@ impl<const N: usize> LatinSquare<N> {
         &self,
         lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
     ) -> (Self, Vec<[Permutation<N>; 3]>) {
-        let mut candidates = Vec::new();
+        let mut candidates = Vec::with_capacity(N * N);
         let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
 
         for [row0, row1] in
@@ -529,11 +694,12 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         let mut isotopic = *self;
-        let mut isotopic_permutations = vec![[
+        let mut isotopic_permutations = Vec::with_capacity(1000);
+        isotopic_permutations.push([
             Permutation::identity(),
             Permutation::identity(),
             Permutation::identity(),
-        ]];
+        ]);
 
         for (rows, row_permutation) in candidates {
             let mut cycles = row_permutation.cycles();
@@ -556,16 +722,17 @@ impl<const N: usize> LatinSquare<N> {
             };
 
             let column_permutation =
-                Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
+                Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())))
+                    .inverse();
 
             let permutations = &lookup[min_cycle_index];
 
             let mut sq = *self;
-            sq.permute_cols_vals_simd(column_permutation.inverse(), symbol_permutation.clone());
+            sq.permute_cols_vals_simd(&column_permutation, &symbol_permutation);
 
             for (s, inverse_c) in permutations {
                 let mut new_sq = sq;
-                new_sq.permute_cols_vals_simd(inverse_c.clone(), s.clone());
+                new_sq.permute_cols_vals_simd(&inverse_c, &s);
 
                 let r = Permutation::from_array(new_sq.get_col(0).map(|i| i as usize));
 
@@ -575,10 +742,9 @@ impl<const N: usize> LatinSquare<N> {
                 }
                 let new_sq = LatinSquare::new(new_rows);
 
-                let c = column_permutation
-                    .inverse()
-                    .apply_array(inverse_c.clone().inverse().into_array())
-                    .into();
+                let c = Permutation::from_array(
+                    column_permutation.apply_array(inverse_c.inverse().clone().into_array()),
+                );
                 let s = symbol_permutation
                     .inverse()
                     .apply_array(s.clone().into_array())
@@ -587,7 +753,8 @@ impl<const N: usize> LatinSquare<N> {
                 match new_sq.cmp_rows(&isotopic) {
                     Ordering::Less => {
                         isotopic = new_sq;
-                        isotopic_permutations = vec![[r, c, s]];
+                        isotopic_permutations.clear();
+                        isotopic_permutations.push([r, c, s]);
                     }
                     Ordering::Equal => {
                         isotopic_permutations.push([r, c, s]);
@@ -614,14 +781,13 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn isotopy_class_lookup(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Self {
-        let mut isotopy_class = *self;
-        let mut min_cycles = vec![N];
-        let mut candidates = Vec::new();
+        let mut candidates = Vec::with_capacity(N * N);
+        let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
 
         for [row0, row1] in
             TupleIterator::<2>::new(N).flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
         {
-            let rows = [*self.get_row(row0), *self.get_row(row1)];
+            let rows = [self.get_row(row0), self.get_row(row1)];
             let row_permutation = {
                 let mut permutation = [0; N];
 
@@ -633,38 +799,82 @@ impl<const N: usize> LatinSquare<N> {
                 Permutation::from_array(permutation)
             };
 
-            let mut cycles: Vec<_> = row_permutation.cycle_lengths();
-            cycles.sort();
+            let cycles = row_permutation.cycle_lengths_index();
 
-            match cycles.cmp(&min_cycles) {
+            match cycles.cmp(&min_cycle_index) {
                 Ordering::Less => {
-                    min_cycles = cycles;
+                    min_cycle_index = cycles;
                     candidates.clear();
-                    candidates.push(rows);
+                    candidates.push((rows.map(|r| *r), row_permutation));
                 }
                 Ordering::Equal => {
-                    candidates.push(rows);
+                    candidates.push((rows.map(|r| *r), row_permutation));
                 }
                 Ordering::Greater => {}
             }
         }
 
-        for rows in candidates {
-            let permutations = minimize_rows_with_lookup(&rows, lookup);
+        let mut isotopic = *self;
 
-            for (s, c) in permutations {
-                let mut new_sq = *self;
-                new_sq.permute_cols_vals_simd(c, s);
+        for (rows, row_permutation) in candidates {
+            let mut cycles = row_permutation.cycles();
+            cycles.sort_by_key(|c| c.len());
 
-                new_sq.rows.sort();
+            let symbol_permutation = {
+                let mut permutation = [0; N];
 
-                if new_sq.cmp_rows(&isotopy_class).is_lt() {
-                    isotopy_class = new_sq;
+                let mut index = 0;
+                for cycle in cycles {
+                    let cycle_len = cycle.len();
+                    let start_index = index;
+                    index += cycle_len;
+                    for (i, j) in cycle.into_iter().enumerate() {
+                        permutation[j] = start_index + (i + 1) % cycle_len;
+                    }
+                }
+
+                Permutation::from_array(permutation)
+            };
+
+            let column_permutation =
+                Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())))
+                    .inverse();
+
+            let permutations = &lookup[min_cycle_index];
+
+            let mut sq = *self;
+            sq.permute_cols_vals_simd(&column_permutation, &symbol_permutation);
+
+            for (s, inverse_c) in permutations {
+                let mut new_sq = sq;
+                new_sq.permute_cols_vals_simd(&inverse_c, &s);
+
+                let mut new_rows = [[0; N]; N];
+                for i in 0..N {
+                    new_rows[new_sq.rows[i][0] as usize] = new_sq.rows[i];
+                }
+                let new_sq = LatinSquare::new(new_rows);
+
+                match new_sq.cmp_rows(&isotopic) {
+                    Ordering::Less => {
+                        isotopic = new_sq;
+                    }
+                    Ordering::Equal => {}
+                    Ordering::Greater => {}
                 }
             }
         }
 
-        isotopy_class
+        // for perm in &isotopic_permutations {
+        //     assert_eq!(
+        //         self.permuted_rows(&perm[0])
+        //             .permuted_cols(&perm[1])
+        //             .permuted_vals(&perm[2]),
+        //         isotopic
+        //     );
+        // }
+
+        isotopic
     }
 
     pub fn symmetries(&self) -> Vec<Permutation<3>> {
@@ -749,7 +959,7 @@ impl<const N: usize> LatinSquare<N> {
 
                 for (s, c) in permutations {
                     let mut new_sq = sq;
-                    new_sq.permute_cols_vals_simd(c, s);
+                    new_sq.permute_cols_vals_simd(&c, &s);
                     new_sq.rows.sort();
 
                     if new_sq.cmp_rows(&paratopic).is_lt() {
@@ -849,11 +1059,11 @@ impl<const N: usize> LatinSquare<N> {
                 let permutations = &lookup[min_cycle_index];
 
                 let mut sq = sq;
-                sq.permute_cols_vals_simd(column_permutation.inverse(), symbol_permutation);
+                sq.permute_cols_vals_simd(&column_permutation.inverse(), &symbol_permutation);
 
                 for (s, inverse_c) in permutations {
                     let mut new_sq = sq;
-                    new_sq.permute_cols_vals_simd(inverse_c.clone(), s.clone());
+                    new_sq.permute_cols_vals_simd(&inverse_c, &s);
 
                     let mut new_rows = [[0; N]; N];
                     for i in 0..N {
@@ -1130,14 +1340,13 @@ impl<const N: usize> LatinSquare<N> {
         permutation.apply_arrays(&mut self.rows);
     }
 
-    pub fn permute_cols_simd(&mut self, permutation: &Permutation<N>) {
+    pub fn permute_cols_simd(&mut self, inverse_permutation: &Permutation<N>) {
         use std::simd::Simd;
 
         assert!(N <= 16);
 
         let mut permutation_simd = [0; 16];
-        permutation_simd[0..N]
-            .copy_from_slice(&permutation.clone().inverse().into_array().map(|v| v as u8));
+        permutation_simd[0..N].copy_from_slice(&inverse_permutation.as_array().map(|v| v as u8));
         let permutation = Simd::from_array(permutation_simd);
 
         for i in 0..N {
@@ -1147,21 +1356,6 @@ impl<const N: usize> LatinSquare<N> {
             let new_row = simd.swizzle_dyn(permutation);
             self.rows[i].copy_from_slice(&new_row[0..N]);
         }
-    }
-
-    pub fn permuted_rows_and_cols(&self, permutation: &Permutation<N>) -> Self {
-        let mut values = [[MaybeUninit::uninit(); N]; N];
-
-        for (i, new_row) in values.iter_mut().enumerate() {
-            let row = self.rows[permutation.apply(i)];
-            for j in 0..N {
-                new_row[j].write(row[permutation.apply(j)]);
-            }
-        }
-
-        let values = values.map(|row| row.map(|val| unsafe { val.assume_init() }));
-
-        Self { rows: values }
     }
 
     pub fn permuted_vals(&self, permutation: &Permutation<N>) -> Self {
@@ -1184,7 +1378,7 @@ impl<const N: usize> LatinSquare<N> {
         assert!(N <= 16);
 
         let mut permutation_simd = [0; 16];
-        permutation_simd[0..N].copy_from_slice(&permutation.clone().into_array().map(|v| v as u8));
+        permutation_simd[0..N].copy_from_slice(&permutation.as_array().map(|v| v as u8));
         let permutation = Simd::from_array(permutation_simd);
 
         for i in 0..N {
@@ -1198,8 +1392,8 @@ impl<const N: usize> LatinSquare<N> {
 
     pub fn permute_cols_vals_simd(
         &mut self,
-        inverse_col_permutation: Permutation<N>,
-        val_permutation: Permutation<N>,
+        inverse_col_permutation: &Permutation<N>,
+        val_permutation: &Permutation<N>,
     ) {
         use std::simd::Simd;
 

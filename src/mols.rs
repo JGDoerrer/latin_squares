@@ -12,7 +12,7 @@ pub struct Mols<const N: usize> {
 }
 
 impl<const N: usize> Mols<N> {
-    pub fn new(sqs: &[LatinSquare<N>]) -> Result<Self, (usize, usize)> {
+    pub fn new(sqs: Vec<LatinSquare<N>>) -> Result<Self, (usize, usize)> {
         for i in 0..sqs.len() {
             for j in (i + 1)..sqs.len() {
                 if !sqs[i].is_orthogonal_to(&sqs[j]) {
@@ -24,14 +24,15 @@ impl<const N: usize> Mols<N> {
         Ok(Mols { sqs: sqs.to_vec() })
     }
 
-    pub fn new_unchecked(sqs: &[LatinSquare<N>]) -> Self {
-        Mols { sqs: sqs.to_vec() }
+    pub fn new_unchecked(sqs: Vec<LatinSquare<N>>) -> Self {
+        Mols { sqs }
     }
 
     pub fn normalize_main_class_set(
         &self,
         lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
-    ) -> Self {
+        in_sq: &LatinSquare<N>,
+    ) -> Option<Self> {
         let mut rows = [[0; N]; N];
         for (i, row) in rows.iter_mut().enumerate() {
             *row = [i as u8; N];
@@ -64,15 +65,23 @@ impl<const N: usize> Mols<N> {
         for [r, c, s] in TupleIterator::<3>::new(values.len())
             .flat_map(|rcs| PermutationIter::new().map(move |p| p.apply_array(rcs)))
         {
-            let (sq, permutations) = LatinSquare::from_rcs(values[r], values[c], values[s])
-                .isotopy_class_permutations(lookup);
+            let sq = LatinSquare::from_rcs(values[r], values[c], values[s]);
+            let isotopy_class = sq.isotopy_class_lookup(lookup);
 
-            match sq.cmp(&min_sq) {
+            if isotopy_class.cmp(in_sq).is_lt() {
+                return None;
+            }
+
+            match isotopy_class.cmp(&min_sq) {
                 Ordering::Less => {
                     min_sq = sq;
+                    let (_, permutations) = sq.isotopy_class_permutations(lookup);
                     min_perms = vec![([r, c, s], permutations)];
                 }
-                Ordering::Equal => min_perms.push(([r, c, s], permutations)),
+                Ordering::Equal => {
+                    let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    min_perms.push(([r, c, s], permutations))
+                }
                 Ordering::Greater => {}
             }
         }
@@ -104,7 +113,11 @@ impl<const N: usize> Mols<N> {
             }
         }
 
-        min_mols
+        if min_mols.sqs[0] == *in_sq {
+            Some(min_mols)
+        } else {
+            None
+        }
     }
 
     pub fn permute_rows(&mut self, permutation: &Permutation<N>) {
@@ -114,8 +127,9 @@ impl<const N: usize> Mols<N> {
     }
 
     pub fn permute_cols(&mut self, permutation: &Permutation<N>) {
+        let inverse = permutation.inverse();
         for sq in self.sqs.iter_mut() {
-            sq.permute_cols_simd(permutation);
+            sq.permute_cols_simd(&inverse);
         }
     }
 
@@ -249,7 +263,7 @@ impl<const N: usize> TryFrom<&str> for Mols<N> {
             sqs.push(sq?);
         }
 
-        let mols = Mols::new(&sqs).map_err(|indices| Error::NotOrthogonal { indices })?;
+        let mols = Mols::new(sqs).map_err(|indices| Error::NotOrthogonal { indices })?;
 
         Ok(mols)
     }
