@@ -449,12 +449,13 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn orthogonal_squares(&self) -> impl Iterator<Item = LatinSquare<N>> + '_ {
-        self.full_disjoint_transversals().map(|transversals| {
-            let sq = Self::transversals_to_sq(&transversals);
-            debug_assert!(self.is_orthogonal_to(&sq));
+        self.full_disjoint_transversals_bitset()
+            .map(|transversals| {
+                let sq = Self::bitset_transversals_to_sq(&transversals);
+                debug_assert!(self.is_orthogonal_to(&sq));
 
-            sq
-        })
+                sq
+            })
     }
 
     fn transversals_to_sq(transversals: &[[u8; N]; N]) -> LatinSquare<N> {

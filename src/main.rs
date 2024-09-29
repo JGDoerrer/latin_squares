@@ -126,6 +126,7 @@ enum Mode {
         n: usize,
     },
     DecodeCS,
+    CountEntries,
 }
 
 #[derive(Parser)]
@@ -182,6 +183,7 @@ fn main() {
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
         Mode::DecodeCS => decode_cs(),
+        Mode::CountEntries => count_entries(),
     }
 }
 
@@ -713,50 +715,32 @@ fn find_all_mols_for_sq<const N: usize>(
     for mols in mols {
         writeln!(stdout, "{mols}").unwrap();
     }
-    return;
-
-    let mut current_mols = vec![sq];
-    let mut indices = vec![0];
-    let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
-
-    let mut found = HashSet::new();
-
-    'i: while let Some(index) = indices.last_mut() {
-        for orthogonal in orthogonal.iter().skip(*index) {
-            *index += 1;
-            if current_mols
-                .iter()
-                .all(|sq| sq.is_orthogonal_to(orthogonal))
-            {
-                current_mols.push(*orthogonal);
-
-                let mols = Mols::new_unchecked(current_mols.clone());
-                if let Some(normalized_mols) = mols.normalize_main_class_set(&lookup, &sq) {
-                    if found.insert(normalized_mols.clone()) {
-                        // let mut stdout = stdout().lock();
-                        // writeln!(stdout, "{normalized_mols}").unwrap();
-                    }
-                }
-
-                let next_index = *index;
-                indices.push(next_index);
-
-                continue 'i;
-            }
-        }
-
-        current_mols.pop();
-        indices.pop();
-    }
 }
 
 fn solve() {
-    for sq in read_partial_sqs_from_stdin() {
+    while let Some(sq) = read_partial_sq_from_stdin() {
         let solutions = LatinSquareGeneratorDyn::from_partial_sq(&sq);
 
         for solution in solutions {
             println!("{}", solution);
         }
+    }
+}
+
+fn count_entries() {
+    let mut counts = Vec::new();
+    while let Some(sq) = read_partial_sq_from_stdin() {
+        let size = sq.n().pow(2);
+        if size > counts.len() {
+            counts.resize(size, 0);
+        }
+
+        let num_entries = sq.num_entries();
+        counts[num_entries] += 1;
+    }
+
+    for (num_entries, count) in counts.into_iter().enumerate() {
+        println!("{num_entries}: {count}");
     }
 }
 
