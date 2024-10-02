@@ -1,4 +1,7 @@
-use std::{cmp::Ordering, fmt::Debug};
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display, Write},
+};
 
 use crate::{
     bitset::BitSet16,
@@ -477,6 +480,20 @@ impl<const N: usize> Debug for RowPartialLatinSquare<N> {
         }
         write!(f, "+{}", "---+".repeat(N))?;
 
+        Ok(())
+    }
+}
+
+impl<const N: usize> Display for RowPartialLatinSquare<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for i in 0..self.full_rows {
+            for j in &self.get_row(i)[0..N] {
+                f.write_char(char::from_digit(*j as u32, 10).unwrap())?;
+            }
+        }
+        for _ in self.full_rows..N {
+            f.write_str(".".repeat(N).as_str())?;
+        }
         Ok(())
     }
 }

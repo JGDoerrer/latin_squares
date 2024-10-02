@@ -28,31 +28,41 @@ impl<const N: usize> Mols<N> {
         Mols { sqs }
     }
 
+    const ROWS: [[u8; N]; N] = {
+        let mut rows = [[0; N]; N];
+        let mut i = 0;
+        while i < N {
+            rows[i] = [i as u8; N];
+            i += 1;
+        }
+        rows
+    };
+
+    const COLS: [[u8; N]; N] = {
+        let mut col = [0; N];
+
+        let mut i = 0;
+        while i < N {
+            col[i] = i as u8;
+            i += 1;
+        }
+
+        
+        [col; N]
+    };
+
     pub fn normalize_main_class_set(
         &self,
         lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
         in_sq: &LatinSquare<N>,
     ) -> Option<Self> {
-        let mut rows = [[0; N]; N];
-        for (i, row) in rows.iter_mut().enumerate() {
-            *row = [i as u8; N];
-        }
-
-        let mut col = [0; N];
-
-        for (i, val) in col.iter_mut().enumerate() {
-            *val = i as u8;
-        }
-
-        let cols = [col; N];
-
-        let values: Vec<_> = [rows, cols]
+        let values: Vec<_> = [Self::ROWS, Self::COLS]
             .into_iter()
             .chain(self.sqs.iter().map(|sq| (*sq).to_values()))
             .map(|v| v.map(|v| v.map(|v| v as usize)))
             .collect();
 
-        let mut min_sq = LatinSquare::z();
+        let mut min_sq = self.sqs[0];
         let mut min_perms = vec![(
             [0, 1, 2],
             vec![[
@@ -66,20 +76,21 @@ impl<const N: usize> Mols<N> {
             .flat_map(|rcs| PermutationIter::new().map(move |p| p.apply_array(rcs)))
         {
             let sq = LatinSquare::from_rcs(values[r], values[c], values[s]);
-            let isotopy_class = sq.isotopy_class_lookup(lookup);
+            // let isotopy_class = sq.isotopy_class_lookup(lookup);
 
-            if isotopy_class.cmp(in_sq).is_lt() {
-                return None;
-            }
+            let (isotopy_class, permutations) = sq.isotopy_class_permutations(lookup);
 
             match isotopy_class.cmp(&min_sq) {
                 Ordering::Less => {
                     min_sq = sq;
-                    let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    if min_sq.cmp(in_sq).is_lt() {
+                        return None;
+                    }
+                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
                     min_perms = vec![([r, c, s], permutations)];
                 }
                 Ordering::Equal => {
-                    let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
                     min_perms.push(([r, c, s], permutations))
                 }
                 Ordering::Greater => {}
@@ -103,8 +114,9 @@ impl<const N: usize> Mols<N> {
             for perm in perms {
                 let mut mols = Mols { sqs: sqs.clone() };
                 mols.permute_rows(&perm[0]);
-                mols.permute_cols(&perm[1]);
-                mols.reduce_all_sqs();
+                mols.permute_cols_and_reduce(&perm[1]);
+                // mols.permute_cols(&perm[1]);
+                // mols.reduce_all_sqs();
                 mols.sqs.sort();
 
                 if mols < min_mols {
@@ -126,7 +138,7 @@ impl<const N: usize> Mols<N> {
         }
     }
 
-    pub fn permute_cols(&mut self, permutation: &Permutation<N>) {
+    fn permute_cols(&mut self, permutation: &Permutation<N>) {
         let inverse = permutation.inverse();
         for sq in self.sqs.iter_mut() {
             sq.permute_cols_simd(&inverse);
@@ -144,6 +156,20 @@ impl<const N: usize> Mols<N> {
 
             let symbol_permutation = Permutation::from_array(permutation);
             sq.permute_vals_simd(&symbol_permutation);
+        }
+    }
+
+    pub fn permute_cols_and_reduce(&mut self, col_permutation: &Permutation<N>) {
+        let inverse = col_permutation.inverse();
+        for sq in self.sqs.iter_mut() {
+            let first_row = col_permutation.apply_array(*sq.get_row(0));
+
+            let mut permutation = [0; N];
+            for i in 0..N {
+                permutation[first_row[i] as usize] = i;
+            }
+
+            sq.permute_cols_vals_simd(&inverse, &permutation.into());
         }
     }
 }

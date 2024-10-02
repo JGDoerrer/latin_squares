@@ -37,7 +37,7 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
                 continue;
             };
 
-            if sq.is_complete() && sq.is_minimal_main_class(&self.lookup) {
+            if sq.is_complete() && sq.is_minimal_main_class(self.lookup) {
                 let sq: LatinSquare<N> = sq.try_into().unwrap();
 
                 let mut stdout = stdout();

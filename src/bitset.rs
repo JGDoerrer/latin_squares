@@ -82,7 +82,7 @@ macro_rules! make_bitset {
             }
 
             #[inline]
-            pub fn insert(&mut self, index: usize) {
+            pub const fn insert(&mut self, index: usize) {
                 debug_assert!(index < <$BitType>::BITS as usize);
                 let bit_mask = 1 << index;
 

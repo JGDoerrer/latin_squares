@@ -241,40 +241,107 @@ impl<const N: usize> LatinSquare<N> {
         })
     }
 
+    const BITSET_COLS: [BitSet128; N] = {
+        let mut bitsets = [BitSet128::empty(); N];
+        let mut i = 0;
+        while i < N {
+            let mut j = 0;
+            while j < N {
+                bitsets[i].insert(j * N + i);
+
+                j += 1;
+            }
+            i += 1;
+        }
+        bitsets
+    };
+
+    const BITSET_ROWS: [BitSet128; N] = {
+        let mut bitsets = [BitSet128::empty(); N];
+        let mut i = 0;
+        while i < N {
+            let mut j = 0;
+            while j < N {
+                bitsets[i].insert(j + i * N);
+
+                j += 1;
+            }
+            i += 1;
+        }
+        bitsets
+    };
+
     pub fn transversals_bitset(&self) -> impl Iterator<Item = BitSet128> + '_ {
         assert!(N * N <= 128);
-        // TODO: not use permutations?
-        PermutationIter::<N>::new().filter_map(|permutation| {
-            let mut used_cols = [false; N];
+        assert!(N <= 16);
+
+        let mut indices = [0; N];
+
+        let mut bitsets = Vec::new();
+
+        // let bits: [[BitSet16; N]; N] = self.rows.map(|row| row.map(|v| BitSet16::single(v.into())));
+
+        let mut value_bitsets = [BitSet128::empty(); N];
+
+        for i in 0..N {
+            let cols = self.get_val(i);
+
+            let mut bitset = BitSet128::empty();
+            for (i, j) in cols.into_iter().enumerate() {
+                bitset.insert(i * N + j as usize);
+            }
+
+            value_bitsets[i] = bitset;
+        }
+
+        let value_bitsets = value_bitsets;
+
+        'l: loop {
+            let mut unused_vals = BitSet16::all_less_than(N);
+            let mut bitset = BitSet128::empty();
+
+            let mut used_cols = BitSet128::empty();
 
             for i in 0..N {
-                let val = permutation.as_array()[i];
+                let index = indices[i];
 
-                let col = self
-                    .get_row(i)
-                    .iter()
-                    .position(|v| *v as usize == val)
-                    .unwrap();
+                let bitset_row = Self::BITSET_ROWS[i];
 
-                if used_cols[col] {
-                    return None;
+                if let Some((val, index)) = unused_vals
+                    .into_iter()
+                    .filter_map(|val| {
+                        let index = value_bitsets[val]
+                            .intersect(bitset_row)
+                            .intersect(used_cols.complement())
+                            .into_iter()
+                            .next()?;
+
+                        Some((val, index))
+                    })
+                    .nth(index)
+                {
+                    bitset.insert(index);
+                    unused_vals.remove(val.into());
+
+                    let col = index % N;
+                    used_cols = used_cols.union(Self::BITSET_COLS[col]);
+                } else if i != 0 {
+                    indices[i - 1] += 1;
+                    for j in i..N {
+                        indices[j] = 0;
+                    }
+                    continue 'l;
                 } else {
-                    used_cols[col] = true;
+                    break 'l;
                 }
             }
 
-            let mut bitset = BitSet128::empty();
-            for (row, v) in permutation.into_array().into_iter().enumerate() {
-                let col = self
-                    .get_row(row)
-                    .iter()
-                    .position(|a| *a as usize == v)
-                    .unwrap();
-                bitset.insert(row * N + col);
-            }
+            indices[N - 1] += 1;
+            // bitset.print_sq(N);
+            bitsets.push(bitset);
+        }
 
-            Some(bitset)
-        })
+        bitsets.into_iter()
     }
 
     // pub fn max_disjoint_transversals(&self) -> usize {
@@ -422,22 +489,41 @@ impl<const N: usize> LatinSquare<N> {
 
                 'i: while !indices.is_empty() {
                     let i = indices.len();
-                    let index = indices.last_mut().unwrap();
 
-                    for other in transversals_by_start[i].iter().skip(*index) {
-                        *index += 1;
+                    if i == N - 1 {
+                        let left = disjoint[0..N - 1]
+                            .iter()
+                            .cloned()
+                            .reduce(|a, b| a.union(b))
+                            .unwrap()
+                            .complement()
+                            .intersect(BitSet128::all_less_than(N * N));
 
-                        let is_disjoint = disjoint.iter().take(i).all(|t| other.is_disjoint(*t));
+                        if disjoint.iter().take(N - 1).all(|t| left.is_disjoint(*t))
+                            && transversals_by_start[N - 1].contains(&left)
+                        {
+                            disjoint[N - 1] = left;
+                            all.push(disjoint);
+                        }
+                    } else {
+                        let index = indices.last_mut().unwrap();
 
-                        if is_disjoint {
-                            disjoint[i] = *other;
+                        for other in transversals_by_start[i].iter().skip(*index) {
+                            *index += 1;
 
-                            if i == N - 1 {
-                                all.push(disjoint);
-                            } else {
-                                indices.push(0);
+                            let is_disjoint =
+                                disjoint.iter().take(i).all(|t| other.is_disjoint(*t));
+
+                            if is_disjoint {
+                                disjoint[i] = *other;
+
+                                if i == N - 1 {
+                                    all.push(disjoint);
+                                } else {
+                                    indices.push(0);
+                                }
+                                continue 'i;
                             }
-                            continue 'i;
                         }
                     }
 
@@ -458,24 +544,10 @@ impl<const N: usize> LatinSquare<N> {
             })
     }
 
-    fn transversals_to_sq(transversals: &[[u8; N]; N]) -> LatinSquare<N> {
-        let mut rows = [[0; N]; N];
-
-        for (i, t) in transversals.into_iter().enumerate() {
-            for (row, col) in t.into_iter().enumerate() {
-                rows[row][*col as usize] = i as u8;
-            }
-        }
-
-        let sq = LatinSquare::new(rows);
-
-        sq
-    }
-
     fn bitset_transversals_to_sq(transversals: &[BitSet128; N]) -> LatinSquare<N> {
         let mut rows = [[0; N]; N];
 
-        for (i, t) in transversals.into_iter().enumerate() {
+        for (i, t) in transversals.iter().enumerate() {
             for index in t.into_iter() {
                 let row = index / N;
                 let col = index % N;
@@ -483,16 +555,11 @@ impl<const N: usize> LatinSquare<N> {
             }
         }
 
-        let sq = LatinSquare::new(rows);
-
-        sq
+        LatinSquare::new(rows)
     }
 
     pub fn mols(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Vec<Mols<N>> {
         let transversals: Vec<_> = self.full_disjoint_transversals_bitset().collect();
-        if !transversals.is_empty() {
-            dbg!(transversals.len());
-        }
 
         let mut indices = vec![0];
         let mut current_mols = Vec::new();
@@ -517,11 +584,7 @@ impl<const N: usize> LatinSquare<N> {
                     let new_mols = Mols::new(
                         [*self]
                             .into_iter()
-                            .chain(
-                                current_mols
-                                    .iter()
-                                    .map(|t| Self::bitset_transversals_to_sq(t)),
-                            )
+                            .chain(current_mols.iter().map(Self::bitset_transversals_to_sq))
                             .collect::<Vec<_>>(),
                     )
                     .unwrap();
@@ -733,7 +796,7 @@ impl<const N: usize> LatinSquare<N> {
 
             for (s, inverse_c) in permutations {
                 let mut new_sq = sq;
-                new_sq.permute_cols_vals_simd(&inverse_c, &s);
+                new_sq.permute_cols_vals_simd(inverse_c, s);
 
                 let r = Permutation::from_array(new_sq.get_col(0).map(|i| i as usize));
 
@@ -848,7 +911,7 @@ impl<const N: usize> LatinSquare<N> {
 
             for (s, inverse_c) in permutations {
                 let mut new_sq = sq;
-                new_sq.permute_cols_vals_simd(&inverse_c, &s);
+                new_sq.permute_cols_vals_simd(inverse_c, s);
 
                 let mut new_rows = [[0; N]; N];
                 for i in 0..N {
@@ -1064,7 +1127,7 @@ impl<const N: usize> LatinSquare<N> {
 
                 for (s, inverse_c) in permutations {
                     let mut new_sq = sq;
-                    new_sq.permute_cols_vals_simd(&inverse_c, &s);
+                    new_sq.permute_cols_vals_simd(inverse_c, s);
 
                     let mut new_rows = [[0; N]; N];
                     for i in 0..N {
@@ -1494,6 +1557,7 @@ impl<const N: usize> Debug for LatinSquare<N> {
 
 impl<const N: usize> Display for LatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        assert!(N <= 10);
         for i in 0..N {
             for j in 0..N {
                 f.write_char(char::from_digit(self.get(i, j) as u32, 10).unwrap())?;

@@ -677,7 +677,7 @@ fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
         }
 
         let lookup = lookup.clone();
-        let move_buffer = buffer.drain(..).collect::<Vec<_>>();
+        let move_buffer = std::mem::take(&mut buffer);
 
         let thread = thread::spawn(move || {
             for sq in move_buffer {
