@@ -8,7 +8,6 @@ use crate::{
     bitset::BitSet16,
     cycles::minimize_rows_with_lookup,
     latin_square::LatinSquare,
-    latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     permutation::{Permutation, PermutationIter},
     tuple_iterator::TupleIterator,
 };
@@ -24,21 +23,15 @@ impl<const N: usize> Default for PartialLatinSquare<N> {
     }
 }
 
-impl<const N: usize> PartialLatinSquareTrait for PartialLatinSquare<N> {
-    fn n(&self) -> usize {
-        N
-    }
-
-    fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
-        self.rows[row][col].map(|val| val.into())
-    }
-}
-
 impl<const N: usize> PartialLatinSquare<N> {
     pub const fn empty() -> Self {
         PartialLatinSquare {
             rows: [[None; N]; N],
         }
+    }
+
+    pub fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
+        self.rows[row][col].map(|val| val.into())
     }
 
     pub fn from_array(values: [[Option<u8>; N]; N]) -> Self {

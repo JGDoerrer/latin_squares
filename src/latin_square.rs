@@ -6,12 +6,11 @@ use std::{
 use crate::{
     bitset::{BitSet128, BitSet16},
     cycles::{minimize_rows, CYCLE_STRUCTURES},
-    latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     mols::Mols,
     partial_latin_square::PartialLatinSquare,
     permutation::{Permutation, PermutationIter},
     permutation_dyn::PermutationDyn,
-    tuple_iterator::TupleIterator,
+    tuple_iterator::{TupleIterator, TupleIteratorDyn},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -22,27 +21,15 @@ pub struct LatinSquare<const N: usize> {
 #[derive(Debug, Clone, Copy)]
 pub struct Cell(pub usize, pub usize);
 
-impl<const N: usize> PartialLatinSquareTrait for LatinSquare<N> {
-    fn n(&self) -> usize {
-        N
-    }
-
-    fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
-        Some(self.rows[row][col].into())
-    }
-}
-
-impl<const N: usize> LatinSquareTrait for LatinSquare<N> {
-    fn get(&self, row: usize, col: usize) -> usize {
-        self.rows[row][col].into()
-    }
-}
-
 impl<const N: usize> LatinSquare<N> {
     pub fn new(values: [[u8; N]; N]) -> Self {
         debug_assert!(Self::is_valid(&values));
 
         LatinSquare { rows: values }
+    }
+
+    pub fn get(&self, row: usize, col: usize) -> usize {
+        self.rows[row][col].into()
     }
 
     pub fn z() -> Self {
@@ -148,63 +135,8 @@ impl<const N: usize> LatinSquare<N> {
         true
     }
 
-    pub fn is_isotopic_to(&self, other: &Self) -> bool {
-        assert!(self.is_reduced());
-        assert!(other.is_reduced());
-
-        for sq in self.all_reduced() {
-            for permutation in PermutationIter::new() {
-                let row_reduced = sq.permuted_vals(&permutation).permuted_cols(&permutation);
-                let reduced = row_reduced.permuted_rows(&Permutation::from_array(
-                    row_reduced.get_col(0).map(|i| i as usize),
-                ));
-
-                if reduced == *other {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
-    pub fn has_diagonal_symmetry(&self) -> bool {
-        for i in 0..N {
-            for j in (i + 1)..N {
-                if self.get(i, j) != self.get(j, i) {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-
     pub fn num_transversals(&self) -> usize {
-        let mut count = 0;
-
-        'p: for permutation in PermutationIter::<N>::new() {
-            let mut used_cols = [false; N];
-
-            for i in 0..N {
-                let val = permutation.as_array()[i];
-
-                let col = self
-                    .get_row(i)
-                    .iter()
-                    .position(|v| *v as usize == val)
-                    .unwrap();
-
-                if used_cols[col] {
-                    continue 'p;
-                } else {
-                    used_cols[col] = true;
-                }
-            }
-
-            count += 1;
-        }
-
-        count
+        self.transversals_bitset().len()
     }
 
     pub fn transversals(&self) -> impl Iterator<Item = [u8; N]> + '_ {
@@ -271,7 +203,7 @@ impl<const N: usize> LatinSquare<N> {
         bitsets
     };
 
-    pub fn transversals_bitset(&self) -> impl Iterator<Item = BitSet128> + '_ {
+    pub fn transversals_bitset(&self) -> Vec<BitSet128> {
         assert!(N * N <= 128);
         assert!(N <= 16);
 
@@ -341,35 +273,8 @@ impl<const N: usize> LatinSquare<N> {
             bitsets.push(bitset);
         }
 
-        bitsets.into_iter()
+        bitsets
     }
-
-    // pub fn max_disjoint_transversals(&self) -> usize {
-    //     let mut max = 0;
-
-    //     let transversals: Vec<_> = self.transversals().collect();
-    //     for (i, transversal) in transversals.iter().enumerate() {
-    //         // TODO: check all possibilities with backtracking
-    //         let mut disjoint = vec![transversal];
-
-    //         for other in transversals.iter().skip(i + 1) {
-    //             let is_disjoint = disjoint
-    //                 .iter()
-    //                 .all(|t| other.iter().zip(*t).all(|(a, b)| *a != *b));
-
-    //             if is_disjoint {
-    //                 disjoint.push(other);
-    //             }
-    //         }
-
-    //         max = max.max(disjoint.len());
-    //         if max == N {
-    //             break;
-    //         }
-    //     }
-
-    //     max
-    // }
 
     pub fn max_disjoint_transversals(&self) -> usize {
         let mut transversals_by_start = [(); N].map(|_| Vec::new());
@@ -468,7 +373,9 @@ impl<const N: usize> LatinSquare<N> {
     pub fn full_disjoint_transversals_bitset(&self) -> impl Iterator<Item = [BitSet128; N]> {
         let mut transversals_by_start = [(); N].map(|_| Vec::new());
 
-        for t in self.transversals_bitset() {
+        let transversals = self.transversals_bitset();
+
+        for t in transversals {
             let first = t
                 .intersect(BitSet128::all_less_than(N))
                 .into_iter()
@@ -619,27 +526,6 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         N
-    }
-
-    pub fn reduced(&self) -> Self {
-        let first_row = self.get_row(0).map(|i| i as usize);
-        let row_reduced = self.permuted_cols(&Permutation::from_array(first_row));
-
-        let first_col = row_reduced.get_col(0).map(|i| i as usize);
-        let reduced = row_reduced.permuted_rows(&Permutation::from_array(first_col));
-
-        debug_assert!(reduced.is_reduced(), "{reduced:?}");
-
-        reduced
-    }
-
-    pub fn all_reduced(&self) -> impl Iterator<Item = Self> + '_ {
-        (0..N).map(|i| {
-            let mut new_values = self.rows;
-            new_values.swap(0, i);
-
-            Self::new(new_values).reduced()
-        })
     }
 
     /// returns all permutations of rows, columns and values
@@ -955,33 +841,10 @@ impl<const N: usize> LatinSquare<N> {
         symmetries
     }
 
-    pub fn main_class_old(&self) -> Self {
-        let sq = &self.reduced();
-
-        let mut paratopic = *sq;
-
-        for sq in sq.conjugates() {
-            for s in PermutationIter::new() {
-                let sq = sq.permuted_vals(&s);
-                for c in PermutationIter::new() {
-                    let sq = sq.permuted_cols(&c);
-                    let sq = sq
-                        .permuted_rows(&Permutation::from_array(sq.get_col(0).map(|i| i as usize)));
-
-                    if sq.cmp_rows(&paratopic).is_lt() {
-                        paratopic = sq;
-                    }
-                }
-            }
-        }
-
-        paratopic
-    }
-
     pub fn main_class(&self) -> Self {
-        let sq = &self.reduced();
+        let sq = self;
 
-        let mut paratopic = *sq;
+        let mut main_class = *sq;
         let mut min_cycles = vec![N];
 
         for sq in sq.conjugates() {
@@ -1026,17 +889,14 @@ impl<const N: usize> LatinSquare<N> {
                     new_sq.permute_cols_vals_simd(&c, &s);
                     new_sq.rows.sort();
 
-                    if new_sq.cmp_rows(&paratopic).is_lt() {
-                        paratopic = new_sq;
+                    if new_sq.cmp_rows(&main_class).is_lt() {
+                        main_class = new_sq;
                     }
                 }
             }
         }
 
-        // dbg!(self.to_string());
-        // assert_eq!(self.reduced_paratopic_old(), paratopic);
-
-        paratopic
+        main_class
     }
 
     pub fn main_class_permutation(&self) -> (Self, Permutation<3>, [Permutation<N>; 3]) {
@@ -1063,8 +923,6 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn main_class_lookup(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Self {
-        debug_assert!(self.is_reduced());
-
         let mut main_class = *self;
         let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
 
@@ -1144,23 +1002,9 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         // dbg!(self.to_string());
-        // assert_eq!(self.main_class(), paratopic);
+        // assert_eq!(self.main_class(), main_class);
 
         main_class
-    }
-
-    fn subsquares_order_2_iter(&self) -> impl Iterator<Item = [usize; 4]> + '_ {
-        let rows_iter = TupleIterator::new(N);
-
-        rows_iter.flat_map(|[row1, row2]| {
-            let cols_iter = TupleIterator::new(N);
-            cols_iter
-                .map(move |[col1, col2]| [row1, row2, col1, col2])
-                .filter(|[row1, row2, col1, col2]| {
-                    self.get(*row1, *col1) == self.get(*row2, *col2)
-                        && self.get(*row1, *col2) == self.get(*row2, *col1)
-                })
-        })
     }
 
     pub fn get_subsquare<const K: usize>(
@@ -1226,8 +1070,59 @@ impl<const N: usize> LatinSquare<N> {
         subsquares
     }
 
-    pub fn intercalates(&self) -> usize {
-        self.subsquares_order_2_iter().count()
+    pub fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
+        debug_assert!(rows.len() == cols.len());
+
+        let k = rows.len();
+
+        let mut values = vec![vec![0; k]; k];
+
+        for i in 0..k {
+            for (j, col) in cols.iter().enumerate() {
+                values[i][j] = self.get(rows[i], *col);
+            }
+        }
+
+        values
+    }
+
+    pub fn num_subsquares_dyn(&self, k: usize) -> usize {
+        let mut subsquares = 0;
+        assert!(N < 16);
+
+        for rows in TupleIteratorDyn::new(N, k) {
+            for cols in TupleIteratorDyn::new(N, k) {
+                let mut subsquare = self.get_subsquare_dyn(&rows, &cols);
+
+                let mut permutation: Vec<_> = subsquare[0].to_vec();
+
+                for i in 0..N {
+                    if !permutation.contains(&i) {
+                        permutation.push(i);
+                    }
+                }
+
+                let permutation = PermutationDyn::from_vec(permutation).inverse();
+
+                for row in subsquare.iter_mut() {
+                    for val in row.iter_mut() {
+                        *val = permutation.apply(*val);
+                    }
+                }
+
+                let is_subsquare = (0..k).all(|i| {
+                    (0..k).map(|j| subsquare[i][j]).collect::<BitSet16>()
+                        == BitSet16::all_less_than(k)
+                        && (0..k).map(|j| subsquare[j][i]).collect::<BitSet16>()
+                            == BitSet16::all_less_than(k)
+                });
+                if is_subsquare {
+                    subsquares += 1;
+                }
+            }
+        }
+
+        subsquares
     }
 
     pub fn row_cycles(&self) -> Vec<Vec<usize>> {
@@ -1484,44 +1379,8 @@ impl<const N: usize> LatinSquare<N> {
         }
     }
 
-    pub fn cmp_diagonal(&self, other: &Self) -> Ordering {
-        for i in 0..N {
-            for j in (0..=i).rev() {
-                match self.rows[j][i].cmp(&other.rows[j][i]) {
-                    Ordering::Equal => {}
-                    o => return o,
-                }
-                match self.rows[i][j].cmp(&other.rows[i][j]) {
-                    Ordering::Equal => {}
-                    o => return o,
-                }
-            }
-        }
-
-        Ordering::Equal
-    }
-
     pub fn cmp_rows(&self, other: &Self) -> Ordering {
         self.rows.cmp(&other.rows)
-    }
-
-    pub fn cmp_row_col(&self, other: &Self) -> Ordering {
-        for i in 0..N {
-            for j in i..N {
-                match self.rows[i][j].cmp(&other.rows[i][j]) {
-                    Ordering::Equal => {}
-                    o => return o,
-                }
-            }
-            for j in i + 1..N {
-                match self.rows[j][i].cmp(&other.rows[j][i]) {
-                    Ordering::Equal => {}
-                    o => return o,
-                }
-            }
-        }
-
-        Ordering::Equal
     }
 }
 

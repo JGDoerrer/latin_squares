@@ -1,7 +1,6 @@
 use crate::{
     bitset::BitSet16,
     latin_square::{Cell, LatinSquare},
-    latin_square_trait::PartialLatinSquareTrait,
     partial_latin_square::PartialLatinSquare,
     partial_latin_square_dyn::PartialLatinSquareDyn,
 };

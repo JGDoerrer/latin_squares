@@ -3,7 +3,6 @@ use std::fmt::{Debug, Display, Write};
 use crate::{
     latin_square_dyn::{isqrt, LatinSquareDyn},
     latin_square_generator::LatinSquareGeneratorDyn,
-    latin_square_trait::PartialLatinSquareTrait,
     permutation_dyn::PermutationDyn,
 };
 
@@ -13,22 +12,20 @@ pub struct PartialLatinSquareDyn {
     values: Box<[Option<u8>]>,
 }
 
-impl PartialLatinSquareTrait for PartialLatinSquareDyn {
-    fn n(&self) -> usize {
-        self.n
-    }
-
-    fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
-        self.values[row * self.n + col].map(|i| i.into())
-    }
-}
-
 impl PartialLatinSquareDyn {
     pub fn empty(n: usize) -> Self {
         PartialLatinSquareDyn {
             n,
             values: vec![None; n * n].into_boxed_slice(),
         }
+    }
+
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    pub fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
+        self.values[row * self.n + col].map(|i| i.into())
     }
 
     pub fn set(&mut self, row: usize, col: usize, val: Option<usize>) {

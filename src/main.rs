@@ -20,7 +20,6 @@ use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::LatinSquareGeneratorDyn;
 use mols::Mols;
 
-use latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait};
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 
 use partial_latin_square_dyn::PartialLatinSquareDyn;
@@ -40,7 +39,6 @@ mod isotopy_class_generator;
 mod latin_square;
 mod latin_square_dyn;
 mod latin_square_generator;
-mod latin_square_trait;
 mod mmcs_hitting_set_generator;
 mod mols;
 mod partial_latin_square;
@@ -219,7 +217,7 @@ fn random_latin_squares<const N: usize>(seed: u64) {
 
 fn analyse<const N: usize>() {
     for sq in read_sqs_from_stdin_n::<N>() {
-        pretty_print_sq(sq);
+        pretty_print_sq_n(sq);
 
         for i in 2..N {
             println!("Subsquares order {i}: {}", sq.num_subsquares_dyn(i));
@@ -276,7 +274,7 @@ fn analyse<const N: usize>() {
             println!("Col permutation: {:?}", perm[1].as_array());
             println!("Sym permutation: {:?}", perm[2].as_array());
 
-            pretty_print_sq(isotopy_class);
+            pretty_print_sq_n(isotopy_class);
         } else {
             println!("Is isotopy class reduced");
         }
@@ -295,7 +293,7 @@ fn analyse<const N: usize>() {
             println!("Col permutation: {:?}", perm[1].as_array());
             println!("Sym permutation: {:?}", perm[2].as_array());
 
-            pretty_print_sq(main_class);
+            pretty_print_sq_n(main_class);
         } else {
             println!("Is main class reduced");
         }
@@ -314,7 +312,7 @@ fn pretty_print() {
     }
 }
 
-fn pretty_print_sq(sq: impl PartialLatinSquareTrait) {
+fn pretty_print_sq(sq: PartialLatinSquareDyn) {
     let n = sq.n();
 
     for i in 0..n {
@@ -326,6 +324,22 @@ fn pretty_print_sq(sq: impl PartialLatinSquareTrait) {
             } else {
                 print!("   |");
             }
+        }
+        println!()
+    }
+    println!("+{}", "---+".repeat(n));
+    println!()
+}
+
+fn pretty_print_sq_n<const N: usize>(sq: LatinSquare<N>) {
+    let n = N;
+
+    for i in 0..n {
+        println!("+{}", "---+".repeat(n));
+        print!("|");
+        for j in 0..n {
+            let value = sq.get(i, j);
+            print!(" {} |", value);
         }
         println!()
     }
@@ -356,16 +370,6 @@ fn generate_isotopy_classes<const N: usize>() {
 
 fn generate_main_classes<const N: usize>(max_threads: usize) {
     let lookup = generate_minimize_rows_lookup_simd::<N>();
-    // for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup)
-    //     .filter(|sq| *sq == sq.main_class_lookup(&lookup))
-    //     .enumerate()
-    // {
-    //     dbg!(i + 1);
-
-    //     if writeln!(stdout(), "{sq}").is_err() {
-    //         return;
-    //     }
-    // }
 
     ThreadedMainClassGenerator::<N>::new(&lookup).run(max_threads);
 }

@@ -4,9 +4,9 @@ use crate::{
     bitset::{BitSet128, BitSet16},
     latin_square::LatinSquare,
     latin_square_generator::LatinSquareGeneratorDyn,
-    latin_square_trait::{LatinSquareTrait, PartialLatinSquareTrait},
     partial_latin_square_dyn::PartialLatinSquareDyn,
-    tuple_iterator::TupleIterator,
+    permutation_dyn::PermutationDyn,
+    tuple_iterator::{TupleIterator, TupleIteratorDyn},
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -15,23 +15,15 @@ pub struct LatinSquareDyn {
     values: Box<[u8]>,
 }
 
-impl PartialLatinSquareTrait for LatinSquareDyn {
-    fn n(&self) -> usize {
+impl LatinSquareDyn {
+    pub fn n(&self) -> usize {
         self.n
     }
 
-    fn get_partial(&self, row: usize, col: usize) -> Option<usize> {
-        Some(self.values[row * self.n() + col].into())
-    }
-}
-
-impl LatinSquareTrait for LatinSquareDyn {
-    fn get(&self, row: usize, col: usize) -> usize {
+    pub fn get(&self, row: usize, col: usize) -> usize {
         self.values[row * self.n() + col].into()
     }
-}
 
-impl LatinSquareDyn {
     pub fn from_boxed_slice(values: Box<[u8]>) -> Option<LatinSquareDyn> {
         if !Self::is_valid(&values) {
             return None;
@@ -155,6 +147,62 @@ impl LatinSquareDyn {
         }
 
         partial_sq
+    }
+
+    pub fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
+        debug_assert!(rows.len() == cols.len());
+
+        let k = rows.len();
+
+        let mut values = vec![vec![0; k]; k];
+
+        for i in 0..k {
+            for (j, col) in cols.iter().enumerate() {
+                values[i][j] = self.get(rows[i], *col);
+            }
+        }
+
+        values
+    }
+
+    pub fn num_subsquares_dyn(&self, k: usize) -> usize {
+        let mut subsquares = 0;
+        let n = self.n;
+        assert!(n < 16);
+
+        for rows in TupleIteratorDyn::new(n, k) {
+            for cols in TupleIteratorDyn::new(n, k) {
+                let mut subsquare = self.get_subsquare_dyn(&rows, &cols);
+
+                let mut permutation: Vec<_> = subsquare[0].to_vec();
+
+                for i in 0..n {
+                    if !permutation.contains(&i) {
+                        permutation.push(i);
+                    }
+                }
+
+                let permutation = PermutationDyn::from_vec(permutation).inverse();
+
+                for row in subsquare.iter_mut() {
+                    for val in row.iter_mut() {
+                        *val = permutation.apply(*val);
+                    }
+                }
+
+                let is_subsquare = (0..k).all(|i| {
+                    (0..k).map(|j| subsquare[i][j]).collect::<BitSet16>()
+                        == BitSet16::all_less_than(k)
+                        && (0..k).map(|j| subsquare[j][i]).collect::<BitSet16>()
+                            == BitSet16::all_less_than(k)
+                });
+                if is_subsquare {
+                    subsquares += 1;
+                }
+            }
+        }
+
+        subsquares
     }
 }
 
