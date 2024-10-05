@@ -495,7 +495,7 @@ impl<const N: usize> LatinSquare<N> {
                             .collect::<Vec<_>>(),
                     )
                     .unwrap();
-                    if let Some(new_mols) = new_mols.normalize_main_class_set(lookup, self) {
+                    if let Some(new_mols) = new_mols.normalize_main_class_set_sq(lookup, self) {
                         if !mols.contains(&new_mols) {
                             mols.push(new_mols);
                         }

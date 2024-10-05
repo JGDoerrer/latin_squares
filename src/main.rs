@@ -1,7 +1,8 @@
 #![feature(portable_simd)]
 
 use std::{
-    collections::{HashMap, HashSet},
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap, HashSet},
     io::{stdin, stdout, Read, Write},
     sync::Arc,
     thread::{self},
@@ -129,6 +130,9 @@ enum Mode {
     CountIsotopyClasses {
         n: usize,
     },
+    Expand {
+        n: usize,
+    },
 }
 
 #[derive(Parser)]
@@ -187,6 +191,7 @@ fn main() {
         Mode::DecodeCS => decode_cs(),
         Mode::CountEntries => count_entries(),
         Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
+        Mode::Expand { n } => match_n!(n, expand),
     }
 }
 
@@ -244,7 +249,7 @@ fn analyse<const N: usize>() {
         );
         println!(
             "Full disjoint transversal count: {}",
-            sq.full_disjoint_transversals().count()
+            sq.full_disjoint_transversals_bitset().count()
         );
         println!();
 
@@ -631,10 +636,17 @@ fn find_mols<const N: usize>(mols: usize) {
 
                     if current_mols.len() == mols {
                         let mols = Mols::new_unchecked(current_mols.clone());
-                        if let Some(normalized_mols) = mols.normalize_main_class_set(&lookup, &sq) {
-                            if found.insert(normalized_mols.clone()) {
-                                println!("{normalized_mols}");
-                            }
+                        // if let Some(normalized_mols) =
+                        //     mols.normalize_main_class_set_sq(&lookup, &sq)
+                        // {
+                        //     if found.insert(normalized_mols.clone()) {
+                        //         println!("{normalized_mols}");
+                        //     }
+                        // }
+
+                        let normalized_mols = mols.normalize_main_class_set(&lookup);
+                        if found.insert(normalized_mols.clone()) {
+                            println!("{normalized_mols}");
                         }
 
                         // println!(
@@ -755,6 +767,27 @@ fn count_isotopy_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
     while let Some(sq) = read_sq_n_from_stdin::<N>() {
         println!("{}", sq.num_isotopy_classes(&lookup));
+    }
+}
+
+fn expand<const N: usize>() {
+    let mut found = HashSet::new();
+    let mut queue = BinaryHeap::new();
+
+    while let Some(sq) = read_sq_n_from_stdin::<N>() {
+        queue.push((sq.num_transversals(), sq));
+    }
+
+    while let Some((transversals, sq)) = queue.pop() {
+        dbg!(transversals);
+        println!("{sq}");
+        for mate in sq.orthogonal_squares() {
+            if found.insert(mate) {
+                queue.push((mate.num_transversals(), mate));
+            }
+        }
+
+        dbg!(queue.len());
     }
 }
 

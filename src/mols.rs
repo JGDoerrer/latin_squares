@@ -47,11 +47,10 @@ impl<const N: usize> Mols<N> {
             i += 1;
         }
 
-        
         [col; N]
     };
 
-    pub fn normalize_main_class_set(
+    pub fn normalize_main_class_set_sq(
         &self,
         lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
         in_sq: &LatinSquare<N>,
@@ -97,6 +96,10 @@ impl<const N: usize> Mols<N> {
             }
         }
 
+        if min_sq != *in_sq {
+            return None;
+        }
+
         debug_assert!(min_sq == min_sq.main_class());
 
         let mut min_mols = self.clone();
@@ -130,6 +133,78 @@ impl<const N: usize> Mols<N> {
         } else {
             None
         }
+    }
+
+    pub fn normalize_main_class_set(
+        &self,
+        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
+    ) -> Self {
+        let values: Vec<_> = [Self::ROWS, Self::COLS]
+            .into_iter()
+            .chain(self.sqs.iter().map(|sq| (*sq).to_values()))
+            .map(|v| v.map(|v| v.map(|v| v as usize)))
+            .collect();
+
+        let mut min_sq = self.sqs[0];
+        let mut min_perms = vec![(
+            [0, 1, 2],
+            vec![[
+                Permutation::identity(),
+                Permutation::identity(),
+                Permutation::identity(),
+            ]],
+        )];
+
+        for [r, c, s] in TupleIterator::<3>::new(values.len())
+            .flat_map(|rcs| PermutationIter::new().map(move |p| p.apply_array(rcs)))
+        {
+            let sq = LatinSquare::from_rcs(values[r], values[c], values[s]);
+            // let isotopy_class = sq.isotopy_class_lookup(lookup);
+
+            let (isotopy_class, permutations) = sq.isotopy_class_permutations(lookup);
+
+            match isotopy_class.cmp(&min_sq) {
+                Ordering::Less => {
+                    min_sq = sq;
+                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    min_perms = vec![([r, c, s], permutations)];
+                }
+                Ordering::Equal => {
+                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    min_perms.push(([r, c, s], permutations))
+                }
+                Ordering::Greater => {}
+            }
+        }
+
+        debug_assert!(min_sq == min_sq.main_class());
+
+        let mut min_mols = self.clone();
+        for (rcs, perms) in min_perms {
+            let rows = values[rcs[0]];
+            let cols = values[rcs[1]];
+
+            let sqs: Vec<_> = values
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != rcs[0] && *i != rcs[1])
+                .map(|(_, vals)| LatinSquare::from_rcs(rows, cols, *vals))
+                .collect();
+
+            for perm in perms {
+                let mut mols = Mols { sqs: sqs.clone() };
+                mols.permute_rows(&perm[0]);
+                mols.permute_cols_and_reduce(&perm[1]);
+                // mols.permute_cols(&perm[1]);
+                // mols.reduce_all_sqs();
+                mols.sqs.sort();
+
+                if mols < min_mols {
+                    min_mols = mols;
+                }
+            }
+        }
+        min_mols
     }
 
     pub fn permute_rows(&mut self, permutation: &Permutation<N>) {
