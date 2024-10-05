@@ -771,23 +771,24 @@ fn count_isotopy_classes<const N: usize>() {
 }
 
 fn expand<const N: usize>() {
-    let mut found = HashSet::new();
-    let mut queue = BinaryHeap::new();
+    let mut last_layer = HashSet::new();
+    let mut next_layer = HashSet::new();
+    let mut queue = HashSet::new();
 
     while let Some(sq) = read_sq_n_from_stdin::<N>() {
-        queue.push((sq.num_transversals(), sq));
+        queue.insert(sq);
     }
 
-    while let Some((transversals, sq)) = queue.pop() {
-        dbg!(transversals);
-        println!("{sq}");
-        for mate in sq.orthogonal_squares() {
-            if found.insert(mate) {
-                queue.push((mate.num_transversals(), mate));
+    while !queue.is_empty() {
+        for sq in queue.iter() {
+            println!("{sq}");
+            for mate in sq.orthogonal_squares() {
+                next_layer.insert(mate);
             }
         }
-
-        dbg!(queue.len());
+        last_layer.clear();
+        std::mem::swap(&mut last_layer, &mut queue);
+        std::mem::swap(&mut next_layer, &mut queue);
     }
 }
 
