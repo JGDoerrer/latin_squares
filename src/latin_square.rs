@@ -1007,11 +1007,27 @@ impl<const N: usize> LatinSquare<N> {
         main_class
     }
 
-    pub fn get_subsquare<const K: usize>(
-        &self,
-        rows: &[usize; K],
-        cols: &[usize; K],
-    ) -> [[u8; K]; K] {
+    pub fn num_isotopy_classes(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> usize {
+        let conjugates: [_; 6] = self.conjugates().collect::<Vec<_>>().try_into().unwrap();
+
+        let mut isotopy_classes = conjugates.map(|c| c.isotopy_class_lookup(lookup));
+
+        isotopy_classes.sort();
+
+        let mut unique = 1;
+        let mut prev = &isotopy_classes[0];
+
+        for i in 1..isotopy_classes.len() {
+            if isotopy_classes[i] != *prev {
+                unique += 1;
+            }
+            prev = &isotopy_classes[i];
+        }
+
+        unique
+    }
+
+    fn get_subsquare<const K: usize>(&self, rows: &[usize; K], cols: &[usize; K]) -> [[u8; K]; K] {
         assert!(K <= N);
 
         let mut values = [[0; K]; K];
@@ -1025,7 +1041,7 @@ impl<const N: usize> LatinSquare<N> {
         values
     }
 
-    pub fn subsquares<const K: usize>(&self) -> Vec<([usize; K], [usize; K])> {
+    fn subsquares<const K: usize>(&self) -> Vec<([usize; K], [usize; K])> {
         if K > N {
             return vec![];
         }
@@ -1070,7 +1086,7 @@ impl<const N: usize> LatinSquare<N> {
         subsquares
     }
 
-    pub fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
+    fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
         debug_assert!(rows.len() == cols.len());
 
         let k = rows.len();

@@ -92,7 +92,9 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
                 if sqs.len() >= 1000 {
                     let mut stdout = stdout().lock();
                     for sq in sqs.drain(..) {
-                        writeln!(stdout, "{sq}").unwrap();
+                        if writeln!(stdout, "{sq}").is_err() {
+                            return;
+                        }
                     }
                 }
 
@@ -104,7 +106,9 @@ impl<'a, const N: usize> ThreadedMainClassGenerator<'a, N> {
 
         let mut stdout = stdout().lock();
         for sq in sqs.drain(..) {
-            writeln!(stdout, "{sq}").unwrap();
+            if writeln!(stdout, "{sq}").is_err() {
+                return;
+            }
         }
     }
 }

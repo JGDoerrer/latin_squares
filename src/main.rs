@@ -125,6 +125,10 @@ enum Mode {
     },
     DecodeCS,
     CountEntries,
+    /// Counts the number of isotopy classes in the given main classes
+    CountIsotopyClasses {
+        n: usize,
+    },
 }
 
 #[derive(Parser)]
@@ -182,6 +186,7 @@ fn main() {
         Mode::Decode { n } => match_n!(n, decode),
         Mode::DecodeCS => decode_cs(),
         Mode::CountEntries => count_entries(),
+        Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
     }
 }
 
@@ -359,9 +364,7 @@ fn normalize_main_class<const N: usize>() {
 
 fn generate_isotopy_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup_simd::<N>();
-    for (i, sq) in IsotopyClassGenerator::<N>::new(&lookup).enumerate() {
-        dbg!(i + 1);
-
+    for sq in IsotopyClassGenerator::<N>::new(&lookup) {
         if writeln!(stdout(), "{sq}").is_err() {
             return;
         }
@@ -745,6 +748,13 @@ fn count_entries() {
 
     for (num_entries, count) in counts.into_iter().enumerate() {
         println!("{num_entries}: {count}");
+    }
+}
+
+fn count_isotopy_classes<const N: usize>() {
+    let lookup = generate_minimize_rows_lookup();
+    while let Some(sq) = read_sq_n_from_stdin::<N>() {
+        println!("{}", sq.num_isotopy_classes(&lookup));
     }
 }
 

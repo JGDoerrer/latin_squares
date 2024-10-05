@@ -139,6 +139,8 @@ impl LatinSquareDyn {
     pub fn mask(&self, mask: BitSet128) -> PartialLatinSquareDyn {
         let mut partial_sq = PartialLatinSquareDyn::empty(self.n);
 
+        assert!(self.n * self.n <= 128);
+
         for index in mask {
             let i = index / self.n;
             let j = index % self.n;
