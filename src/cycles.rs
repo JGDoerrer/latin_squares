@@ -24,7 +24,7 @@ pub fn generate_cycle_structures(n: usize) -> Vec<Vec<usize>> {
     cycles
 }
 
-pub const CYCLE_STRUCTURES: [&[&[usize]]; 11] = [
+pub const CYCLE_STRUCTURES: [&[&[usize]]; 12] = [
     &[&[0]],
     &[&[1]],
     &[&[2]],
@@ -65,6 +65,22 @@ pub const CYCLE_STRUCTURES: [&[&[usize]]; 11] = [
         &[4, 6],
         &[5, 5],
         &[10],
+    ],
+    &[
+        &[2, 2, 2, 2, 3],
+        &[2, 2, 2, 5],
+        &[2, 2, 3, 4],
+        &[2, 2, 7],
+        &[2, 3, 3, 3],
+        &[2, 3, 6],
+        &[2, 4, 5],
+        &[2, 9],
+        &[3, 3, 5],
+        &[3, 4, 4],
+        &[3, 8],
+        &[4, 7],
+        &[5, 6],
+        &[11],
     ],
 ];
 

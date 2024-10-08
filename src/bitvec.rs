@@ -1,21 +1,24 @@
-use std::{cmp::Ordering, vec};
-
 #[derive(Debug, Clone)]
 pub struct BitVec {
     words: Vec<usize>,
+    is_empty: bool,
 }
 
 #[allow(dead_code)]
 impl BitVec {
     #[inline]
     pub fn empty() -> Self {
-        BitVec { words: Vec::new() }
+        BitVec {
+            words: Vec::new(),
+            is_empty: true,
+        }
     }
 
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         BitVec {
             words: Vec::with_capacity(capacity.div_ceil(usize::BITS as usize)),
+            is_empty: true,
         }
     }
 
@@ -26,9 +29,8 @@ impl BitVec {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        // debug_assert_eq!(self.words.is_empty(), self.words.iter().all(|w| *w == 0));
-        // self.words.is_empty()
-        self.words.iter().all(|w| *w == 0)
+        debug_assert_eq!(self.is_empty, self.words.iter().all(|w| *w == 0));
+        self.is_empty
     }
 
     #[inline]
@@ -42,6 +44,7 @@ impl BitVec {
         }
 
         self.words[word] |= bit_mask;
+        self.is_empty = false;
     }
 
     #[inline]
@@ -53,6 +56,10 @@ impl BitVec {
             let bit_mask = 1 << bit;
 
             *word &= !bit_mask;
+
+            if *word == 0 {
+                self.is_empty = self.words.iter().all(|w| *w == 0);
+            }
         }
     }
 
@@ -83,36 +90,9 @@ impl BitVec {
             *word = self.words.get(i).unwrap_or(&0) | other.words.get(i).unwrap_or(&0);
         }
 
-        BitVec { words }
-    }
-
-    #[inline]
-    pub fn union_into(&self, other: &Self, result: &mut Self) {
-        let words = &mut result.words;
-
-        match self.words.len().cmp(&other.words.len()) {
-            Ordering::Less => {
-                words.resize(other.words.len(), 0);
-                for i in 0..self.words.len() {
-                    words[i] = self.words[i] | other.words[i];
-                }
-                words[self.words.len()..other.words.len()]
-                    .copy_from_slice(&other.words[self.words.len()..]);
-            }
-            Ordering::Equal => {
-                words.resize(self.words.len(), 0);
-                for i in 0..self.words.len() {
-                    words[i] = self.words[i] | other.words[i];
-                }
-            }
-            Ordering::Greater => {
-                words.resize(self.words.len(), 0);
-                for i in 0..other.words.len() {
-                    words[i] = self.words[i] | other.words[i];
-                }
-                words[other.words.len()..self.words.len()]
-                    .copy_from_slice(&self.words[other.words.len()..]);
-            }
+        BitVec {
+            words,
+            is_empty: self.is_empty && other.is_empty,
         }
     }
 
@@ -120,24 +100,34 @@ impl BitVec {
     pub fn intersect(&self, other: &Self) -> Self {
         let new_len = self.words.len().min(other.words.len());
         let mut words = Vec::with_capacity(new_len);
+        let mut is_empty = true;
 
         for i in 0..new_len {
-            words.push(self.words[i] & other.words[i]);
+            let intersection = self.words[i] & other.words[i];
+            words.push(intersection);
+            if intersection != 0 {
+                is_empty = false;
+            }
         }
 
-        BitVec { words }
+        BitVec { words, is_empty }
     }
 
     #[inline]
     pub fn minus(&self, other: &Self) -> Self {
         let new_len = self.words.len();
         let mut words = Vec::with_capacity(new_len);
+        let mut is_empty = true;
 
         for i in 0..new_len {
-            words.push(self.words[i] & !other.words.get(i).unwrap_or(&0));
+            let value = self.words[i] & !other.words.get(i).unwrap_or(&0);
+            words.push(value);
+            if value != 0 {
+                is_empty = false;
+            }
         }
 
-        BitVec { words }
+        BitVec { words, is_empty }
     }
 
     #[inline]

@@ -39,15 +39,18 @@ impl PartialSquareGeneratorDyn {
         let n = sq.n();
 
         let current_entries = partial.num_entries();
+        assert!(num_entries >= current_entries);
         let entries_left = num_entries - current_entries;
 
-        let mut gen = (entries_left != 0).then(|| {
-            Box::new(PartialSquareGeneratorDyn::new_partial(
+        let mut gen = if entries_left > 0 {
+            Some(Box::new(PartialSquareGeneratorDyn::new_partial(
                 sq.clone(),
                 partial.clone(),
                 num_entries - 1,
-            ))
-        });
+            )))
+        } else {
+            None
+        };
 
         let partial_sq = if entries_left == 0 {
             Some(partial.clone())

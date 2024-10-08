@@ -20,13 +20,19 @@ macro_rules! make_bitset {
 
             #[inline]
             pub const fn full() -> Self {
-                Self::all_less_than(<$BitType>::BITS as usize)
+                $Name {
+                    bits: <$BitType>::MAX,
+                }
             }
 
             #[inline]
             pub const fn all_less_than(n: usize) -> Self {
-                $Name {
-                    bits: (((1 as $BitType) << n) - 1) as $BitType,
+                if n == <$BitType>::BITS as usize {
+                    Self::full()
+                } else {
+                    $Name {
+                        bits: (((1 as $BitType) << n) - 1) as $BitType,
+                    }
                 }
             }
 

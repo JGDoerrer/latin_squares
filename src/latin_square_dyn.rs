@@ -225,7 +225,8 @@ impl Display for LatinSquareDyn {
         let n = self.n();
         for i in 0..n {
             for j in 0..n {
-                f.write_char(char::from_digit(self.get(i, j) as u32, 10).unwrap())?;
+                assert!(n <= 16);
+                f.write_char(char::from_digit(self.get(i, j) as u32, 16).unwrap())?;
             }
         }
         Ok(())
@@ -264,7 +265,7 @@ impl TryFrom<&str> for LatinSquareDyn {
         let mut values = vec![0; value.len()].into_boxed_slice();
         for (i, c) in value.chars().enumerate() {
             let entry = c
-                .to_digit(10)
+                .to_digit(16)
                 .ok_or(Error::InvalidChar { index: i, char: c })?;
             if entry >= n as u32 {
                 return Err(Error::InvalidChar { index: i, char: c });

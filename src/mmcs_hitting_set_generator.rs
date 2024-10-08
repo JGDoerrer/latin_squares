@@ -153,6 +153,10 @@ impl Iterator for MMCSHittingSetGenerator {
                 next_entry.hitting_set.clone_from(hitting_set);
                 next_entry.hitting_set.insert(v);
 
+                if hitting_set.len() + 1 >= self.max_entries {
+                    continue;
+                }
+
                 for f in self.entry_to_sets[v].iter() {
                     for crit in &mut next_entry.critical {
                         if !crit.is_empty() {
@@ -181,9 +185,6 @@ impl Iterator for MMCSHittingSetGenerator {
                             dbg!(self.progress(), self.estimated_time_left());
                         }
                         return Some(hitting_set);
-                    }
-                    if hitting_set.len() + 1 >= self.max_entries {
-                        continue;
                     }
 
                     let uncovered_set_index = next_entry

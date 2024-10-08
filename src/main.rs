@@ -27,7 +27,7 @@ use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, Permutation};
 use permutation_dyn::PermutationDyn;
-use random_latin_square_generator::RandomLatinSquareGenerator;
+use random_latin_square_generator::{RandomLatinSquareGenerator, RandomLatinSquareGeneratorDyn};
 use threaded_main_class_generator::ThreadedMainClassGenerator;
 
 mod bitset;
@@ -35,7 +35,6 @@ mod bitvec;
 mod constants;
 mod constraints;
 mod cycles;
-mod hitting_set_generator;
 mod isotopy_class_generator;
 mod latin_square;
 mod latin_square_dyn;
@@ -60,7 +59,16 @@ enum Mode {
     /// Prints all solutions for a partial latin square
     Solve,
     /// Permutes the symbols of a latin square randomly
-    Shuffle,
+    Shuffle {
+        #[arg(short)]
+        r: bool,
+        #[arg(short)]
+        c: bool,
+        #[arg(short)]
+        s: bool,
+        #[arg(long)]
+        seed: u64,
+    },
     /// Prints information about a latin square
     Analyse {
         n: usize,
@@ -117,7 +125,10 @@ enum Mode {
         #[arg(long, default_value_t = 10)]
         buffer_size: usize,
     },
-    ToTex,
+    ToTex {
+        #[arg(long, default_value_t = false)]
+        standalone: bool,
+    },
     Encode {
         n: usize,
     },
@@ -157,6 +168,7 @@ fn main() {
                 8 => $f::<8>($($args),*),
                 9 => $f::<9>($($args),*),
                 10 => $f::<10>($($args),*),
+                11 => $f::<11>($($args),*),
                 _ => unimplemented!(),
             }
         };
@@ -172,12 +184,12 @@ fn main() {
             match_n!(n, generate_main_classes, max_threads)
         }
         Mode::Solve => solve(),
-        Mode::Shuffle => shuffle(),
+        Mode::Shuffle { r, c, s, seed } => shuffle(seed, r, c, s),
         Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindAllCS => find_all_cs(),
         Mode::FindLCS { max_threads } => find_lcs(max_threads),
         Mode::FindSCS { reverse } => find_scs(reverse),
-        Mode::Random { n, seed } => match_n!(n, random_latin_squares, seed),
+        Mode::Random { n, seed } => random_latin_squares(n, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
         Mode::FindAllMOLS {
@@ -185,7 +197,7 @@ fn main() {
             max_threads,
             buffer_size,
         } => match_n!(n, find_all_mols, max_threads, buffer_size),
-        Mode::ToTex => to_tex(),
+        Mode::ToTex { standalone } => to_tex(standalone),
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
         Mode::DecodeCS => decode_cs(),
@@ -217,8 +229,8 @@ fn find_orthogonal<const N: usize>(all: bool) {
     }
 }
 
-fn random_latin_squares<const N: usize>(seed: u64) {
-    for sq in RandomLatinSquareGenerator::<N>::new(seed) {
+fn random_latin_squares(n: usize, seed: u64) {
+    for sq in RandomLatinSquareGeneratorDyn::new(n, seed) {
         if writeln!(stdout(), "{}", sq).is_err() {
             return;
         }
@@ -389,12 +401,10 @@ fn find_scs(reverse: bool) {
         println!("{}", sq);
 
         let differences = sq.differences();
-        differences.iter().for_each(|sets| {
-            dbg!(sets.len());
-        });
+        dbg!(differences.len());
 
         let start = *KNOWN_SCS.get(sq.n()).unwrap_or(&sq.n());
-        let end = sq.n().pow(2);
+        let end = sq.n().pow(2) - 1;
 
         if !reverse {
             for i in start..=end {
@@ -402,7 +412,7 @@ fn find_scs(reverse: bool) {
                 let hitting_sets = MMCSHittingSetGenerator::new(differences.clone(), i);
 
                 let mut found = false;
-                let mut scs = HashSet::new();
+                let mut scs = PartialLatinSquareDyn::empty(sq.n());
                 'h: for hitting_set in hitting_sets {
                     let partial_sq = sq.mask(hitting_set);
 
@@ -417,15 +427,14 @@ fn find_scs(reverse: bool) {
                             && first_solution.is_some_and(|solution| solution == sq)
                         {
                             found = true;
-                            if scs.insert(partial_sq.clone()) {
-                                println!("{}", partial_sq);
-                            }
+                            scs = partial_sq;
                             break 'h;
                         }
                     }
                 }
 
                 if found {
+                    println!("{scs}");
                     break;
                 }
             }
@@ -435,7 +444,7 @@ fn find_scs(reverse: bool) {
                 dbg!(i);
 
                 let mut found = false;
-                let mut scs = HashSet::new();
+                let mut scs = PartialLatinSquareDyn::empty(sq.n());
                 'h: for hitting_set in hitting_sets.by_ref() {
                     let partial_sq = sq.mask(hitting_set);
 
@@ -450,9 +459,8 @@ fn find_scs(reverse: bool) {
                             && first_solution.is_some_and(|solution| solution == sq)
                         {
                             found = true;
-                            if scs.insert(partial_sq.clone()) {
-                                println!("{}", partial_sq);
-                            }
+                            scs = partial_sq;
+                            dbg!(scs.to_string());
                             break 'h;
                         }
                     }
@@ -460,6 +468,7 @@ fn find_scs(reverse: bool) {
                 hitting_sets.decrease_max_entries();
 
                 if !found {
+                    println!("{scs}");
                     break;
                 }
             }
@@ -771,28 +780,60 @@ fn count_isotopy_classes<const N: usize>() {
 }
 
 fn expand<const N: usize>() {
-    let mut last_layer = HashSet::new();
-    let mut next_layer = HashSet::new();
-    let mut queue = HashSet::new();
+    let lookup = generate_minimize_rows_lookup();
+
+    // let mut last_layer = HashSet::new();
+    // let mut next_layer = HashSet::new();
+    // let mut queue = HashSet::new();
+
+    // while let Some(sq) = read_sq_n_from_stdin::<N>() {
+    //     queue.insert(sq);
+    // }
+
+    // while !queue.is_empty() {
+    //     for sq in queue.iter() {
+    //         println!("{sq}");
+    //         for mate in sq
+    //             .orthogonal_squares()
+    //             .map(|sq| sq.main_class_lookup(&lookup))
+    //         {
+    //             next_layer.insert(mate);
+    //         }
+    //     }
+    //     last_layer.clear();
+    //     std::mem::swap(&mut last_layer, &mut queue);
+    //     std::mem::swap(&mut next_layer, &mut queue);
+    // }
+
+    let mut queue = BinaryHeap::new();
+    let mut found = HashSet::new();
 
     while let Some(sq) = read_sq_n_from_stdin::<N>() {
-        queue.insert(sq);
+        let sq = sq.main_class_lookup(&lookup);
+        found.insert(sq);
+        queue.push((sq.num_transversals(), sq));
     }
 
-    while !queue.is_empty() {
-        for sq in queue.iter() {
-            println!("{sq}");
-            for mate in sq.orthogonal_squares() {
-                next_layer.insert(mate);
+    while let Some((t, sq)) = queue.pop() {
+        dbg!(t, queue.len(), found.len());
+        println!("{sq}");
+
+        let mut mates: Vec<_> = sq
+            .orthogonal_squares()
+            .map(|s| s.main_class_lookup(&lookup))
+            .collect();
+        mates.sort();
+        mates.dedup();
+
+        for mate in mates {
+            if found.insert(mate) {
+                queue.push((mate.num_transversals(), mate));
             }
         }
-        last_layer.clear();
-        std::mem::swap(&mut last_layer, &mut queue);
-        std::mem::swap(&mut next_layer, &mut queue);
     }
 }
 
-fn shuffle() {
+fn shuffle(seed: u64, rows: bool, cols: bool, vals: bool) {
     fn xoshiro(state: &mut [u64; 4]) -> u64 {
         let result = state[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
 
@@ -807,34 +848,69 @@ fn shuffle() {
         result
     }
 
-    let mut state = [1, 2, 3, 4];
+    let mut state = [seed, 2, 3, 4];
+
+    for _ in 0..100 {
+        xoshiro(&mut state);
+    }
 
     for mut sq in read_partial_sqs_from_stdin() {
         let n = sq.n();
-        let rank = xoshiro(&mut state) as usize % factorial(n);
 
-        let permutations = PermutationDyn::from_rank(rank, n);
+        if rows {
+            let rank = xoshiro(&mut state) as usize % factorial(n);
+            let permutations = PermutationDyn::from_rank(rank, n);
 
-        sq.permute_vals(&permutations);
+            sq.permute_rows(&permutations);
+        }
+
+        if cols {
+            let rank = xoshiro(&mut state) as usize % factorial(n);
+            let permutations = PermutationDyn::from_rank(rank, n);
+
+            sq.permute_cols(&permutations);
+        }
+
+        if vals {
+            let rank = xoshiro(&mut state) as usize % factorial(n);
+            let permutations = PermutationDyn::from_rank(rank, n);
+
+            sq.permute_vals(&permutations);
+        }
 
         println!("{sq}");
     }
 }
 
-fn to_tex() {
+fn to_tex(standalone: bool) {
+    if standalone {
+        println!(
+            "\\documentclass[preview]{{standalone}}
+\\usepackage{{tikz}}
+\\newcounter{{row}}
+\\newcounter{{col}}
+\\begin{{document}}"
+        );
+    }
+
     while let Some(sq) = read_partial_sq_from_stdin() {
         let n = sq.n();
 
-        let args = (1..=n)
-            .map(|i| format!("#{i}"))
-            .reduce(|a, b| format!("{a}, {b}"))
-            .unwrap();
         println!("% {}", sq);
         println!(
             "\\begin{{tikzpicture}}[scale=0.5]
     \\begin{{scope}}
-        \\newcommand{{\\makerow}}[{n}]{{
-        \\setcounter{{col}}{{0}};
+        \\draw (0, 0) grid ({n}, {n});"
+        );
+
+        if n <= 9 {
+            let args = (1..=n)
+                .map(|i| format!("#{i}"))
+                .reduce(|a, b| format!("{a}, {b}"))
+                .unwrap();
+            println!(
+                "        \\newcommand{{\\makerow}}[{n}]{{
+        \\setcounter{{col}}{{0}}
         \\foreach \\n in {{{args}}} {{
             \\edef\\x{{\\value{{col}} + 0.5}}
                 \\edef\\y{{{}.5 - \\value{{row}}}}
@@ -843,23 +919,40 @@ fn to_tex() {
             }}
             \\stepcounter{{row}}
         }}
-        \\draw (0, 0) grid ({n}, {n});
-        \\setcounter{{row}}{{0}};",
-            n - 1
-        );
-        for i in 0..n {
-            print!("        \\makerow");
-            for j in 0..n {
-                if let Some(v) = sq.get_partial(i, j) {
-                    print!("{{{}}}", v + 1);
-                } else {
-                    print!("{{}}");
+        \\setcounter{{row}}{{0}}",
+                n - 1
+            );
+            for i in 0..n {
+                print!("        \\makerow");
+                for j in 0..n {
+                    if let Some(v) = sq.get_partial(i, j) {
+                        print!("{{{}}}", v + 1);
+                    } else {
+                        print!("{{}}");
+                    }
                 }
+                println!();
             }
-            println!();
+        } else {
+            for i in 0..n {
+                for j in 0..n {
+                    if let Some(v) = sq.get_partial(i, j) {
+                        print!(
+                            "\\node[anchor=center] at ({j}.5, {}.5) {{{}}};",
+                            n - i - 1,
+                            v + 1
+                        );
+                    }
+                }
+                println!();
+            }
         }
         println!("    \\end{{scope}}");
         println!("\\end{{tikzpicture}}");
+    }
+
+    if standalone {
+        println!("\\end{{document}}");
     }
 }
 

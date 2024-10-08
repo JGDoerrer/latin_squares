@@ -500,6 +500,10 @@ impl<const N: usize> LatinSquare<N> {
                             mols.push(new_mols);
                         }
                     }
+                    // let new_mols = new_mols.normalize_main_class_set(lookup);
+                    // if !mols.contains(&new_mols) {
+                    //     mols.push(new_mols);
+                    // }
 
                     let next_index = *index;
                     indices.push(next_index);
@@ -1432,10 +1436,10 @@ impl<const N: usize> Debug for LatinSquare<N> {
 
 impl<const N: usize> Display for LatinSquare<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        assert!(N <= 10);
+        assert!(N <= 16);
         for i in 0..N {
             for j in 0..N {
-                f.write_char(char::from_digit(self.get(i, j) as u32, 10).unwrap())?;
+                f.write_char(char::from_digit(self.get(i, j) as u32, 16).unwrap())?;
             }
         }
         Ok(())
@@ -1477,7 +1481,7 @@ impl<const N: usize> TryFrom<&str> for LatinSquare<N> {
         let mut values = [[0; N]; N];
         for (i, c) in value.chars().enumerate() {
             let entry = c
-                .to_digit(10)
+                .to_digit(16)
                 .ok_or(Error::InvalidChar { index: i, char: c })?;
             if entry >= N as u32 {
                 return Err(Error::InvalidChar { index: i, char: c });

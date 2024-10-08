@@ -91,6 +91,30 @@ impl PartialLatinSquareDyn {
         true
     }
 
+    pub fn permute_rows(&mut self, permutation: &PermutationDyn) {
+        let mut new_values = vec![None; self.n * self.n].into_boxed_slice();
+
+        for i in 0..self.n {
+            for j in 0..self.n {
+                new_values[permutation.as_vec()[i] * self.n + j] = self.values[i * self.n + j];
+            }
+        }
+
+        self.values = new_values;
+    }
+
+    pub fn permute_cols(&mut self, permutation: &PermutationDyn) {
+        let mut new_values = vec![None; self.n * self.n].into_boxed_slice();
+
+        for i in 0..self.n {
+            for j in 0..self.n {
+                new_values[i * self.n + permutation.as_vec()[j]] = self.values[i * self.n + j];
+            }
+        }
+
+        self.values = new_values;
+    }
+
     pub fn permute_vals(&mut self, permutation: &PermutationDyn) {
         for val in self.values.iter_mut().flatten() {
             *val = permutation.apply(*val as usize) as u8;
@@ -103,7 +127,7 @@ impl Display for PartialLatinSquareDyn {
         for i in 0..self.n {
             for j in 0..self.n {
                 if let Some(entry) = self.get_partial(i, j) {
-                    f.write_char(char::from_digit(entry as u32, 10).unwrap())?;
+                    f.write_char(char::from_digit(entry as u32, 16).unwrap())?;
                 } else {
                     f.write_char('.')?;
                 }
@@ -175,7 +199,7 @@ impl TryFrom<&str> for PartialLatinSquareDyn {
         for (i, c) in value.chars().enumerate() {
             if c != '.' {
                 let entry = c
-                    .to_digit(10)
+                    .to_digit(16)
                     .ok_or(Error::InvalidChar { index: i, char: c })?;
                 if entry >= n as u32 {
                     return Err(Error::InvalidChar { index: i, char: c });
