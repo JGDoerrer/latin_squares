@@ -572,7 +572,7 @@ impl<const N: usize> PartialLatinSquare<N> {
         })
     }
 
-    pub fn minimize_main_class(&self, lookup: &Vec<Vec<(Permutation<N>, Permutation<N>)>>) -> Self {
+    pub fn minimize_main_class(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Self {
         let mut min = *self;
 
         for sq in self.paratopic() {

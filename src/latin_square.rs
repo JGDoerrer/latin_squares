@@ -1,4 +1,5 @@
 use std::{
+    array,
     cmp::Ordering,
     fmt::{Debug, Display, Write},
 };
@@ -253,7 +254,7 @@ impl<const N: usize> LatinSquare<N> {
                     .nth(index)
                 {
                     bitset.insert(index);
-                    unused_vals.remove(val.into());
+                    unused_vals.remove(val);
 
                     let col = index % N;
                     used_cols = used_cols.union(Self::BITSET_COLS[col]);
@@ -370,8 +371,9 @@ impl<const N: usize> LatinSquare<N> {
             })
     }
 
-    pub fn full_disjoint_transversals_bitset(&self) -> impl Iterator<Item = [BitSet128; N]> {
-        let mut transversals_by_start = [(); N].map(|_| Vec::new());
+    pub fn full_disjoint_transversals_bitset(&self) -> Vec<[BitSet128; N]> {
+        let mut transversals_by_start: [[Vec<_>; N]; N] =
+            array::from_fn(|_| array::from_fn(|_| Vec::new()));
 
         let transversals = self.transversals_bitset();
 
@@ -381,68 +383,85 @@ impl<const N: usize> LatinSquare<N> {
                 .into_iter()
                 .next()
                 .unwrap();
-            transversals_by_start[first].push(t);
+            let second = t
+                .intersect(BitSet128::from_range(N..2 * N))
+                .into_iter()
+                .next()
+                .unwrap()
+                - N;
+            transversals_by_start[first][second].push(t);
         }
 
-        transversals_by_start[0]
-            .clone()
-            .into_iter()
-            .flat_map(move |transversal| {
-                let mut disjoint = [BitSet128::empty(); N];
-                disjoint[0] = transversal;
-                let mut all = vec![];
+        let mut disjoint_transversals = Vec::new();
 
-                let mut indices = vec![0];
+        for i in 0..N {
+            for transversal in &transversals_by_start[0][i] {
+                let mut disjoint = [BitSet128::empty(); N];
+                disjoint[0] = *transversal;
+
+                let second_row_left = transversal
+                    .complement()
+                    .intersect(BitSet128::from_range(N..2 * N));
+                let mut indices = vec![(0, second_row_left, *transversal)];
 
                 'i: while !indices.is_empty() {
                     let i = indices.len();
 
                     if i == N - 1 {
-                        let left = disjoint[0..N - 1]
-                            .iter()
-                            .cloned()
-                            .reduce(|a, b| a.union(b))
-                            .unwrap()
+                        let (_, second_row_left, union) = indices.last().unwrap();
+
+                        let left = union
                             .complement()
                             .intersect(BitSet128::all_less_than(N * N));
 
-                        if disjoint.iter().take(N - 1).all(|t| left.is_disjoint(*t))
-                            && transversals_by_start[N - 1].contains(&left)
-                        {
+                        debug_assert!(second_row_left.len() == 1);
+                        let second_row = second_row_left.into_iter().next().unwrap() - N;
+
+                        if transversals_by_start[N - 1][second_row].contains(&left) {
                             disjoint[N - 1] = left;
-                            all.push(disjoint);
+                            disjoint_transversals.push(disjoint);
+                            dbg!(disjoint_transversals.len());
                         }
                     } else {
-                        let index = indices.last_mut().unwrap();
+                        let (index, second_row_left, union) = indices.last_mut().unwrap();
 
-                        for other in transversals_by_start[i].iter().skip(*index) {
-                            *index += 1;
+                        while let Some(second_row) =
+                            second_row_left.into_iter().next().map(|i| i - N)
+                        {
+                            for other in transversals_by_start[i][second_row].iter().skip(*index) {
+                                *index += 1;
 
-                            let is_disjoint =
-                                disjoint.iter().take(i).all(|t| other.is_disjoint(*t));
+                                let is_disjoint = union.is_disjoint(*other);
 
-                            if is_disjoint {
-                                disjoint[i] = *other;
+                                if is_disjoint {
+                                    disjoint[i] = *other;
 
-                                if i == N - 1 {
-                                    all.push(disjoint);
-                                } else {
-                                    indices.push(0);
+                                    let union = union.union(*other);
+
+                                    let next_second_row_left = union
+                                        .complement()
+                                        .intersect(BitSet128::from_range(N..2 * N));
+
+                                    indices.push((0, next_second_row_left, union));
+                                    continue 'i;
                                 }
-                                continue 'i;
                             }
+                            *index = 0;
+                            second_row_left.pop();
                         }
                     }
 
                     indices.pop();
                 }
+            }
+        }
 
-                all
-            })
+        disjoint_transversals
     }
 
     pub fn orthogonal_squares(&self) -> impl Iterator<Item = LatinSquare<N>> + '_ {
         self.full_disjoint_transversals_bitset()
+            .into_iter()
             .map(|transversals| {
                 let sq = Self::bitset_transversals_to_sq(&transversals);
                 debug_assert!(self.is_orthogonal_to(&sq));
@@ -466,7 +485,7 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn mols(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Vec<Mols<N>> {
-        let transversals: Vec<_> = self.full_disjoint_transversals_bitset().collect();
+        let transversals: Vec<_> = self.full_disjoint_transversals_bitset();
 
         let mut indices = vec![0];
         let mut current_mols = Vec::new();
@@ -1031,65 +1050,6 @@ impl<const N: usize> LatinSquare<N> {
         unique
     }
 
-    fn get_subsquare<const K: usize>(&self, rows: &[usize; K], cols: &[usize; K]) -> [[u8; K]; K] {
-        assert!(K <= N);
-
-        let mut values = [[0; K]; K];
-
-        for i in 0..K {
-            for (j, col) in cols.iter().enumerate() {
-                values[i][j] = self.rows[rows[i]][*col];
-            }
-        }
-
-        values
-    }
-
-    fn subsquares<const K: usize>(&self) -> Vec<([usize; K], [usize; K])> {
-        if K > N {
-            return vec![];
-        }
-
-        let mut subsquares = Vec::new();
-
-        for rows in TupleIterator::<K>::new(N) {
-            for cols in TupleIterator::<K>::new(N) {
-                let mut subsquare = self.get_subsquare::<K>(&rows, &cols);
-
-                let mut permutation = [None; N];
-
-                for (i, element) in permutation.iter_mut().enumerate().take(K) {
-                    *element = Some(subsquare[0][i] as usize);
-                }
-
-                for i in K..N {
-                    for j in 0..N {
-                        if !permutation.contains(&Some(j)) {
-                            permutation[i] = Some(j);
-                        }
-                    }
-                }
-
-                let permutation: Permutation<N> =
-                    PermutationDyn::from_array(permutation.map(|i| i.unwrap()))
-                        .pad_with_id()
-                        .inverse();
-
-                for row in subsquare.iter_mut() {
-                    for val in row.iter_mut() {
-                        *val = permutation.apply(*val as usize) as u8;
-                    }
-                }
-
-                if LatinSquare::<K>::is_valid(&subsquare) {
-                    subsquares.push((rows, cols));
-                }
-            }
-        }
-
-        subsquares
-    }
-
     fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
         debug_assert!(rows.len() == cols.len());
 
@@ -1450,7 +1410,7 @@ impl<const N: usize> Display for LatinSquare<N> {
 pub enum Error {
     InvalidLength { len: usize, expected: usize },
     InvalidChar { index: usize, char: char },
-    InvalidLatinSquare,
+    NotALatinSquare,
 }
 
 impl Display for Error {
@@ -1462,7 +1422,7 @@ impl Display for Error {
             Error::InvalidChar { index, char } => {
                 write!(f, "Invalid char at index {index}: {char}")
             }
-            Error::InvalidLatinSquare => write!(f, "The latin square property is not met"),
+            Error::NotALatinSquare => write!(f, "The latin square property is not met"),
         }
     }
 }
@@ -1499,7 +1459,7 @@ impl<const N: usize> TryFrom<[[u8; N]; N]> for LatinSquare<N> {
         if Self::is_valid(&value) {
             Ok(LatinSquare::new(value))
         } else {
-            Err(Error::InvalidLatinSquare)
+            Err(Error::NotALatinSquare)
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::mem::MaybeUninit;
+use std::{cmp::Ordering, mem::MaybeUninit};
 
 use crate::permutation::{factorial, Permutation, FACTORIAL};
 
@@ -64,14 +64,14 @@ impl PermutationDyn {
     }
 
     pub fn pad_with_id<const N: usize>(&self) -> Permutation<N> {
-        if self.0.len() == N {
-            self.into()
-        } else if self.0.len() < N {
-            let mut new = [0; N];
-            new[..self.0.len()].copy_from_slice(&self.0[..]);
-            Permutation::from_array(new)
-        } else {
-            todo!()
+        match self.0.len().cmp(&N) {
+            Ordering::Less => {
+                let mut new = [0; N];
+                new[..self.0.len()].copy_from_slice(&self.0[..]);
+                Permutation::from_array(new)
+            }
+            Ordering::Equal => self.into(),
+            Ordering::Greater => todo!(),
         }
     }
 

@@ -147,8 +147,12 @@ macro_rules! make_bitset {
 
             #[inline]
             pub const fn is_single(&self) -> bool {
-                self.bits != 0 && self.bits & (self.bits - 1) == 0
-                // self.bits.is_power_of_two()
+                self.bits != 0 && self.bits.is_power_of_two()
+            }
+
+            #[inline]
+            pub const fn pop(&mut self) {
+                self.bits = (self.bits - 1) & self.bits;
             }
 
             pub fn print_sq(&self, size: usize) {
@@ -204,7 +208,7 @@ macro_rules! make_bitset {
 
                 if next < <$BitType>::BITS as usize {
                     // remove first set bit
-                    self.bitset.bits = (self.bitset.bits - 1) & self.bitset.bits;
+                    self.bitset.pop();
                     Some(next)
                 } else {
                     None

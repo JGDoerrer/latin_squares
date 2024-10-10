@@ -1,24 +1,18 @@
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BitVec {
     words: Vec<usize>,
-    is_empty: bool,
 }
 
-#[allow(dead_code)]
 impl BitVec {
     #[inline]
     pub fn empty() -> Self {
-        BitVec {
-            words: Vec::new(),
-            is_empty: true,
-        }
+        BitVec { words: Vec::new() }
     }
 
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         BitVec {
             words: Vec::with_capacity(capacity.div_ceil(usize::BITS as usize)),
-            is_empty: true,
         }
     }
 
@@ -29,8 +23,7 @@ impl BitVec {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        debug_assert_eq!(self.is_empty, self.words.iter().all(|w| *w == 0));
-        self.is_empty
+        self.words.iter().all(|w| *w == 0)
     }
 
     #[inline]
@@ -44,7 +37,6 @@ impl BitVec {
         }
 
         self.words[word] |= bit_mask;
-        self.is_empty = false;
     }
 
     #[inline]
@@ -56,10 +48,6 @@ impl BitVec {
             let bit_mask = 1 << bit;
 
             *word &= !bit_mask;
-
-            if *word == 0 {
-                self.is_empty = self.words.iter().all(|w| *w == 0);
-            }
         }
     }
 
@@ -90,44 +78,33 @@ impl BitVec {
             *word = self.words.get(i).unwrap_or(&0) | other.words.get(i).unwrap_or(&0);
         }
 
-        BitVec {
-            words,
-            is_empty: self.is_empty && other.is_empty,
-        }
+        BitVec { words }
     }
 
     #[inline]
     pub fn intersect(&self, other: &Self) -> Self {
         let new_len = self.words.len().min(other.words.len());
         let mut words = Vec::with_capacity(new_len);
-        let mut is_empty = true;
 
         for i in 0..new_len {
             let intersection = self.words[i] & other.words[i];
             words.push(intersection);
-            if intersection != 0 {
-                is_empty = false;
-            }
         }
 
-        BitVec { words, is_empty }
+        BitVec { words }
     }
 
     #[inline]
     pub fn minus(&self, other: &Self) -> Self {
         let new_len = self.words.len();
         let mut words = Vec::with_capacity(new_len);
-        let mut is_empty = true;
 
         for i in 0..new_len {
             let value = self.words[i] & !other.words.get(i).unwrap_or(&0);
             words.push(value);
-            if value != 0 {
-                is_empty = false;
-            }
         }
 
-        BitVec { words, is_empty }
+        BitVec { words }
     }
 
     #[inline]
@@ -168,6 +145,18 @@ impl BitVec {
 
     pub fn iter(&self) -> BitVecIter {
         self.into_iter()
+    }
+}
+
+impl Clone for BitVec {
+    fn clone(&self) -> Self {
+        Self {
+            words: self.words.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.words.clone_from(&source.words);
     }
 }
 

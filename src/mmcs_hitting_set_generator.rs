@@ -146,36 +146,37 @@ impl Iterator for MMCSHittingSetGenerator {
                 ..
             } = entry;
 
-            for v in c {
-                let next_entry = &mut self.temp_entry;
-                next_entry.critical.clone_from(critical);
-                next_entry.uncovered.clone_from(uncovered);
-                next_entry.hitting_set.clone_from(hitting_set);
-                next_entry.hitting_set.insert(v);
+            if hitting_set.len() < self.max_entries {
+                for v in c {
+                    let next_entry = &mut self.temp_entry;
 
-                if hitting_set.len() + 1 >= self.max_entries {
-                    continue;
-                }
+                    next_entry.hitting_set.clone_from(hitting_set);
+                    next_entry.hitting_set.insert(v);
 
-                for f in self.entry_to_sets[v].iter() {
-                    for crit in &mut next_entry.critical {
-                        if !crit.is_empty() {
+                    next_entry.critical.clone_from(critical);
+                    next_entry.uncovered.clone_from(uncovered);
+
+                    for f in self.entry_to_sets[v].iter() {
+                        for crit in &mut next_entry.critical {
                             crit.remove(f);
+                        }
+
+                        if next_entry.uncovered.contains(f) {
+                            next_entry.uncovered.remove(f);
+                            next_entry.critical[v].insert(f);
                         }
                     }
 
-                    if next_entry.uncovered.contains(f) {
-                        next_entry.uncovered.remove(f);
-                        next_entry.critical[v].insert(f);
+                    if !hitting_set.into_iter().all(|f| {
+                        next_entry.critical[f].iter().any(|c| {
+                            self.sets[c].intersect(next_entry.hitting_set) == BitSet::single(f)
+                        })
+                    }) {
+                        continue;
                     }
-                }
 
-                if hitting_set.into_iter().all(|f| {
-                    next_entry.critical[f].iter().any(|c| {
-                        self.sets[c].intersect(next_entry.hitting_set) == BitSet::single(f)
-                    })
-                }) {
                     cand.insert(v);
+
                     if next_entry.uncovered.is_empty() {
                         let hitting_set = next_entry.hitting_set;
 
@@ -206,7 +207,6 @@ impl Iterator for MMCSHittingSetGenerator {
                 }
             }
 
-            let other_cand = self.stack[self.stack_index].cand;
             if self.stack_index > 0 {
                 self.stack_index -= 1;
             } else {
@@ -214,6 +214,7 @@ impl Iterator for MMCSHittingSetGenerator {
             }
 
             if let Some(cand) = &mut self.stack.get_mut(self.stack_index).map(|e| e.cand) {
+                let other_cand = self.stack[self.stack_index].cand;
                 *cand = cand.intersect(other_cand);
             }
         }

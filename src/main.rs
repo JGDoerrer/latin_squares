@@ -1,8 +1,7 @@
 #![feature(portable_simd)]
 
 use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     io::{stdin, stdout, Read, Write},
     sync::Arc,
     thread::{self},
@@ -27,7 +26,7 @@ use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, Permutation};
 use permutation_dyn::PermutationDyn;
-use random_latin_square_generator::{RandomLatinSquareGenerator, RandomLatinSquareGeneratorDyn};
+use random_latin_square_generator::RandomLatinSquareGeneratorDyn;
 use threaded_main_class_generator::ThreadedMainClassGenerator;
 
 mod bitset;
@@ -58,16 +57,16 @@ enum Mode {
     PrettyPrint,
     /// Prints all solutions for a partial latin square
     Solve,
-    /// Permutes the symbols of a latin square randomly
-    Shuffle {
-        #[arg(short)]
-        r: bool,
-        #[arg(short)]
-        c: bool,
-        #[arg(short)]
-        s: bool,
-        #[arg(long)]
-        seed: u64,
+    CountSubsquares {
+        k: usize,
+    },
+    CountEntries,
+    /// Counts the number of isotopy classes in the given main classes
+    CountIsotopyClasses {
+        n: usize,
+    },
+    CountTransversals {
+        n: usize,
     },
     /// Prints information about a latin square
     Analyse {
@@ -102,17 +101,10 @@ enum Mode {
         #[arg(long)]
         max_threads: usize,
     },
-    Random {
-        n: usize,
-        seed: u64,
-    },
     FindOrthogonal {
         n: usize,
         #[arg(short, long)]
         all: bool,
-    },
-    NumSubsquares {
-        k: usize,
     },
     FindMOLS {
         n: usize,
@@ -136,13 +128,23 @@ enum Mode {
         n: usize,
     },
     DecodeCS,
-    CountEntries,
-    /// Counts the number of isotopy classes in the given main classes
-    CountIsotopyClasses {
-        n: usize,
-    },
     Expand {
         n: usize,
+    },
+    Random {
+        n: usize,
+        seed: u64,
+    },
+    /// Permutes the symbols of a latin square randomly
+    Shuffle {
+        #[arg(short)]
+        r: bool,
+        #[arg(short)]
+        c: bool,
+        #[arg(short)]
+        s: bool,
+        #[arg(long)]
+        seed: u64,
     },
 }
 
@@ -176,6 +178,10 @@ fn main() {
 
     match args.mode {
         Mode::Analyse { n } => match_n!(n, analyse),
+        Mode::CountSubsquares { k } => count_subsquares(k),
+        Mode::CountEntries => count_entries(),
+        Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
+        Mode::CountTransversals { n } => match_n!(n, count_transversals),
         Mode::PrettyPrint => pretty_print(),
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
         Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
@@ -185,7 +191,6 @@ fn main() {
         }
         Mode::Solve => solve(),
         Mode::Shuffle { r, c, s, seed } => shuffle(seed, r, c, s),
-        Mode::NumSubsquares { k } => num_subsquares(k),
         Mode::FindAllCS => find_all_cs(),
         Mode::FindLCS { max_threads } => find_lcs(max_threads),
         Mode::FindSCS { reverse } => find_scs(reverse),
@@ -201,20 +206,18 @@ fn main() {
         Mode::Encode { n } => match_n!(n, encode),
         Mode::Decode { n } => match_n!(n, decode),
         Mode::DecodeCS => decode_cs(),
-        Mode::CountEntries => count_entries(),
-        Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
         Mode::Expand { n } => match_n!(n, expand),
     }
 }
 
-fn num_subsquares(k: usize) {
-    for sq in read_sqs_from_stdin() {
+fn count_subsquares(k: usize) {
+    while let Some(sq) = read_sq_from_stdin() {
         println!("{}", sq.num_subsquares_dyn(k));
     }
 }
 
 fn find_orthogonal<const N: usize>(all: bool) {
-    for sq in read_sqs_from_stdin_n::<N>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
         println!("{sq}");
 
         if all {
@@ -238,7 +241,7 @@ fn random_latin_squares(n: usize, seed: u64) {
 }
 
 fn analyse<const N: usize>() {
-    for sq in read_sqs_from_stdin_n::<N>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
         pretty_print_sq_n(sq);
 
         for i in 2..N {
@@ -261,7 +264,7 @@ fn analyse<const N: usize>() {
         );
         println!(
             "Full disjoint transversal count: {}",
-            sq.full_disjoint_transversals_bitset().count()
+            sq.full_disjoint_transversals_bitset().len()
         );
         println!();
 
@@ -329,7 +332,7 @@ fn generate_latin_squares(n: usize) {
 }
 
 fn pretty_print() {
-    for sq in read_partial_sqs_from_stdin() {
+    while let Some(sq) = read_partial_sq_from_stdin() {
         pretty_print_sq(sq);
     }
 }
@@ -372,7 +375,7 @@ fn pretty_print_sq_n<const N: usize>(sq: LatinSquare<N>) {
 fn normalize_main_class<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
 
-    for sq in read_sqs_from_stdin_n::<N>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
         if writeln!(stdout(), "{}", sq.main_class_lookup(&lookup)).is_err() {
             return;
         }
@@ -397,9 +400,7 @@ fn generate_main_classes<const N: usize>(max_threads: usize) {
 const KNOWN_SCS: [usize; 9] = [0, 0, 1, 2, 4, 6, 9, 12, 16];
 
 fn find_scs(reverse: bool) {
-    for sq in read_sqs_from_stdin() {
-        println!("{}", sq);
-
+    while let Some(sq) = read_sq_from_stdin() {
         let differences = sq.differences();
         dbg!(differences.len());
 
@@ -412,52 +413,39 @@ fn find_scs(reverse: bool) {
                 let hitting_sets = MMCSHittingSetGenerator::new(differences.clone(), i);
 
                 let mut found = false;
-                let mut scs = PartialLatinSquareDyn::empty(sq.n());
                 'h: for hitting_set in hitting_sets {
                     let partial_sq = sq.mask(hitting_set);
 
                     for partial_sq in
                         PartialSquareGeneratorDyn::new_partial(sq.clone(), partial_sq.clone(), i)
                     {
-                        let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
-                        let first_solution = solutions.next();
-                        let second_solution = solutions.next();
-
-                        if second_solution.is_none()
-                            && first_solution.is_some_and(|solution| solution == sq)
-                        {
+                        if partial_sq.is_uniquely_completable_to(&sq) {
                             found = true;
-                            scs = partial_sq;
+                            println!("{sq}");
+                            println!("{partial_sq}");
                             break 'h;
                         }
                     }
                 }
 
                 if found {
-                    println!("{scs}");
                     break;
                 }
             }
         } else {
             let mut hitting_sets = MMCSHittingSetGenerator::new(differences, end);
+            let mut scs = PartialLatinSquareDyn::empty(sq.n());
             for i in (start..=end).rev() {
                 dbg!(i);
 
                 let mut found = false;
-                let mut scs = PartialLatinSquareDyn::empty(sq.n());
                 'h: for hitting_set in hitting_sets.by_ref() {
                     let partial_sq = sq.mask(hitting_set);
 
                     for partial_sq in
                         PartialSquareGeneratorDyn::new_partial(sq.clone(), partial_sq, i)
                     {
-                        let mut solutions = LatinSquareGeneratorDyn::from_partial_sq(&partial_sq);
-                        let first_solution = solutions.next();
-                        let second_solution = solutions.next();
-
-                        if second_solution.is_none()
-                            && first_solution.is_some_and(|solution| solution == sq)
-                        {
+                        if partial_sq.is_uniquely_completable_to(&sq) {
                             found = true;
                             scs = partial_sq;
                             dbg!(scs.to_string());
@@ -468,6 +456,7 @@ fn find_scs(reverse: bool) {
                 hitting_sets.decrease_max_entries();
 
                 if !found {
+                    println!("{sq}");
                     println!("{scs}");
                     break;
                 }
@@ -620,7 +609,7 @@ fn find_mols<const N: usize>(mols: usize) {
 
     let lookup = generate_minimize_rows_lookup();
 
-    for sq in read_sqs_from_stdin_n::<N>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
         let has_orthogonal = sq
             .full_disjoint_transversals()
             .nth(mols.saturating_sub(2))
@@ -687,7 +676,7 @@ fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
     let lookup = Arc::new(generate_minimize_rows_lookup());
 
     if max_threads == 1 {
-        while let Some(sq) = read_sq_n_from_stdin() {
+        while let Some(sq) = read_sq_from_stdin_n() {
             find_all_mols_for_sq(sq, lookup.clone());
         }
         return;
@@ -697,7 +686,7 @@ fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
 
     let mut buffer: Vec<LatinSquare<N>> = Vec::new();
 
-    while let Some(sq) = read_sq_n_from_stdin() {
+    while let Some(sq) = read_sq_from_stdin_n() {
         buffer.push(sq);
 
         if buffer.len() < buffer_size {
@@ -774,7 +763,7 @@ fn count_entries() {
 
 fn count_isotopy_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
-    while let Some(sq) = read_sq_n_from_stdin::<N>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
         println!("{}", sq.num_isotopy_classes(&lookup));
     }
 }
@@ -782,54 +771,60 @@ fn count_isotopy_classes<const N: usize>() {
 fn expand<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
 
-    // let mut last_layer = HashSet::new();
-    // let mut next_layer = HashSet::new();
-    // let mut queue = HashSet::new();
+    let mut last_layer = HashSet::new();
+    let mut next_layer = HashSet::new();
+    let mut queue = HashSet::new();
 
-    // while let Some(sq) = read_sq_n_from_stdin::<N>() {
-    //     queue.insert(sq);
-    // }
-
-    // while !queue.is_empty() {
-    //     for sq in queue.iter() {
-    //         println!("{sq}");
-    //         for mate in sq
-    //             .orthogonal_squares()
-    //             .map(|sq| sq.main_class_lookup(&lookup))
-    //         {
-    //             next_layer.insert(mate);
-    //         }
-    //     }
-    //     last_layer.clear();
-    //     std::mem::swap(&mut last_layer, &mut queue);
-    //     std::mem::swap(&mut next_layer, &mut queue);
-    // }
-
-    let mut queue = BinaryHeap::new();
-    let mut found = HashSet::new();
-
-    while let Some(sq) = read_sq_n_from_stdin::<N>() {
-        let sq = sq.main_class_lookup(&lookup);
-        found.insert(sq);
-        queue.push((sq.num_transversals(), sq));
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
+        queue.insert(sq);
     }
 
-    while let Some((t, sq)) = queue.pop() {
-        dbg!(t, queue.len(), found.len());
-        println!("{sq}");
-
-        let mut mates: Vec<_> = sq
-            .orthogonal_squares()
-            .map(|s| s.main_class_lookup(&lookup))
-            .collect();
-        mates.sort();
-        mates.dedup();
-
-        for mate in mates {
-            if found.insert(mate) {
-                queue.push((mate.num_transversals(), mate));
+    while !queue.is_empty() {
+        for sq in queue.iter() {
+            println!("{sq}");
+            for mate in sq
+                .orthogonal_squares()
+                .map(|sq| sq.main_class_lookup(&lookup))
+            {
+                next_layer.insert(mate);
             }
         }
+        last_layer.clear();
+        std::mem::swap(&mut last_layer, &mut queue);
+        std::mem::swap(&mut next_layer, &mut queue);
+    }
+
+    // let mut queue = BinaryHeap::new();
+    // let mut found = HashSet::new();
+
+    // while let Some(sq) = read_sq_from_stdin_n::<N>() {
+    //     let sq = sq.main_class_lookup(&lookup);
+    //     found.insert(sq);
+    //     queue.push((sq.num_transversals(), sq));
+    // }
+
+    // while let Some((t, sq)) = queue.pop() {
+    //     dbg!(t, queue.len(), found.len());
+    //     println!("{sq}");
+
+    //     let mut mates: Vec<_> = sq
+    //         .orthogonal_squares()
+    //         .map(|s| s.main_class_lookup(&lookup))
+    //         .collect();
+    //     mates.sort();
+    //     mates.dedup();
+
+    //     for mate in mates {
+    //         if found.insert(mate) {
+    //             queue.push((mate.num_transversals(), mate));
+    //         }
+    //     }
+    // }
+}
+
+fn count_transversals<const N: usize>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
+        println!("{}", sq.num_transversals());
     }
 }
 
@@ -854,7 +849,7 @@ fn shuffle(seed: u64, rows: bool, cols: bool, vals: bool) {
         xoshiro(&mut state);
     }
 
-    for mut sq in read_partial_sqs_from_stdin() {
+    while let Some(mut sq) = read_partial_sq_from_stdin() {
         let n = sq.n();
 
         if rows {
@@ -961,7 +956,7 @@ fn encode<const N: usize>() {
     let mut buffer = Vec::new();
     let mut stdout = stdout();
 
-    while let Some(sq) = read_sq_n_from_stdin::<N>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
         encode_sq::<N>(sq, prev_sq, &mut buffer);
 
         stdout.write_all(&buffer).unwrap();
@@ -1092,28 +1087,6 @@ fn decode_sq<const N: usize>(
     LatinSquare::try_from(rows).unwrap()
 }
 
-fn read_sqs_from_stdin_n<const N: usize>() -> impl Iterator<Item = LatinSquare<N>> {
-    let mut line = String::new();
-
-    (0..).map_while(move |_| {
-        while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
-            line = line.trim().into(); // remove newline
-            match LatinSquare::try_from(line.as_str()) {
-                Ok(sq) => {
-                    line.clear();
-                    return Some(sq);
-                }
-                Err(err) => {
-                    eprintln!("{err}");
-                    line.clear();
-                    continue;
-                }
-            }
-        }
-        None
-    })
-}
-
 fn read_sq_from_stdin() -> Option<LatinSquareDyn> {
     let mut line = String::new();
     while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
@@ -1133,7 +1106,7 @@ fn read_sq_from_stdin() -> Option<LatinSquareDyn> {
     None
 }
 
-fn read_sq_n_from_stdin<const N: usize>() -> Option<LatinSquare<N>> {
+fn read_sq_from_stdin_n<const N: usize>() -> Option<LatinSquare<N>> {
     let mut line = String::new();
     while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
         line = line.trim().into(); // remove newline
@@ -1150,10 +1123,6 @@ fn read_sq_n_from_stdin<const N: usize>() -> Option<LatinSquare<N>> {
         }
     }
     None
-}
-
-fn read_sqs_from_stdin() -> impl Iterator<Item = LatinSquareDyn> {
-    (0..).map_while(|_| read_sq_from_stdin())
 }
 
 fn read_partial_sq_from_stdin() -> Option<PartialLatinSquareDyn> {
@@ -1173,8 +1142,4 @@ fn read_partial_sq_from_stdin() -> Option<PartialLatinSquareDyn> {
         }
     }
     None
-}
-
-fn read_partial_sqs_from_stdin() -> impl Iterator<Item = PartialLatinSquareDyn> {
-    (0..).map_while(|_| read_partial_sq_from_stdin())
 }

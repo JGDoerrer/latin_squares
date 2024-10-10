@@ -39,7 +39,10 @@ impl PartialSquareGeneratorDyn {
         let n = sq.n();
 
         let current_entries = partial.num_entries();
-        assert!(num_entries >= current_entries);
+        assert!(
+            num_entries >= current_entries,
+            "{num_entries} >= {current_entries}"
+        );
         let entries_left = num_entries - current_entries;
 
         let mut gen = if entries_left > 0 {
