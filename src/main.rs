@@ -610,18 +610,13 @@ fn find_mols<const N: usize>(mols: usize) {
     let lookup = generate_minimize_rows_lookup();
 
     while let Some(sq) = read_sq_from_stdin_n::<N>() {
-        let has_orthogonal = sq
-            .full_disjoint_transversals()
-            .nth(mols.saturating_sub(2))
-            .is_some();
-
-        if !has_orthogonal {
-            continue;
-        }
-
         let mut current_mols = vec![sq];
         let mut indices = vec![0];
         let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
+
+        if orthogonal.len() < mols - 1 {
+            continue;
+        }
 
         'i: while let Some(index) = indices.last_mut() {
             for orthogonal in orthogonal.iter().skip(*index) {
@@ -666,6 +661,7 @@ fn find_mols<const N: usize>(mols: usize) {
                 }
             }
 
+            dbg!(&indices);
             current_mols.pop();
             indices.pop();
         }

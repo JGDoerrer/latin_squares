@@ -132,7 +132,7 @@ macro_rules! make_bitset {
 
             #[inline]
             pub const fn is_disjoint(&self, other: Self) -> bool {
-                self.intersect(other).is_empty()
+                self.bits & other.bits == 0
             }
 
             #[inline]
@@ -153,6 +153,20 @@ macro_rules! make_bitset {
             #[inline]
             pub const fn pop(&mut self) {
                 self.bits = (self.bits - 1) & self.bits;
+            }
+
+            #[inline]
+            pub const fn shift_left(&self, shift: usize) -> Self {
+                $Name {
+                    bits: self.bits << shift,
+                }
+            }
+
+            #[inline]
+            pub const fn shift_right(&self, shift: usize) -> Self {
+                $Name {
+                    bits: self.bits >> shift,
+                }
             }
 
             pub fn print_sq(&self, size: usize) {
