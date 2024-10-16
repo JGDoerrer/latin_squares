@@ -241,7 +241,7 @@ impl<const N: usize> LatinSquare<N> {
                 .into_iter()
                 .next()
                 .unwrap();
-            transversals_by_start[first as usize].push(t);
+            transversals_by_start[first].push(t);
         }
 
         transversals_by_start[0]
@@ -440,6 +440,8 @@ impl<const N: usize> LatinSquare<N> {
                     }) {
                         current_mols.push(*t);
 
+                        let next_index = (*index0 + 1, 0);
+
                         let new_mols = Mols::new(
                             [*self]
                                 .into_iter()
@@ -450,6 +452,9 @@ impl<const N: usize> LatinSquare<N> {
                         if let Some(new_mols) = new_mols.normalize_main_class_set_sq(lookup, self) {
                             if !mols.contains(&new_mols) {
                                 mols.push(new_mols);
+                                if mols.len() % 1000 == 0 {
+                                    dbg!(&indices, mols.len());
+                                }
                             }
                         }
                         // let new_mols = new_mols.normalize_main_class_set(lookup);
@@ -457,8 +462,100 @@ impl<const N: usize> LatinSquare<N> {
                         //     mols.push(new_mols);
                         // }
 
+                        indices.push(next_index);
+
+                        continue 'i;
+                    }
+                }
+                *index0 += 1;
+                *index1 = 0;
+            }
+
+            current_mols.pop();
+            indices.pop();
+        }
+
+        mols
+    }
+
+    pub fn kmols(
+        &self,
+        k: usize,
+        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
+    ) -> Vec<Mols<N>> {
+        let transversals: Vec<_> = self.full_disjoint_transversals_bitset();
+
+        let mut transversals_by_start: [_; N] = array::from_fn(|_| Vec::new());
+
+        for transversal in transversals {
+            let first_row = transversal.map(|t| {
+                t.intersect(BitSet128::from_range(0..N))
+                    .into_iter()
+                    .next()
+                    .unwrap()
+            });
+            debug_assert_eq!(first_row, Permutation::identity().into_array());
+
+            let second_row = transversal.map(|t| {
+                t.intersect(BitSet128::from_range(N..2 * N))
+                    .shift_right(N)
+                    .into_iter()
+                    .next()
+                    .unwrap()
+            });
+
+            transversals_by_start[second_row[0]].push(transversal);
+        }
+
+        let mut indices = vec![(0, 0)];
+        let mut current_mols = Vec::new();
+        let mut mols = Vec::new();
+
+        'i: while let Some((index0, index1)) = indices.last_mut() {
+            for transversals in transversals_by_start.iter().skip(*index0) {
+                for t in transversals.iter().skip(*index1) {
+                    *index1 += 1;
+
+                    if current_mols.iter().all(|transversal: &[BitSet128; N]| {
+                        for other in transversal {
+                            for t in t {
+                                if !other.intersect(*t).is_single() {
+                                    return false;
+                                }
+                            }
+                        }
+                        true
+                    }) {
+                        current_mols.push(*t);
+
                         let next_index = (*index0 + 1, 0);
                         indices.push(next_index);
+
+                        if current_mols.len() == k - 1 {
+                            let new_mols = Mols::new(
+                                [*self]
+                                    .into_iter()
+                                    .chain(current_mols.iter().map(Self::bitset_transversals_to_sq))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap();
+
+                            let new_mols = new_mols.normalize_main_class_set(lookup);
+                            if !mols.contains(&new_mols) {
+                                mols.push(new_mols);
+                                if mols.len() % 1000 == 0 {
+                                    dbg!(&indices, mols.len());
+                                }
+                            }
+
+                            current_mols.pop();
+                            indices.pop();
+                        }
+
+                        // let new_mols = new_mols.normalize_main_class_set(lookup);
+                        // if !mols.contains(&new_mols) {
+                        //     mols.push(new_mols);
+                        // }
 
                         continue 'i;
                     }
@@ -1321,7 +1418,4 @@ mod test {
             LatinSquare::new([[0, 1, 2, 3], [1, 0, 3, 2], [2, 3, 1, 0], [3, 2, 0, 1]])
         )
     }
-
-    #[test]
-    fn transversal() {}
 }

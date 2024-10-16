@@ -606,65 +606,13 @@ fn decode_cs() {
 }
 
 fn find_mols<const N: usize>(mols: usize) {
-    let mut found = HashSet::new();
-
     let lookup = generate_minimize_rows_lookup();
 
     while let Some(sq) = read_sq_from_stdin_n::<N>() {
-        let mut current_mols = vec![sq];
-        let mut indices = vec![0];
-        let orthogonal: Vec<_> = sq.orthogonal_squares().collect();
-
-        if orthogonal.len() < mols - 1 {
-            continue;
-        }
-
-        'i: while let Some(index) = indices.last_mut() {
-            for orthogonal in orthogonal.iter().skip(*index) {
-                *index += 1;
-                if current_mols
-                    .iter()
-                    .all(|sq| sq.is_orthogonal_to(orthogonal))
-                {
-                    current_mols.push(*orthogonal);
-
-                    if current_mols.len() == mols {
-                        let mols = Mols::new_unchecked(current_mols.clone());
-                        // if let Some(normalized_mols) =
-                        //     mols.normalize_main_class_set_sq(&lookup, &sq)
-                        // {
-                        //     if found.insert(normalized_mols.clone()) {
-                        //         println!("{normalized_mols}");
-                        //     }
-                        // }
-
-                        let normalized_mols = mols.normalize_main_class_set(&lookup);
-                        if found.insert(normalized_mols.clone()) {
-                            println!("{normalized_mols}");
-                        }
-
-                        // println!(
-                        //     "{}",
-                        //     current_mols
-                        //         .iter()
-                        //         .map(|sq| sq.to_string())
-                        //         .reduce(|a, b| format!("{a}{}{b}", SEPARATOR))
-                        //         .unwrap()
-                        // );
-
-                        current_mols.pop();
-                    } else {
-                        let next_index = *index;
-                        indices.push(next_index);
-                    }
-
-                    continue 'i;
-                }
-            }
-
-            dbg!(&indices);
-            current_mols.pop();
-            indices.pop();
+        let mols = sq.kmols(mols, lookup.as_slice());
+        let mut stdout = stdout().lock();
+        for mols in mols {
+            writeln!(stdout, "{mols}").unwrap();
         }
     }
 }
