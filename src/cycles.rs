@@ -307,67 +307,6 @@ pub fn minimize_rows<const N: usize>(rows: &[[u8; N]; 2]) -> Vec<(Permutation<N>
     permutations
 }
 
-pub fn minimize_rows_with_lookup<'a, const N: usize>(
-    rows: &[[u8; N]; 2],
-    lookup: &'a [Vec<(Permutation<N>, Permutation<N>)>],
-) -> Box<dyn Iterator<Item = (Permutation<N>, Permutation<N>)> + 'a> {
-    // find (s,c) to normalize
-    let row_permutation = {
-        let mut permutation = [0; N];
-
-        for i in 0..N {
-            let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
-            permutation[i] = rows[1][position].into();
-        }
-
-        Permutation::from_array(permutation)
-    };
-
-    let mut cycles = row_permutation.cycles();
-    cycles.sort_by_key(|c| c.len());
-
-    let cycle_lengths: Vec<_> = cycles.iter().map(|c| c.len()).collect();
-
-    let symbol_permutation = {
-        let mut permutation = [0; N];
-
-        let mut index = 0;
-        for cycle in cycles {
-            let cycle_len = cycle.len();
-            let start_index = index;
-            index += cycle_len;
-            for (i, j) in cycle.into_iter().enumerate() {
-                permutation[j] = start_index + (i + 1) % cycle_len;
-            }
-        }
-
-        Permutation::from_array(permutation)
-    };
-
-    let column_permutation =
-        Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())));
-
-    // lookup
-    let cycle_index = CYCLE_STRUCTURES[N]
-        .iter()
-        .position(|c| c == &cycle_lengths)
-        .unwrap();
-
-    let permutations = &lookup[cycle_index];
-
-    // fix lookup by (s,c)
-    let symbol_permutation = symbol_permutation.inverse();
-
-    let permutations = permutations.iter().map(move |(s, c)| {
-        (
-            Permutation::from_array(symbol_permutation.apply_array(s.clone().into_array())),
-            Permutation::from_array(column_permutation.apply_array(c.clone().into_array())),
-        )
-    });
-
-    Box::new(permutations)
-}
-
 #[cfg(test)]
 mod test {
 

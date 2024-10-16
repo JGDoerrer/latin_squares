@@ -100,7 +100,7 @@ impl<const N: usize> Mols<N> {
             return None;
         }
 
-        debug_assert!(min_sq == min_sq.main_class());
+        debug_assert!(min_sq == min_sq.main_class_lookup(lookup));
 
         let mut min_mols = self.clone();
         for (rcs, perms) in min_perms {
@@ -177,7 +177,7 @@ impl<const N: usize> Mols<N> {
             }
         }
 
-        debug_assert!(min_sq == min_sq.main_class());
+        debug_assert!(min_sq == min_sq.main_class_lookup(lookup));
 
         let mut min_mols = self.clone();
         for (rcs, perms) in min_perms {

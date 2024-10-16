@@ -1,6 +1,4 @@
-use std::{cmp::Ordering, mem::MaybeUninit};
-
-use crate::permutation::{factorial, Permutation, FACTORIAL};
+use crate::permutation::{Permutation, FACTORIAL};
 
 /// A permutation of elements
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -63,18 +61,6 @@ impl PermutationDyn {
         &self.0
     }
 
-    pub fn pad_with_id<const N: usize>(&self) -> Permutation<N> {
-        match self.0.len().cmp(&N) {
-            Ordering::Less => {
-                let mut new = [0; N];
-                new[..self.0.len()].copy_from_slice(&self.0[..]);
-                Permutation::from_array(new)
-            }
-            Ordering::Equal => self.into(),
-            Ordering::Greater => todo!(),
-        }
-    }
-
     pub fn inverse(self) -> Self {
         let mut identity = Self::identity(self.0.len()).0;
         let len = self.0.len();
@@ -96,24 +82,6 @@ impl PermutationDyn {
 
     pub fn apply(&self, num: usize) -> usize {
         self.0[num]
-    }
-
-    pub fn apply_vec<T>(&self, array: Vec<T>) -> Vec<T>
-    where
-        T: Copy,
-    {
-        let permutation = self.as_vec();
-
-        let mut new_array = vec![MaybeUninit::uninit(); self.0.len()];
-
-        for (i, p) in permutation.iter().enumerate() {
-            new_array[*p].write(array[i]);
-        }
-
-        new_array
-            .into_iter()
-            .map(|i| unsafe { i.assume_init() })
-            .collect()
     }
 }
 
@@ -145,7 +113,7 @@ impl PermutationDynIter {
         PermutationDynIter {
             n,
             indices,
-            left: factorial(n),
+            left: FACTORIAL[n],
         }
     }
 }

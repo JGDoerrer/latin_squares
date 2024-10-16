@@ -31,7 +31,6 @@ use threaded_main_class_generator::ThreadedMainClassGenerator;
 
 mod bitset;
 mod bitvec;
-mod constants;
 mod constraints;
 mod cycles;
 mod isotopy_class_generator;
@@ -241,6 +240,8 @@ fn random_latin_squares(n: usize, seed: u64) {
 }
 
 fn analyse<const N: usize>() {
+    let lookup = generate_minimize_rows_lookup();
+
     while let Some(sq) = read_sq_from_stdin_n::<N>() {
         pretty_print_sq_n(sq);
 
@@ -291,13 +292,13 @@ fn analyse<const N: usize>() {
             println!();
         }
 
-        let (isotopy_class, perm) = sq.isotopy_class_permutation();
+        let (isotopy_class, perm) = sq.isotopy_class_permutations(&lookup);
         if isotopy_class != sq {
             println!("Isotopy class: ");
             println!("{}", isotopy_class);
-            println!("Row permutation: {:?}", perm[0].as_array());
-            println!("Col permutation: {:?}", perm[1].as_array());
-            println!("Sym permutation: {:?}", perm[2].as_array());
+            println!("Row permutation: {:?}", perm[0][0].as_array());
+            println!("Col permutation: {:?}", perm[0][1].as_array());
+            println!("Sym permutation: {:?}", perm[0][2].as_array());
 
             pretty_print_sq_n(isotopy_class);
         } else {

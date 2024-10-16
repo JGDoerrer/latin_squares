@@ -19,9 +19,6 @@ pub struct LatinSquare<const N: usize> {
     rows: [[u8; N]; N],
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Cell(pub usize, pub usize);
-
 impl<const N: usize> LatinSquare<N> {
     pub fn new(values: [[u8; N]; N]) -> Self {
         debug_assert!(Self::is_valid(&values));
@@ -31,18 +28,6 @@ impl<const N: usize> LatinSquare<N> {
 
     pub fn get(&self, row: usize, col: usize) -> usize {
         self.rows[row][col].into()
-    }
-
-    pub fn z() -> Self {
-        let mut values = [[0; N]; N];
-
-        for (i, row) in values.iter_mut().enumerate() {
-            for (j, val) in row.iter_mut().enumerate() {
-                *val = ((i + j) % N) as u8;
-            }
-        }
-
-        LatinSquare::new(values)
     }
 
     pub fn from_rcs(rows: [[usize; N]; N], cols: [[usize; N]; N], vals: [[usize; N]; N]) -> Self {
@@ -99,6 +84,8 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn is_valid(values: &[[u8; N]; N]) -> bool {
+        assert!(N <= 16);
+
         (0..N).all(|i| {
             (0..N).map(|j| values[i][j] as usize).collect::<BitSet16>()
                 == BitSet16::all_less_than(N)
@@ -108,8 +95,10 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn is_orthogonal_to(&self, other: &Self) -> bool {
+        assert!(N <= 16);
+
         for value in 0..N {
-            let mut other_values = BitSet128::empty();
+            let mut other_values = BitSet16::empty();
 
             for i in 0..N {
                 for j in 0..N {
@@ -119,7 +108,7 @@ impl<const N: usize> LatinSquare<N> {
                 }
             }
 
-            if other_values != BitSet128::all_less_than(N) {
+            if other_values != BitSet16::all_less_than(N) {
                 return false;
             }
         }
@@ -503,7 +492,7 @@ impl<const N: usize> LatinSquare<N> {
         PermutationIter::new().map(|perm| self.permuted_rcs(&perm))
     }
 
-    pub fn isotopy_class_permutation(&self) -> (Self, [Permutation<N>; 3]) {
+    fn isotopy_class_permutation(&self) -> (Self, [Permutation<N>; 3]) {
         let mut candidates = Vec::new();
         let mut min_cycles = vec![N];
 
@@ -798,75 +787,17 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn symmetries(&self) -> Vec<Permutation<3>> {
-        let (isotopy_class, _) = self.isotopy_class_permutation();
+        let isotopy_class = self.isotopy_class();
 
         let mut symmetries = Vec::new();
         for (sq, permutation) in
             PermutationIter::new().map(|permutation| (self.permuted_rcs(&permutation), permutation))
         {
-            if sq.isotopy_class_permutation().0 == isotopy_class {
+            if sq.isotopy_class() == isotopy_class {
                 symmetries.push(permutation);
             }
         }
         symmetries
-    }
-
-    pub fn main_class(&self) -> Self {
-        let sq = self;
-
-        let mut main_class = *sq;
-        let mut min_cycles = vec![N];
-
-        for sq in sq.conjugates() {
-            let mut candidates = Vec::new();
-
-            for [row0, row1] in
-                TupleIterator::<2>::new(N).flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
-            {
-                let rows = [*sq.get_row(row0), *sq.get_row(row1)];
-                let row_permutation = {
-                    let mut permutation = [0; N];
-
-                    for i in 0..N {
-                        let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
-                        permutation[i] = rows[1][position].into();
-                    }
-
-                    Permutation::from_array(permutation)
-                };
-
-                let mut cycles = row_permutation.cycle_lengths();
-                cycles.sort();
-
-                match cycles.cmp(&min_cycles) {
-                    Ordering::Less => {
-                        min_cycles = cycles;
-                        candidates.clear();
-                        candidates.push(rows);
-                    }
-                    Ordering::Equal => {
-                        candidates.push(rows);
-                    }
-                    Ordering::Greater => {}
-                }
-            }
-
-            for rows in candidates {
-                let permutations = minimize_rows(&rows);
-
-                for (s, c) in permutations {
-                    let mut new_sq = sq;
-                    new_sq.permute_cols_vals_simd(&c, &s);
-                    new_sq.rows.sort();
-
-                    if new_sq.cmp_rows(&main_class).is_lt() {
-                        main_class = new_sq;
-                    }
-                }
-            }
-        }
-
-        main_class
     }
 
     pub fn main_class_permutation(&self) -> (Self, Permutation<3>, [Permutation<N>; 3]) {
@@ -1127,66 +1058,6 @@ impl<const N: usize> LatinSquare<N> {
         cycles
     }
 
-    pub fn mask(&self, mask: BitSet128) -> PartialLatinSquare<N> {
-        let mut partial_sq = PartialLatinSquare::empty();
-
-        for i in mask {
-            let Cell(i, j) = Cell::from_index::<N>(i);
-
-            partial_sq.set(i, j, Some(self.get(i, j)));
-        }
-
-        partial_sq
-    }
-
-    pub fn without_rows(&self, rows: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {
-        let mut sq = PartialLatinSquare::from(*self);
-        for row in rows {
-            for i in 0..N {
-                sq.set(row, i, None);
-            }
-        }
-        sq
-    }
-
-    pub fn without_cols(&self, cols: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {
-        let mut sq = PartialLatinSquare::from(*self);
-        for col in cols {
-            for i in 0..N {
-                sq.set(i, col, None);
-            }
-        }
-        sq
-    }
-
-    pub fn without_vals(&self, vals: impl IntoIterator<Item = usize>) -> PartialLatinSquare<N> {
-        let mut sq = PartialLatinSquare::from(*self);
-        for value in vals {
-            for i in 0..N {
-                for j in 0..N {
-                    if self.get(i, j) == value {
-                        sq.set(i, j, None);
-                    }
-                }
-            }
-        }
-        sq
-    }
-
-    pub fn difference_mask(&self, other: &Self) -> BitSet128 {
-        let mut mask = BitSet128::empty();
-
-        for i in 0..N {
-            for j in 0..N {
-                if self.get(i, j) != other.get(i, j) {
-                    mask.insert(Cell(i, j).to_index::<N>());
-                }
-            }
-        }
-
-        mask
-    }
-
     pub fn permuted_rcs(&self, permutation: &Permutation<3>) -> Self {
         let mut rows = [[0; N]; N];
         for (i, row) in rows.iter_mut().enumerate() {
@@ -1433,24 +1304,20 @@ impl<const N: usize> From<LatinSquare<N>> for [[u8; N]; N] {
     }
 }
 
-impl Cell {
-    pub fn to_index<const N: usize>(self) -> usize {
-        self.0 * N + self.1
-    }
-    pub fn from_index<const N: usize>(value: usize) -> Self {
-        Cell(value / N, value % N)
-    }
-}
-
 #[cfg(test)]
 mod test {
+
+    use crate::cycles::generate_minimize_rows_lookup;
 
     use super::*;
 
     #[test]
     fn normalize_main_class() {
+        let lookup = generate_minimize_rows_lookup();
+
         assert_eq!(
-            LatinSquare::new([[0, 1, 2, 3], [1, 3, 0, 2], [2, 0, 3, 1], [3, 2, 1, 0]]).main_class(),
+            LatinSquare::new([[0, 1, 2, 3], [1, 3, 0, 2], [2, 0, 3, 1], [3, 2, 1, 0]])
+                .main_class_lookup(&lookup),
             LatinSquare::new([[0, 1, 2, 3], [1, 0, 3, 2], [2, 3, 1, 0], [3, 2, 0, 1]])
         )
     }

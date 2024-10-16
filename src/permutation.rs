@@ -85,37 +85,6 @@ impl<const N: usize> Permutation<N> {
         Self::from_array(inverse)
     }
 
-    pub fn order(&self) -> usize {
-        let mut permutation = self.clone();
-
-        let mut order = 1;
-        while permutation != Permutation::identity() {
-            permutation.0 = permutation.0.map(|i| self.apply(i));
-            order += 1;
-        }
-        order
-    }
-
-    pub fn num_fixed_points(&self) -> usize {
-        self.fixed_points().count()
-    }
-
-    pub fn fixed_points(&self) -> impl Iterator<Item = usize> + '_ {
-        self.0
-            .iter()
-            .enumerate()
-            .filter(|(i, j)| i == *j)
-            .map(|(i, _)| i)
-    }
-
-    pub fn conjugate_by(&self, other: &Permutation<N>) -> Self {
-        other
-            .0
-            .map(|i| self.apply(i))
-            .map(|i| other.clone().inverse().apply(i))
-            .into()
-    }
-
     pub fn cycles(&self) -> Vec<Vec<usize>> {
         let mut cycles = Vec::new();
         let mut used = [false; N];
@@ -243,7 +212,7 @@ impl<const N: usize> From<[usize; N]> for Permutation<N> {
     }
 }
 
-/// An iterater that generates all permutations
+/// An iterator that generates all permutations
 pub struct PermutationIter<const N: usize> {
     indices: [usize; N],
     left: usize,
@@ -331,13 +300,6 @@ mod test {
         assert_eq!(iter.next(), Some(Permutation([2, 0, 1])));
         assert_eq!(iter.next(), Some(Permutation([2, 1, 0])));
         assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn order_test() {
-        assert_eq!(Permutation::from_array([1, 0, 3, 2]).order(), 2);
-        assert_eq!(Permutation::from_array([1, 2, 0, 3]).order(), 3);
-        assert_eq!(Permutation::from_array([1, 2, 3, 0]).order(), 4);
     }
 
     #[test]
