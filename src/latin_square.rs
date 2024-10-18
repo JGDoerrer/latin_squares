@@ -395,180 +395,106 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn mols(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Vec<Mols<N>> {
-        let transversals: Vec<_> = self.full_disjoint_transversals_bitset();
+        let transversals = self.transversals_bitset();
 
-        let mut transversals_by_start: [_; N] = array::from_fn(|_| Vec::new());
+        let mut indices = vec![0];
+        let mut current_mols = vec![*self];
+        let mut disjoint_transversals = vec![n_disjoint_transversals_bitset(&transversals)];
+        let mut intersections = vec![transversals.clone()];
 
-        for transversal in transversals {
-            let first_row = transversal.map(|t| {
-                t.intersect(BitSet128::from_range(0..N))
-                    .into_iter()
-                    .next()
-                    .unwrap()
-            });
-            debug_assert_eq!(first_row, Permutation::identity().into_array());
+        let mut all_mols = Vec::new();
 
-            let second_row = transversal.map(|t| {
-                t.intersect(BitSet128::from_range(N..2 * N))
-                    .shift_right(N)
-                    .into_iter()
-                    .next()
-                    .unwrap()
-            });
+        'i: while let Some(index) = indices.last_mut() {
+            for disjoint_transversal in disjoint_transversals.last().unwrap().iter().skip(*index) {
+                let sq = Self::bitset_transversals_to_sq(&disjoint_transversal);
 
-            transversals_by_start[second_row[0]].push(transversal);
-        }
+                *index += 1;
 
-        let mut indices = vec![(0, 0)];
-        let mut current_mols = Vec::new();
-        let mut mols = Vec::new();
+                current_mols.push(sq);
 
-        'i: while let Some((index0, index1)) = indices.last_mut() {
-            for transversals in transversals_by_start.iter().skip(*index0) {
-                for t in transversals.iter().skip(*index1) {
-                    *index1 += 1;
+                let new_mols = Mols::new_unchecked(current_mols.clone());
 
-                    if current_mols.iter().all(|transversal: &[BitSet128; N]| {
-                        for other in transversal {
-                            for t in t {
-                                if !other.intersect(*t).is_single() {
-                                    return false;
-                                }
-                            }
+                if let Some(new_mols) = new_mols.normalize_main_class_set_sq(lookup, self) {
+                    if !all_mols.contains(&new_mols) {
+                        all_mols.push(new_mols);
+                        if all_mols.len() % 1000 == 0 {
+                            dbg!(&indices, all_mols.len());
                         }
-                        true
-                    }) {
-                        current_mols.push(*t);
-
-                        let next_index = (*index0 + 1, 0);
-
-                        let new_mols = Mols::new(
-                            [*self]
-                                .into_iter()
-                                .chain(current_mols.iter().map(Self::bitset_transversals_to_sq))
-                                .collect::<Vec<_>>(),
-                        )
-                        .unwrap();
-                        if let Some(new_mols) = new_mols.normalize_main_class_set_sq(lookup, self) {
-                            if !mols.contains(&new_mols) {
-                                mols.push(new_mols);
-                                if mols.len() % 1000 == 0 {
-                                    dbg!(&indices, mols.len());
-                                }
-                            }
-                        }
-                        // let new_mols = new_mols.normalize_main_class_set(lookup);
-                        // if !mols.contains(&new_mols) {
-                        //     mols.push(new_mols);
-                        // }
-
-                        indices.push(next_index);
-
-                        continue 'i;
                     }
                 }
-                *index0 += 1;
-                *index1 = 0;
+
+                let new_transversals = sq.transversals_bitset();
+                let mut intersection = intersections.last().unwrap().clone();
+                intersection.retain(|t| new_transversals.contains(t));
+
+                disjoint_transversals.push(n_disjoint_transversals_bitset(&intersection));
+                intersections.push(intersection);
+                indices.push(0);
+
+                continue 'i;
             }
 
             current_mols.pop();
             indices.pop();
+            disjoint_transversals.pop();
+            intersections.pop();
         }
 
-        mols
+        all_mols
     }
 
     pub fn kmols(
         &self,
         k: usize,
-        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
+        _lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
     ) -> Vec<Mols<N>> {
-        let transversals: Vec<_> = self.full_disjoint_transversals_bitset();
+        let transversals = self.transversals_bitset();
 
-        let mut transversals_by_start: [_; N] = array::from_fn(|_| Vec::new());
+        let mut indices = vec![0];
+        let mut current_mols = vec![*self];
+        let mut disjoint_transversals = vec![n_disjoint_transversals_bitset(&transversals)];
+        let mut intersections = vec![transversals.clone()];
 
-        for transversal in transversals {
-            let first_row = transversal.map(|t| {
-                t.intersect(BitSet128::from_range(0..N))
-                    .into_iter()
-                    .next()
-                    .unwrap()
-            });
-            debug_assert_eq!(first_row, Permutation::identity().into_array());
+        let mut all_mols = Vec::new();
 
-            let second_row = transversal.map(|t| {
-                t.intersect(BitSet128::from_range(N..2 * N))
-                    .shift_right(N)
-                    .into_iter()
-                    .next()
-                    .unwrap()
-            });
+        'i: while let Some(index) = indices.last_mut() {
+            for disjoint_transversal in disjoint_transversals.last().unwrap().iter().skip(*index) {
+                let sq = Self::bitset_transversals_to_sq(&disjoint_transversal);
 
-            transversals_by_start[second_row[0]].push(transversal);
-        }
+                *index += 1;
 
-        let mut indices = vec![(0, 0)];
-        let mut current_mols = Vec::new();
-        let mut mols = Vec::new();
+                current_mols.push(sq);
 
-        'i: while let Some((index0, index1)) = indices.last_mut() {
-            for transversals in transversals_by_start.iter().skip(*index0) {
-                for t in transversals.iter().skip(*index1) {
-                    *index1 += 1;
+                if current_mols.len() == k {
+                    let new_mols = Mols::new_unchecked(current_mols.clone());
 
-                    if current_mols.iter().all(|transversal: &[BitSet128; N]| {
-                        for other in transversal {
-                            for t in t {
-                                if !other.intersect(*t).is_single() {
-                                    return false;
-                                }
-                            }
-                        }
-                        true
-                    }) {
-                        current_mols.push(*t);
-
-                        let next_index = (*index0 + 1, 0);
-                        indices.push(next_index);
-
-                        if current_mols.len() == k - 1 {
-                            let new_mols = Mols::new(
-                                [*self]
-                                    .into_iter()
-                                    .chain(current_mols.iter().map(Self::bitset_transversals_to_sq))
-                                    .collect::<Vec<_>>(),
-                            )
-                            .unwrap();
-
-                            let new_mols = new_mols.normalize_main_class_set(lookup);
-                            if !mols.contains(&new_mols) {
-                                mols.push(new_mols);
-                                if mols.len() % 1000 == 0 {
-                                    dbg!(&indices, mols.len());
-                                }
-                            }
-
-                            current_mols.pop();
-                            indices.pop();
-                        }
-
-                        // let new_mols = new_mols.normalize_main_class_set(lookup);
-                        // if !mols.contains(&new_mols) {
-                        //     mols.push(new_mols);
-                        // }
-
-                        continue 'i;
+                    all_mols.push(new_mols);
+                    if all_mols.len() % 1000 == 0 {
+                        dbg!(all_mols.len());
                     }
+
+                    current_mols.pop();
+                    continue;
+                } else {
+                    let new_transversals = sq.transversals_bitset();
+                    let mut intersection = intersections.last().unwrap().clone();
+                    intersection.retain(|t| new_transversals.contains(t));
+
+                    disjoint_transversals.push(n_disjoint_transversals_bitset(&intersection));
+                    intersections.push(intersection);
+                    indices.push(0);
+
+                    continue 'i;
                 }
-                *index0 += 1;
-                *index1 = 0;
             }
 
             current_mols.pop();
             indices.pop();
+            disjoint_transversals.pop();
+            intersections.pop();
         }
 
-        mols
+        all_mols
     }
 
     /// Counts how many rows are the same until a differing row is found
@@ -1399,6 +1325,94 @@ impl<const N: usize> From<LatinSquare<N>> for [[u8; N]; N] {
     fn from(value: LatinSquare<N>) -> Self {
         value.rows
     }
+}
+
+pub fn n_disjoint_transversals_bitset<const N: usize>(
+    transversals: &[BitSet128],
+) -> Vec<[BitSet128; N]> {
+    let mut transversals_by_start: [[Vec<_>; N]; N] =
+        array::from_fn(|_| array::from_fn(|_| Vec::new()));
+
+    for t in transversals {
+        let first = t
+            .intersect(BitSet128::all_less_than(N))
+            .into_iter()
+            .next()
+            .unwrap();
+        let second = t
+            .intersect(BitSet128::from_range(N..2 * N))
+            .into_iter()
+            .next()
+            .unwrap()
+            - N;
+        transversals_by_start[first][second].push(*t);
+    }
+
+    let mut disjoint_transversals = Vec::new();
+
+    for i in 0..N {
+        for transversal in &transversals_by_start[0][i] {
+            let mut disjoint = [BitSet128::empty(); N];
+            disjoint[0] = *transversal;
+
+            let second_row_left = transversal
+                .complement()
+                .intersect(BitSet128::from_range(N..2 * N))
+                .shift_right(N);
+            let mut indices = vec![(0, second_row_left, *transversal)];
+
+            'i: while !indices.is_empty() {
+                let i = indices.len();
+
+                if i == N - 1 {
+                    let (_, second_row_left, union) = indices.last().unwrap();
+
+                    let left = union
+                        .complement()
+                        .intersect(BitSet128::all_less_than(N * N));
+
+                    debug_assert!(second_row_left.len() == 1);
+                    let second_row = second_row_left.into_iter().next().unwrap();
+
+                    if transversals_by_start[N - 1][second_row].contains(&left) {
+                        disjoint[N - 1] = left;
+                        disjoint_transversals.push(disjoint);
+                        if disjoint_transversals.len() % 1000 == 0 {
+                            dbg!(disjoint_transversals.len());
+                        }
+                    }
+                } else {
+                    let (index, second_row_left, union) = indices.last_mut().unwrap();
+
+                    while let Some(second_row) = second_row_left.into_iter().next() {
+                        for other in transversals_by_start[i][second_row].iter().skip(*index) {
+                            *index += 1;
+
+                            if union.is_disjoint(*other) {
+                                disjoint[i] = *other;
+
+                                let union = union.union(*other);
+
+                                let next_second_row_left = union
+                                    .complement()
+                                    .intersect(BitSet128::from_range(N..2 * N))
+                                    .shift_right(N);
+
+                                indices.push((0, next_second_row_left, union));
+                                continue 'i;
+                            }
+                        }
+                        *index = 0;
+                        second_row_left.pop();
+                    }
+                }
+
+                indices.pop();
+            }
+        }
+    }
+
+    disjoint_transversals
 }
 
 #[cfg(test)]

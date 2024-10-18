@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
     thread::{self},
     time::Duration,
-    vec,
 };
 
 use bitset::{BitSet128, BitSet16};
@@ -18,7 +17,6 @@ use latin_square::LatinSquare;
 
 use latin_square_dyn::LatinSquareDyn;
 use latin_square_generator::LatinSquareGeneratorDyn;
-use mols::Mols;
 
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 
@@ -662,6 +660,16 @@ fn find_all_mols<const N: usize>(max_threads: usize, buffer_size: usize) {
             }
         }
     }
+    let lookup = lookup.clone();
+    let move_buffer = std::mem::take(&mut buffer);
+
+    let thread = thread::spawn(move || {
+        for sq in move_buffer {
+            find_all_mols_for_sq(sq, lookup.clone())
+        }
+    });
+
+    threads.push(thread);
 
     for thread in threads {
         thread.join().unwrap();
@@ -694,7 +702,7 @@ fn count_entries() {
     while let Some(sq) = read_partial_sq_from_stdin() {
         let size = sq.n().pow(2);
         if size > counts.len() {
-            counts.resize(size, 0);
+            counts.resize(size + 1, 0);
         }
 
         let num_entries = sq.num_entries();
