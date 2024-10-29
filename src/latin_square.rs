@@ -951,7 +951,7 @@ impl<const N: usize> LatinSquare<N> {
         unique
     }
 
-    fn get_subsquare_dyn(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
+    fn get_subsquare(&self, rows: &[usize], cols: &[usize]) -> Vec<Vec<usize>> {
         debug_assert!(rows.len() == cols.len());
 
         let k = rows.len();
@@ -967,13 +967,13 @@ impl<const N: usize> LatinSquare<N> {
         values
     }
 
-    pub fn num_subsquares_dyn(&self, k: usize) -> usize {
+    pub fn num_subsquares(&self, k: usize) -> usize {
         let mut subsquares = 0;
         assert!(N < 16);
 
         for rows in TupleIteratorDyn::new(N, k) {
             for cols in TupleIteratorDyn::new(N, k) {
-                let mut subsquare = self.get_subsquare_dyn(&rows, &cols);
+                let mut subsquare = self.get_subsquare(&rows, &cols);
 
                 let mut permutation: Vec<_> = subsquare[0].to_vec();
 
@@ -1004,6 +1004,62 @@ impl<const N: usize> LatinSquare<N> {
         }
 
         subsquares
+    }
+
+    pub fn subsquares_bitset(&self, k: usize) -> Vec<BitSet128> {
+        let mut subsquares = Vec::new();
+        assert!(N < 16);
+
+        for rows in TupleIteratorDyn::new(N, k) {
+            for cols in TupleIteratorDyn::new(N, k) {
+                let mut subsquare = self.get_subsquare(&rows, &cols);
+
+                let mut permutation: Vec<_> = subsquare[0].to_vec();
+
+                for i in 0..N {
+                    if !permutation.contains(&i) {
+                        permutation.push(i);
+                    }
+                }
+
+                let permutation = PermutationDyn::from_vec(permutation).inverse();
+
+                for row in subsquare.iter_mut() {
+                    for val in row.iter_mut() {
+                        *val = permutation.apply(*val);
+                    }
+                }
+
+                let is_subsquare = (0..k).all(|i| {
+                    (0..k).map(|j| subsquare[i][j]).collect::<BitSet16>()
+                        == BitSet16::all_less_than(k)
+                        && (0..k).map(|j| subsquare[j][i]).collect::<BitSet16>()
+                            == BitSet16::all_less_than(k)
+                });
+                if is_subsquare {
+                    let bitset = rows
+                        .iter()
+                        .flat_map(|row| cols.iter().map(move |col| row * N + col))
+                        .collect();
+
+                    subsquares.push(bitset);
+                }
+            }
+        }
+
+        subsquares
+    }
+
+    pub fn mask(&self, mask: BitSet128) -> PartialLatinSquare<N> {
+        let mut partial_sq = PartialLatinSquare::empty();
+
+        for i in mask {
+            let (i, j) = (i / N, i % N);
+
+            partial_sq.set(i, j, Some(self.get(i, j)));
+        }
+
+        partial_sq
     }
 
     pub fn row_cycles(&self) -> Vec<Vec<usize>> {

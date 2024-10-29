@@ -1,7 +1,7 @@
 #![feature(portable_simd)]
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BinaryHeap, HashMap, HashSet},
     io::{stdin, stdout, Read, Write},
     sync::Arc,
     thread::{self},
@@ -65,6 +65,10 @@ enum Mode {
     CountTransversals {
         n: usize,
     },
+    SubTransversals {
+        n: usize,
+        k: usize,
+    },
     /// Prints information about a latin square
     Analyse {
         n: usize,
@@ -95,7 +99,7 @@ enum Mode {
         reverse: bool,
     },
     FindLCS {
-        #[arg(long)]
+        #[arg(long, default_value_t = 1)]
         max_threads: usize,
     },
     FindOrthogonal {
@@ -128,6 +132,7 @@ enum Mode {
     Expand {
         n: usize,
     },
+    // Generates pseudo-random latin squares
     Random {
         n: usize,
         seed: u64,
@@ -179,6 +184,7 @@ fn main() {
         Mode::CountEntries => count_entries(),
         Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
         Mode::CountTransversals { n } => match_n!(n, count_transversals),
+        Mode::SubTransversals { n, k } => match_n!(n, sub_transversals, k),
         Mode::PrettyPrint => pretty_print(),
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
         Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
@@ -244,7 +250,7 @@ fn analyse<const N: usize>() {
         pretty_print_sq_n(sq);
 
         for i in 2..N {
-            println!("Subsquares order {i}: {}", sq.num_subsquares_dyn(i));
+            println!("Subsquares order {i}: {}", sq.num_subsquares(i));
         }
         println!();
 
@@ -498,6 +504,8 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
     let hitting_sets = MMCSHittingSetGenerator::new(differences, sq.n() * sq.n());
 
     let mut lcs = PartialLatinSquareDyn::empty(sq.n());
+    let mut all_lcs = Vec::new();
+
     for hitting_set in hitting_sets {
         let partial_sq = sq.mask(hitting_set);
 
@@ -508,30 +516,36 @@ fn find_lcs_sq(sq: LatinSquareDyn) {
                 for partial_sq in PartialSquareGeneratorDyn::new_partial(
                     sq.clone(),
                     partial_sq.clone(),
-                    dbg!((lcs.num_entries() + 1).max(num_entries + 1)),
+                    (lcs.num_entries() + 1).max(num_entries + 1),
                 )
                 .filter(|s| s.is_critical_set_of(&sq))
                 {
                     if lcs.num_entries() < partial_sq.num_entries() {
-                        lcs = partial_sq;
+                        lcs = partial_sq.clone();
+                        all_lcs = vec![partial_sq];
                         continue 'l;
+                    } else if lcs.num_entries() == partial_sq.num_entries() {
+                        all_lcs.push(partial_sq);
                     }
                 }
                 break;
             }
-
-            continue;
-        }
-
-        if lcs.num_entries() < partial_sq.num_entries() {
-            lcs = partial_sq;
+        } else {
+            if lcs.num_entries() < partial_sq.num_entries() {
+                lcs = partial_sq.clone();
+                all_lcs = vec![partial_sq];
+            } else if lcs.num_entries() == partial_sq.num_entries() {
+                all_lcs.push(partial_sq);
+            }
         }
     }
 
     let mut stdout = stdout().lock();
 
     writeln!(stdout, "{}", sq).unwrap();
-    writeln!(stdout, "{lcs}").unwrap();
+    for lcs in all_lcs {
+        writeln!(stdout, "{lcs}").unwrap();
+    }
     writeln!(stdout,).unwrap();
 }
 
@@ -707,6 +721,8 @@ fn count_entries() {
 
         let num_entries = sq.num_entries();
         counts[num_entries] += 1;
+
+        println!("{sq}");
     }
 
     for (num_entries, count) in counts.into_iter().enumerate() {
@@ -721,58 +737,97 @@ fn count_isotopy_classes<const N: usize>() {
     }
 }
 
+fn sub_transversals<const N: usize>(k: usize) {
+    assert!(k <= N);
+
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
+        let subsquares = sq.subsquares_bitset(k);
+        let transversals = sq.transversals_bitset();
+
+        let mut subtransversals_per_subsq = Vec::new();
+
+        for subsquare in &subsquares {
+            let mut subtransversals = Vec::new();
+
+            for transversal in &transversals {
+                if subsquare.intersect(*transversal).len() == k {
+                    subtransversals.push(sq.mask(*transversal));
+                }
+            }
+
+            if !subtransversals.is_empty() {
+                subtransversals_per_subsq.push((subsquare, subtransversals));
+            }
+        }
+
+        if !subtransversals_per_subsq.is_empty() {
+            println!("{sq}");
+            for (subsq, subtransversals) in subtransversals_per_subsq {
+                println!("{}", sq.mask(*subsq));
+
+                for subtransversal in subtransversals {
+                    println!("{subtransversal}")
+                }
+
+                println!()
+            }
+            println!()
+        }
+    }
+}
+
 fn expand<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
 
-    let mut last_layer = HashSet::new();
-    let mut next_layer = HashSet::new();
-    let mut queue = HashSet::new();
-
-    while let Some(sq) = read_sq_from_stdin_n::<N>() {
-        queue.insert(sq);
-    }
-
-    while !queue.is_empty() {
-        for sq in queue.iter() {
-            println!("{sq}");
-            for mate in sq
-                .orthogonal_squares()
-                .map(|sq| sq.main_class_lookup(&lookup))
-            {
-                next_layer.insert(mate);
-            }
-        }
-        last_layer.clear();
-        std::mem::swap(&mut last_layer, &mut queue);
-        std::mem::swap(&mut next_layer, &mut queue);
-    }
-
-    // let mut queue = BinaryHeap::new();
-    // let mut found = HashSet::new();
+    // let mut last_layer = HashSet::new();
+    // let mut next_layer = HashSet::new();
+    // let mut queue = HashSet::new();
 
     // while let Some(sq) = read_sq_from_stdin_n::<N>() {
-    //     let sq = sq.main_class_lookup(&lookup);
-    //     found.insert(sq);
-    //     queue.push((sq.num_transversals(), sq));
+    //     queue.insert(sq);
     // }
 
-    // while let Some((t, sq)) = queue.pop() {
-    //     dbg!(t, queue.len(), found.len());
-    //     println!("{sq}");
-
-    //     let mut mates: Vec<_> = sq
-    //         .orthogonal_squares()
-    //         .map(|s| s.main_class_lookup(&lookup))
-    //         .collect();
-    //     mates.sort();
-    //     mates.dedup();
-
-    //     for mate in mates {
-    //         if found.insert(mate) {
-    //             queue.push((mate.num_transversals(), mate));
+    // while !queue.is_empty() {
+    //     for sq in queue.iter() {
+    //         println!("{sq}");
+    //         for mate in sq
+    //             .orthogonal_squares()
+    //             .map(|sq| sq.main_class_lookup(&lookup))
+    //         {
+    //             next_layer.insert(mate);
     //         }
     //     }
+    //     last_layer.clear();
+    //     std::mem::swap(&mut last_layer, &mut queue);
+    //     std::mem::swap(&mut next_layer, &mut queue);
     // }
+
+    let mut queue = BinaryHeap::new();
+    let mut found = HashSet::new();
+
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
+        let sq = sq.main_class_lookup(&lookup);
+        found.insert(sq);
+        queue.push((sq.num_transversals(), sq));
+    }
+
+    while let Some((t, sq)) = queue.pop() {
+        dbg!(t, queue.len(), found.len());
+        println!("{sq}");
+
+        let mut mates: Vec<_> = sq
+            .orthogonal_squares()
+            .map(|s| s.main_class_lookup(&lookup))
+            .collect();
+        mates.sort();
+        mates.dedup();
+
+        for mate in mates {
+            if found.insert(mate) {
+                queue.push((mate.num_transversals(), mate));
+            }
+        }
+    }
 }
 
 fn count_transversals<const N: usize>() {
@@ -840,16 +895,43 @@ fn to_tex(standalone: bool) {
 \\begin{{document}}"
         );
     }
+    println!("\\begin{{tikzpicture}}[scale=0.5]");
 
+    let mut first_n = None;
+    let mut x = 0;
+    let mut y = 0;
     while let Some(sq) = read_partial_sq_from_stdin() {
         let n = sq.n();
 
+        if first_n.is_none() {
+            first_n = Some(n);
+        }
+
+        if n != first_n.unwrap() {
+            eprintln!("All squares must be the same size");
+            return;
+        }
+
         println!("% {}", sq);
         println!(
-            "\\begin{{tikzpicture}}[scale=0.5]
-    \\begin{{scope}}
-        \\draw (0, 0) grid ({n}, {n});"
+            "    \\begin{{scope}}[xshift = {}cm, yshift = {}cm]
+        \\draw (0, 0) grid ({n}, {n});",
+            x * (n + 1),
+            y * (n + 1)
         );
+
+        dbg!(x, y);
+        if x == y {
+            y = x + 1;
+            x = 0;
+        } else if x < y {
+            x += 1;
+            if x == y {
+                y = 0;
+            }
+        } else if x > y {
+            y += 1;
+        }
 
         if n <= 9 {
             let args = (1..=n)
@@ -896,8 +978,8 @@ fn to_tex(standalone: bool) {
             }
         }
         println!("    \\end{{scope}}");
-        println!("\\end{{tikzpicture}}");
     }
+    println!("\\end{{tikzpicture}}");
 
     if standalone {
         println!("\\end{{document}}");

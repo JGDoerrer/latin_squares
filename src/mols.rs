@@ -62,22 +62,16 @@ impl<const N: usize> Mols<N> {
             .collect();
 
         let mut min_sq = self.sqs[0];
-        let mut min_perms = vec![(
-            [0, 1, 2],
-            vec![[
-                Permutation::identity(),
-                Permutation::identity(),
-                Permutation::identity(),
-            ]],
-        )];
+
+        let mut min_rcs = vec![[0, 1, 2]];
 
         for [r, c, s] in TupleIterator::<3>::new(values.len())
             .flat_map(|rcs| PermutationIter::new().map(move |p| p.apply_array(rcs)))
         {
             let sq = LatinSquare::from_rcs(values[r], values[c], values[s]);
-            // let isotopy_class = sq.isotopy_class_lookup(lookup);
+            let isotopy_class = sq.isotopy_class_lookup(lookup);
 
-            let (isotopy_class, permutations) = sq.isotopy_class_permutations(lookup);
+            // let (isotopy_class, permutations) = sq.isotopy_class_permutations(lookup);
 
             match isotopy_class.cmp(&min_sq) {
                 Ordering::Less => {
@@ -85,12 +79,10 @@ impl<const N: usize> Mols<N> {
                     if min_sq.cmp(in_sq).is_lt() {
                         return None;
                     }
-                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
-                    min_perms = vec![([r, c, s], permutations)];
+                    min_rcs.push([r, c, s]);
                 }
                 Ordering::Equal => {
-                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
-                    min_perms.push(([r, c, s], permutations))
+                    min_rcs.push([r, c, s]);
                 }
                 Ordering::Greater => {}
             }
@@ -99,8 +91,15 @@ impl<const N: usize> Mols<N> {
         if min_sq != *in_sq {
             return None;
         }
-
         debug_assert!(min_sq == min_sq.main_class_lookup(lookup));
+
+        let mut min_perms = vec![];
+
+        for [r, c, s] in min_rcs {
+            let sq = LatinSquare::from_rcs(values[r], values[c], values[s]);
+            let (_, permutations) = sq.isotopy_class_permutations(lookup);
+            min_perms.push(([r, c, s], permutations));
+        }
 
         let mut min_mols = self.clone();
         for (rcs, perms) in min_perms {
@@ -159,18 +158,18 @@ impl<const N: usize> Mols<N> {
             .flat_map(|rcs| PermutationIter::new().map(move |p| p.apply_array(rcs)))
         {
             let sq = LatinSquare::from_rcs(values[r], values[c], values[s]);
-            // let isotopy_class = sq.isotopy_class_lookup(lookup);
+            let isotopy_class = sq.isotopy_class_lookup(lookup);
 
-            let (isotopy_class, permutations) = sq.isotopy_class_permutations(lookup);
+            // let (isotopy_class, permutations) = sq.isotopy_class_permutations(lookup);
 
             match isotopy_class.cmp(&min_sq) {
                 Ordering::Less => {
                     min_sq = sq;
-                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    let (_, permutations) = sq.isotopy_class_permutations(lookup);
                     min_perms = vec![([r, c, s], permutations)];
                 }
                 Ordering::Equal => {
-                    // let (_, permutations) = sq.isotopy_class_permutations(lookup);
+                    let (_, permutations) = sq.isotopy_class_permutations(lookup);
                     min_perms.push(([r, c, s], permutations))
                 }
                 Ordering::Greater => {}
