@@ -20,6 +20,7 @@ use latin_square_generator::LatinSquareGeneratorDyn;
 
 use mmcs_hitting_set_generator::MMCSHittingSetGenerator;
 
+use mols::Mols;
 use partial_latin_square_dyn::PartialLatinSquareDyn;
 use partial_square_generator::PartialSquareGeneratorDyn;
 use permutation::{factorial, Permutation};
@@ -65,6 +66,9 @@ enum Mode {
     CountTransversals {
         n: usize,
     },
+    Transversals {
+        n: usize,
+    },
     SubTransversals {
         n: usize,
         k: usize,
@@ -75,6 +79,9 @@ enum Mode {
     },
     /// Prints the main class representative of a latin square
     NormalizeMainClass {
+        n: usize,
+    },
+    NormalizeMOLS {
         n: usize,
     },
     /// Generates all latin squares of an order n
@@ -184,9 +191,11 @@ fn main() {
         Mode::CountEntries => count_entries(),
         Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
         Mode::CountTransversals { n } => match_n!(n, count_transversals),
+        Mode::Transversals { n } => match_n!(n, transversals),
         Mode::SubTransversals { n, k } => match_n!(n, sub_transversals, k),
         Mode::PrettyPrint => pretty_print(),
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
+        Mode::NormalizeMOLS { n } => match_n!(n, normalize_mols),
         Mode::GenerateLatinSquares { n } => generate_latin_squares(n),
         Mode::GenerateIsotopyClasses { n } => match_n!(n, generate_isotopy_classes),
         Mode::GenerateMainClasses { n, max_threads } => {
@@ -382,6 +391,15 @@ fn normalize_main_class<const N: usize>() {
 
     while let Some(sq) = read_sq_from_stdin_n::<N>() {
         if writeln!(stdout(), "{}", sq.main_class_lookup(&lookup)).is_err() {
+            return;
+        }
+    }
+}
+
+fn normalize_mols<const N: usize>() {
+    let lookup = generate_minimize_rows_lookup();
+    while let Some(mols) = read_mols_from_stdin::<N>() {
+        if writeln!(stdout(), "{}", mols.normalize_main_class_set(&lookup)).is_err() {
             return;
         }
     }
@@ -734,6 +752,19 @@ fn count_isotopy_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
     while let Some(sq) = read_sq_from_stdin_n::<N>() {
         println!("{}", sq.num_isotopy_classes(&lookup));
+    }
+}
+
+fn transversals<const N: usize>() {
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
+        let transversals = sq.transversals_bitset();
+
+        println!("{sq}");
+        for transversal in transversals.into_iter().map(|t| sq.mask(t)) {
+            println!("{transversal}")
+        }
+
+        println!()
     }
 }
 
@@ -1168,6 +1199,25 @@ fn read_partial_sq_from_stdin() -> Option<PartialLatinSquareDyn> {
             Ok(sq) => {
                 line.clear();
                 return Some(sq);
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                line.clear();
+                continue;
+            }
+        }
+    }
+    None
+}
+
+fn read_mols_from_stdin<const N: usize>() -> Option<Mols<N>> {
+    let mut line = String::new();
+    while stdin().read_line(&mut line).is_ok_and(|i| i != 0) {
+        line = line.trim().into(); // remove newline
+        match Mols::try_from(line.as_str()) {
+            Ok(mols) => {
+                line.clear();
+                return Some(mols);
             }
             Err(err) => {
                 eprintln!("{err}");

@@ -196,7 +196,7 @@ impl<const N: usize> Mols<N> {
                 mols.permute_cols_and_reduce(&perm[1]);
                 // mols.permute_cols(&perm[1]);
                 // mols.reduce_all_sqs();
-                mols.sqs.sort();
+                mols.sqs.sort_by_key(|sq| sq.get(1, 0));
 
                 if mols < min_mols {
                     min_mols = mols;
@@ -332,7 +332,7 @@ impl<const N: usize> TryFrom<&str> for Mols<N> {
     type Error = Error;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let separator_count = value.chars().filter(|c| *c == SEPARATOR).count();
-        let expected_len = (separator_count - 1) * N * N + separator_count;
+        let expected_len = (separator_count + 1) * N * N + separator_count;
 
         if value.len() != expected_len {
             return Err(Error::InvalidLength {
