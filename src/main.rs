@@ -73,6 +73,9 @@ enum Mode {
         n: usize,
         k: usize,
     },
+    MainClassSize {
+        n: usize,
+    },
     /// Prints information about a latin square
     Analyse {
         n: usize,
@@ -108,6 +111,10 @@ enum Mode {
     FindLCS {
         #[arg(long, default_value_t = 1)]
         max_threads: usize,
+    },
+    FindAllUC {
+        #[arg(short, long)]
+        brute_force: bool,
     },
     FindOrthogonal {
         n: usize,
@@ -193,6 +200,7 @@ fn main() {
         Mode::CountTransversals { n } => match_n!(n, count_transversals),
         Mode::Transversals { n } => match_n!(n, transversals),
         Mode::SubTransversals { n, k } => match_n!(n, sub_transversals, k),
+        Mode::MainClassSize { n } => match_n!(n, main_class_size),
         Mode::PrettyPrint => pretty_print(),
         Mode::NormalizeMainClass { n } => match_n!(n, normalize_main_class),
         Mode::NormalizeMOLS { n } => match_n!(n, normalize_mols),
@@ -206,6 +214,7 @@ fn main() {
         Mode::FindAllCS => find_all_cs(),
         Mode::FindLCS { max_threads } => find_lcs(max_threads),
         Mode::FindSCS { reverse } => find_scs(reverse),
+        Mode::FindAllUC { brute_force } => find_all_uc(brute_force),
         Mode::Random { n, seed } => random_latin_squares(n, seed),
         Mode::FindOrthogonal { n, all } => match_n!(n, find_orthogonal, all),
         Mode::FindMOLS { n, mols } => match_n!(n, find_mols, mols),
@@ -420,14 +429,12 @@ fn generate_main_classes<const N: usize>(max_threads: usize) {
     ThreadedMainClassGenerator::<N>::new(&lookup).run(max_threads);
 }
 
-const KNOWN_SCS: [usize; 9] = [0, 0, 1, 2, 4, 6, 9, 12, 16];
-
 fn find_scs(reverse: bool) {
     while let Some(sq) = read_sq_from_stdin() {
         let differences = sq.differences();
         dbg!(differences.len());
 
-        let start = *KNOWN_SCS.get(sq.n()).unwrap_or(&sq.n());
+        let start = sq.n() - 1;
         let end = sq.n().pow(2) - 1;
 
         if !reverse {
@@ -478,7 +485,7 @@ fn find_scs(reverse: bool) {
                 }
                 hitting_sets.decrease_max_entries();
 
-                if !found {
+                if !found || i == start {
                     println!("{sq}");
                     println!("{scs}");
                     break;
@@ -592,6 +599,7 @@ fn find_all_cs() {
                 }
             }
         }
+        dbg!(differences.len());
 
         let critical_sets = MMCSHittingSetGenerator::new(differences.clone(), sq.n() * sq.n());
 
@@ -611,6 +619,78 @@ fn find_all_cs() {
                 .write_all(&set.bits().to_le_bytes()[0..bytes_needed])
                 .unwrap();
         }
+    }
+}
+
+fn find_all_uc(brute_force: bool) {
+    if brute_force {
+        while let Some(sq) = read_sq_from_stdin() {
+            let n = sq.n();
+
+            // does not include original square
+            for i in 0..(1 << n * n) - 1 {
+                let mask = BitSet128::from_bits(i);
+
+                let partial_sq = sq.mask(mask);
+
+                if partial_sq.is_uniquely_completable() {
+                    println!("{partial_sq}");
+                }
+            }
+        }
+    } else {
+        todo!();
+        let mut partial_sqs = Vec::new();
+
+        while let Some(sq) = read_partial_sq_from_stdin() {
+            partial_sqs.push(sq);
+        }
+        let mut all_union = PartialLatinSquareDyn::empty(partial_sqs[0].n());
+
+        for sq in &partial_sqs {
+            all_union = sq.union(&all_union);
+        }
+
+        dbg!(&all_union);
+
+        let mut total = 0;
+
+        let mut unions = HashMap::new();
+        unions.insert(PartialLatinSquareDyn::empty(partial_sqs[0].n()), 1);
+
+        for i in 0.. {
+            let mut new_unions = HashMap::new();
+
+            for (b, count) in unions {
+                for a in &partial_sqs {
+                    let union = a.union(&b);
+
+                    let entries = partial_sqs[0].n().pow(2) - a.num_entries();
+                    if i != 0 {
+                        if i % 2 == 1 {
+                            total += count << entries;
+                        } else {
+                            total -= count << entries;
+                        }
+                    }
+
+                    if let Some(prev_count) = new_unions.get(&union) {
+                        new_unions.insert(union, prev_count + count);
+                    } else {
+                        new_unions.insert(union, count);
+                    }
+                }
+            }
+
+            dbg!(&new_unions.len());
+            if new_unions.len() == 0 {
+                break;
+            }
+
+            unions = new_unions;
+        }
+
+        dbg!(total);
     }
 }
 
@@ -807,6 +887,20 @@ fn sub_transversals<const N: usize>(k: usize) {
     }
 }
 
+fn main_class_size<const N: usize>() {
+    let lookup = generate_minimize_rows_lookup();
+    let max = 6 * (factorial(N) as u128).pow(3);
+
+    while let Some(sq) = read_sq_from_stdin_n::<N>() {
+        let vec = &sq.main_class_permutations(&lookup).1;
+        let count = vec.len() as u128 - 1;
+
+        assert_eq!(max % count, 0);
+
+        println!("{}", max / count);
+    }
+}
+
 fn expand<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
 
@@ -951,7 +1045,6 @@ fn to_tex(standalone: bool) {
             y * (n + 1)
         );
 
-        dbg!(x, y);
         if x == y {
             y = x + 1;
             x = 0;

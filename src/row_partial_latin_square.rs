@@ -208,6 +208,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
             self.full_rows += 1;
             true
         } else {
+            let mut minimal = true;
             for i in 0..self.full_rows {
                 for rows in [
                     [Self::shrink_row(self.rows[i]), row],
@@ -227,7 +228,11 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                     let cycle_index = row_permutation.cycle_lengths_index();
 
                     if cycle_index < self.min_row_cycle_index {
-                        return false;
+                        self.min_row_cycle_index = cycle_index;
+                        self.min_row_cycles = [[false; N]; N];
+                        self.min_row_cycles[i][new_row_index] = true;
+
+                        minimal = false;
                     }
                     if cycle_index == self.min_row_cycle_index {
                         self.min_row_cycles[i][new_row_index] = true;
@@ -235,7 +240,7 @@ impl<const N: usize> RowPartialLatinSquare<N> {
                 }
             }
             self.full_rows += 1;
-            true
+            minimal
         }
     }
 
@@ -315,6 +320,104 @@ impl<const N: usize> RowPartialLatinSquare<N> {
         }
 
         true
+    }
+
+    pub fn minimize(&self, lookup: &[Vec<(PermutationSimd, PermutationSimd)>]) -> Self {
+        let mut min = self.clone();
+
+        for rows in TupleIterator::<2>::new(self.full_rows) {
+            if !self.min_row_cycles[rows[0]][rows[1]] {
+                continue;
+            }
+
+            for rows in [[rows[0], rows[1]], [rows[1], rows[0]]] {
+                let rows = rows.map(|i| Self::shrink_row(self.rows[i]));
+
+                let row_permutation = {
+                    let mut permutation = [0; N];
+
+                    for i in 0..N {
+                        let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                        permutation[i] = rows[1][position].into();
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let mut cycles = row_permutation.cycles();
+                cycles.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+
+                let symbol_permutation = {
+                    let mut permutation = [0; N];
+
+                    let mut index = 0;
+                    for cycle in cycles {
+                        let cycle_len = cycle.len();
+                        let start_index = index;
+                        index += cycle_len;
+                        for (i, j) in cycle.into_iter().enumerate() {
+                            permutation[j] = start_index + (i + 1) % cycle_len;
+                        }
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let inverse_column_permutation =
+                    Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v as usize)))
+                        .inverse();
+
+                let (rows, _) = Self::permuted_cols_vals_simd(
+                    &self.rows[0..self.full_rows],
+                    &inverse_column_permutation.into_simd(),
+                    &symbol_permutation.into_simd(),
+                    false,
+                );
+
+                let permutations = &lookup[self.min_row_cycle_index];
+
+                for (s, inverse_c) in permutations {
+                    let (rows, full_rows) = Self::permuted_cols_vals_simd(
+                        &rows[0..self.full_rows],
+                        inverse_c,
+                        s,
+                        false,
+                    );
+
+                    for i in 0..self.full_rows {
+                        match self.rows[i][0..N].cmp(&rows[i][0..N]) {
+                            Ordering::Less => {
+                                min = Self {
+                                    col_masks: Self::calc_col_masks(&rows[0..full_rows]),
+                                    full_rows,
+                                    rows,
+                                    min_row_cycle_index: self.min_row_cycle_index,
+                                    min_row_cycles: self.min_row_cycles,
+                                }
+                            }
+                            Ordering::Equal => {}
+                            Ordering::Greater => break,
+                        }
+                    }
+                }
+            }
+        }
+
+        debug_assert!(min.is_minimal(lookup));
+
+        min
+    }
+
+    fn calc_col_masks(rows: &[[u8; 16]]) -> [BitSet16; N] {
+        let mut cols = [BitSet16::all_less_than(N); N];
+
+        for row in rows {
+            for (col, val) in row.iter().enumerate() {
+                cols[col].remove(*val as usize);
+            }
+        }
+
+        cols
     }
 
     /// does not fix col_masks.

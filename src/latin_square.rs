@@ -846,6 +846,132 @@ impl<const N: usize> LatinSquare<N> {
         (min, permutation.0, permutation.1)
     }
 
+    pub fn main_class_permutations(
+        &self,
+        lookup: &[Vec<(Permutation<N>, Permutation<N>)>],
+    ) -> (Self, Vec<(Permutation<3>, [Permutation<N>; 3])>) {
+        let mut isotopic = *self;
+        let mut isotopic_permutations = Vec::with_capacity(1000);
+        isotopic_permutations.push((
+            Permutation::identity(),
+            [
+                Permutation::identity(),
+                Permutation::identity(),
+                Permutation::identity(),
+            ],
+        ));
+
+        for (rcs, sq) in PermutationIter::new().map(|rcs| (rcs.clone(), self.permuted_rcs(&rcs))) {
+            let mut candidates = Vec::with_capacity(N * N);
+            let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;
+
+            for [row0, row1] in
+                TupleIterator::<2>::new(N).flat_map(|rows| [[rows[0], rows[1]], [rows[1], rows[0]]])
+            {
+                let rows = [sq.get_row(row0), sq.get_row(row1)];
+                let row_permutation = {
+                    let mut permutation = [0; N];
+
+                    for i in 0..N {
+                        let position = rows[0].iter().position(|v| *v as usize == i).unwrap();
+                        permutation[i] = rows[1][position].into();
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let cycles = row_permutation.cycle_lengths_index();
+
+                match cycles.cmp(&min_cycle_index) {
+                    Ordering::Less => {
+                        min_cycle_index = cycles;
+                        candidates.clear();
+                        candidates.push((rows.map(|r| *r), row_permutation));
+                    }
+                    Ordering::Equal => {
+                        candidates.push((rows.map(|r| *r), row_permutation));
+                    }
+                    Ordering::Greater => {}
+                }
+            }
+
+            for (rows, row_permutation) in candidates {
+                let mut cycles = row_permutation.cycles();
+                cycles.sort_by_key(|c| c.len());
+
+                let symbol_permutation = {
+                    let mut permutation = [0; N];
+
+                    let mut index = 0;
+                    for cycle in cycles {
+                        let cycle_len = cycle.len();
+                        let start_index = index;
+                        index += cycle_len;
+                        for (i, j) in cycle.into_iter().enumerate() {
+                            permutation[j] = start_index + (i + 1) % cycle_len;
+                        }
+                    }
+
+                    Permutation::from_array(permutation)
+                };
+
+                let column_permutation =
+                    Permutation::from_array(rows[0].map(|v| symbol_permutation.apply(v.into())))
+                        .inverse();
+
+                let permutations = &lookup[min_cycle_index];
+
+                let mut sq = sq;
+                sq.permute_cols_vals_simd(&column_permutation, &symbol_permutation);
+
+                for (s, inverse_c) in permutations {
+                    let mut new_sq = sq;
+                    new_sq.permute_cols_vals_simd(inverse_c, s);
+
+                    let r = Permutation::from_array(new_sq.get_col(0).map(|i| i as usize));
+
+                    let mut new_rows = [[0; N]; N];
+                    for i in 0..N {
+                        new_rows[new_sq.rows[i][0] as usize] = new_sq.rows[i];
+                    }
+                    let new_sq = LatinSquare::new(new_rows);
+
+                    let c = Permutation::from_array(
+                        column_permutation.apply_array(inverse_c.inverse().clone().into_array()),
+                    );
+                    let s = symbol_permutation
+                        .inverse()
+                        .apply_array(s.clone().into_array())
+                        .into();
+
+                    match new_sq.cmp_rows(&isotopic) {
+                        Ordering::Less => {
+                            isotopic = new_sq;
+                            isotopic_permutations.clear();
+                            isotopic_permutations.push((rcs.clone(), [r, c, s]));
+                        }
+                        Ordering::Equal => {
+                            isotopic_permutations.push((rcs.clone(), [r, c, s]));
+                        }
+                        Ordering::Greater => {}
+                    }
+                }
+            }
+        }
+
+        for (rcs, perm) in &isotopic_permutations {
+            assert_eq!(
+                self.permuted_rcs(rcs)
+                    .permuted_rows(&perm[0])
+                    .permuted_cols(&perm[1])
+                    .permuted_vals(&perm[2]),
+                isotopic
+            );
+        }
+
+        (isotopic, isotopic_permutations)
+    }
+
     pub fn main_class_lookup(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> Self {
         let mut main_class = *self;
         let mut min_cycle_index = CYCLE_STRUCTURES[N].len() - 1;

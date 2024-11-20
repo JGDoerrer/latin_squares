@@ -91,6 +91,21 @@ impl PartialLatinSquareDyn {
         true
     }
 
+    pub fn union(&self, other: &Self) -> Self {
+        assert_eq!(self.n(), other.n());
+        let mut new = self.clone();
+
+        for row in 0..self.n() {
+            for col in 0..self.n() {
+                if let Some(value) = other.get_partial(row, col) {
+                    new.set(row, col, Some(value));
+                }
+            }
+        }
+
+        new
+    }
+
     pub fn permute_rows(&mut self, permutation: &PermutationDyn) {
         let mut new_values = vec![None; self.n * self.n].into_boxed_slice();
 
