@@ -73,17 +73,13 @@ impl<'a, const N: usize> Iterator for RowGenerator<'a, N> {
     fn next(&mut self) -> Option<Self::Item> {
         'l: loop {
             let mut sq = self.sq.clone();
+            let row_index = sq.full_rows();
             let mut new_row = [0; 16];
 
             let mut values = BitSet16::all_less_than(N);
 
-            let first_value = values
-                .intersect(sq.get_col_mask(0))
-                .into_iter()
-                .next()
-                .unwrap();
-            new_row[0] = first_value as u8;
-            values.remove(first_value);
+            new_row[0] = row_index as u8;
+            values.remove(row_index);
 
             for i in 1..N {
                 let index = self.indices[i];

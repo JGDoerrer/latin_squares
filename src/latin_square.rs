@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    bitset::{BitSet128, BitSet16},
+    bitset::{BitSet128, BitSet16, BitSet256},
     cycles::{minimize_rows, CYCLE_STRUCTURES},
     mols::Mols,
     partial_latin_square::PartialLatinSquare,
@@ -159,6 +159,36 @@ impl<const N: usize> LatinSquare<N> {
         bitsets
     };
 
+    const BITSET_COLS256: [BitSet256; N] = {
+        let mut bitsets = [BitSet256::empty(); N];
+        let mut i = 0;
+        while i < N {
+            let mut j = 0;
+            while j < N {
+                bitsets[i].insert(j * N + i);
+
+                j += 1;
+            }
+            i += 1;
+        }
+        bitsets
+    };
+
+    const BITSET_ROWS256: [BitSet256; N] = {
+        let mut bitsets = [BitSet256::empty(); N];
+        let mut i = 0;
+        while i < N {
+            let mut j = 0;
+            while j < N {
+                bitsets[i].insert(j + i * N);
+
+                j += 1;
+            }
+            i += 1;
+        }
+        bitsets
+    };
+
     pub fn transversals_bitset(&self) -> Vec<BitSet128> {
         assert!(N * N <= 128);
         assert!(N <= 16);
@@ -213,6 +243,79 @@ impl<const N: usize> LatinSquare<N> {
 
                     let col = index % N;
                     used_cols = used_cols.union(Self::BITSET_COLS[col]);
+                } else if i != 0 {
+                    indices[i - 1] += 1;
+                    for j in i..N {
+                        indices[j] = 0;
+                    }
+                    continue 'l;
+                } else {
+                    break 'l;
+                }
+            }
+
+            indices[N - 1] += 1;
+            // bitset.print_sq(N);
+            bitsets.push(bitset);
+        }
+
+        bitsets
+    }
+
+    pub fn transversals_bitset256(&self) -> Vec<BitSet256> {
+        assert!(N * N <= 256);
+        assert!(N <= 16);
+
+        let mut indices = [0; N];
+
+        let mut bitsets = Vec::new();
+
+        // let bits: [[BitSet16; N]; N] = self.rows.map(|row| row.map(|v| BitSet16::single(v.into())));
+
+        let mut value_bitsets = [BitSet256::empty(); N];
+
+        for i in 0..N {
+            let cols = self.get_val(i);
+
+            let mut bitset = BitSet256::empty();
+            for (i, j) in cols.into_iter().enumerate() {
+                bitset.insert(i * N + j as usize);
+            }
+
+            value_bitsets[i] = bitset;
+        }
+
+        let value_bitsets = value_bitsets;
+
+        'l: loop {
+            let mut unused_vals = BitSet16::all_less_than(N);
+            let mut bitset = BitSet256::empty();
+
+            let mut used_cols = BitSet256::empty();
+
+            for i in 0..N {
+                let index = indices[i];
+
+                let bitset_row = Self::BITSET_ROWS256[i];
+
+                if let Some((val, index)) = unused_vals
+                    .into_iter()
+                    .filter_map(|val| {
+                        let index = value_bitsets[val]
+                            .intersect(bitset_row)
+                            .intersect(used_cols.complement())
+                            .into_iter()
+                            .next()?;
+
+                        Some((val, index))
+                    })
+                    .nth(index)
+                {
+                    bitset.insert(index);
+                    unused_vals.remove(val);
+
+                    let col = index % N;
+                    used_cols = used_cols.union(Self::BITSET_COLS256[col]);
                 } else if i != 0 {
                     indices[i - 1] += 1;
                     for j in i..N {
@@ -1058,9 +1161,14 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn num_isotopy_classes(&self, lookup: &[Vec<(Permutation<N>, Permutation<N>)>]) -> usize {
-        let conjugates: [_; 6] = self.conjugates().collect::<Vec<_>>().try_into().unwrap();
+        let mut isotopy_classes = [LatinSquare { rows: [[0; N]; N] }; 6];
 
-        let mut isotopy_classes = conjugates.map(|c| c.isotopy_class_lookup(lookup));
+        for (i, sq) in PermutationIter::new()
+            .map(|perm| self.permuted_rcs(&perm).isotopy_class_lookup(lookup))
+            .enumerate()
+        {
+            isotopy_classes[i] = sq;
+        }
 
         isotopy_classes.sort();
 
@@ -1177,6 +1285,22 @@ impl<const N: usize> LatinSquare<N> {
     }
 
     pub fn mask(&self, mask: BitSet128) -> PartialLatinSquare<N> {
+        assert!(N * N <= 128);
+
+        let mut partial_sq = PartialLatinSquare::empty();
+
+        for i in mask {
+            let (i, j) = (i / N, i % N);
+
+            partial_sq.set(i, j, Some(self.get(i, j)));
+        }
+
+        partial_sq
+    }
+
+    pub fn mask256(&self, mask: BitSet256) -> PartialLatinSquare<N> {
+        assert!(N * N <= 256);
+
         let mut partial_sq = PartialLatinSquare::empty();
 
         for i in mask {

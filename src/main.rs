@@ -187,6 +187,8 @@ fn main() {
                 9 => $f::<9>($($args),*),
                 10 => $f::<10>($($args),*),
                 11 => $f::<11>($($args),*),
+                // 12 => $f::<12>($($args),*),
+                // 13 => $f::<13>($($args),*),
                 _ => unimplemented!(),
             }
         };
@@ -830,9 +832,13 @@ fn count_entries() {
 
 fn count_isotopy_classes<const N: usize>() {
     let lookup = generate_minimize_rows_lookup();
+    let mut total = 0;
+
     while let Some(sq) = read_sq_from_stdin_n::<N>() {
-        println!("{}", sq.num_isotopy_classes(&lookup));
+        total += sq.num_isotopy_classes(&lookup);
     }
+
+    println!("{total}");
 }
 
 fn transversals<const N: usize>() {
@@ -1138,7 +1144,17 @@ fn decode<const N: usize>() {
 
     loop {
         let mut same_rows = [0u8];
-        stdin.read_exact(&mut same_rows).unwrap();
+        match stdin.read_exact(&mut same_rows) {
+            Ok(_) => {}
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::UnexpectedEof => {
+                    return;
+                }
+                _ => {
+                    panic!("{err}")
+                }
+            },
+        }
         let same_rows = same_rows[0];
         assert!(same_rows <= N as u8);
 

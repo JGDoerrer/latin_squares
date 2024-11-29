@@ -86,7 +86,7 @@ impl<const N: usize> Permutation<N> {
     }
 
     pub fn cycles(&self) -> Vec<Vec<usize>> {
-        let mut cycles = Vec::new();
+        let mut cycles = Vec::with_capacity((N + 1) / 2);
         let mut used = [false; N];
 
         for start in self.0 {
@@ -94,7 +94,8 @@ impl<const N: usize> Permutation<N> {
                 continue;
             }
 
-            let mut cycle = vec![start];
+            let mut cycle = Vec::with_capacity(N);
+            cycle.push(start);
             let mut current = self.apply(start);
 
             while current != start {
