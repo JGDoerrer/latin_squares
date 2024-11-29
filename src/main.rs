@@ -62,6 +62,10 @@ enum Mode {
     /// Counts the number of isotopy classes in the given main classes
     CountIsotopyClasses {
         n: usize,
+        #[arg(long, default_value_t = 1)]
+        max_threads: usize,
+        #[arg(long, default_value_t = 10000)]
+        buffer_size: usize,
     },
     CountTransversals {
         n: usize,
@@ -198,7 +202,11 @@ fn main() {
         Mode::Analyse { n } => match_n!(n, analyse),
         Mode::CountSubsquares { k } => count_subsquares(k),
         Mode::CountEntries => count_entries(),
-        Mode::CountIsotopyClasses { n } => match_n!(n, count_isotopy_classes),
+        Mode::CountIsotopyClasses {
+            n,
+            max_threads,
+            buffer_size,
+        } => match_n!(n, count_isotopy_classes, max_threads, buffer_size),
         Mode::CountTransversals { n } => match_n!(n, count_transversals),
         Mode::Transversals { n } => match_n!(n, transversals),
         Mode::SubTransversals { n, k } => match_n!(n, sub_transversals, k),
@@ -830,15 +838,76 @@ fn count_entries() {
     }
 }
 
-fn count_isotopy_classes<const N: usize>() {
-    let lookup = generate_minimize_rows_lookup();
-    let mut total = 0;
+fn count_isotopy_classes<const N: usize>(max_threads: usize, buffer_size: usize) {
+    if max_threads == 1 {
+        let lookup = generate_minimize_rows_lookup();
+        let mut total = 0;
 
-    while let Some(sq) = read_sq_from_stdin_n::<N>() {
-        total += sq.num_isotopy_classes(&lookup);
+        while let Some(sq) = read_sq_from_stdin_n::<N>() {
+            total += sq.num_isotopy_classes(&lookup);
+        }
+
+        println!("{total}");
+    } else {
+        let lookup = Arc::new(generate_minimize_rows_lookup());
+        let mut threads = Vec::new();
+
+        let mut buffer: Vec<LatinSquare<N>> = Vec::new();
+        let mut total = 0;
+
+        while let Some(sq) = read_sq_from_stdin_n() {
+            buffer.push(sq);
+
+            if buffer.len() < buffer_size {
+                continue;
+            }
+
+            let lookup = lookup.clone();
+            let move_buffer = std::mem::take(&mut buffer);
+
+            let thread = thread::spawn(move || {
+                let mut local_total = 0;
+                for sq in move_buffer {
+                    local_total += sq.num_isotopy_classes(&lookup);
+                }
+                local_total
+            });
+
+            threads.push(thread);
+
+            while threads.len() >= max_threads {
+                thread::sleep(Duration::from_millis(1));
+                for i in 0..threads.len() {
+                    if !threads[i].is_finished() {
+                        continue;
+                    }
+
+                    let thread = threads.swap_remove(i);
+                    total += thread.join().unwrap();
+                    break;
+                }
+            }
+        }
+
+        let lookup = lookup.clone();
+        let move_buffer = std::mem::take(&mut buffer);
+
+        let thread = thread::spawn(move || {
+            let mut local_total = 0;
+            for sq in move_buffer {
+                local_total += sq.num_isotopy_classes(&lookup);
+            }
+            local_total
+        });
+
+        threads.push(thread);
+
+        for thread in threads {
+            total += thread.join().unwrap();
+        }
+
+        println!("{}", total);
     }
-
-    println!("{total}");
 }
 
 fn transversals<const N: usize>() {
